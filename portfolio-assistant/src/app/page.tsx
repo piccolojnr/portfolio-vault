@@ -192,7 +192,7 @@ export default function Home() {
             Portfolio Assistant
           </div>
           <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 1 }}>
-            RAG · Qdrant · Claude · knows the full vault
+            RAG-powered · Claude or GPT-4o · knows your vault
           </div>
         </div>
 
@@ -506,7 +506,7 @@ export default function Home() {
             }}
           >
             <span>enter to send · shift+enter for newline</span>
-            <span>qdrant · claude sonnet</span>
+            <span>rag · claude or gpt-4o</span>
           </div>
         </div>
       </div>

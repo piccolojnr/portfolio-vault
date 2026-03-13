@@ -66,3 +66,5 @@ Thumbs.db
 # ChromaDB
 chroma_db/
 chroma.sqlite3
+
+generate.py
