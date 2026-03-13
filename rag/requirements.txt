@@ -1,3 +1,6 @@
 openai
 chromadb
 anthropic
+qdrant-client
+fastapi 
+uvicorn

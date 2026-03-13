@@ -26,7 +26,7 @@ from pathlib import Path
 import chromadb
 
 # Load .env file
-env_path = Path(__file__).parent.parent / ".env"
+env_path = Path(__file__).parent / ".env"
 if env_path.exists():
     with open(env_path) as f:
         for line in f:
@@ -66,33 +66,127 @@ def embed(texts):
     return [item.embedding for item in resp.data]
 
 
-def retrieve(query: str, n: int = 5) -> list[dict]:
+def route_query(query: str):
     """
-    The retrieval step.
-    Embed the query → find n nearest chunks → return them.
+    Determine which sources to search based on query intent.
+    Returns metadata filter or None (no filter = search all sources).
+    """
+    query_lower = query.lower()
     
-    This is the heart of RAG. Everything else is just plumbing.
+    # Project-specific queries: "which project", "built a", etc.
+    if any(x in query_lower for x in ["which project", "what project", "built a", "created a", "developed a", "launched"]):
+        return {"source": {"$contains": "project_"}}
+    
+    # Impact/metric queries: focus on brag_sheet (has the wins and numbers)
+    if any(x in query_lower for x in ["how many", "how much", "users", "processed", "revenue", "impact", "reach"]):
+        return {"source": {"$contains": "brag"}}
+    
+    # Skills/tech queries: search everything (skills, bio, and projects all relevant)
+    if any(x in query_lower for x in ["skill", "expertise", "best at", "experience with", "proficient", "strong in"]):
+        return None  # No filter
+    
+    # Default: search everything
+    return None
+
+
+def retrieve(query: str, n: int = 5, max_per_source: int = 2, confidence_threshold: float = 0.4) -> list[dict]:
+    """
+    The retrieval step with intelligent routing, confidence fallback, and source capping.
+    
+    Features:
+    1. Intent-based query routing: detects query type and applies smart filters
+    2. Confidence threshold: if top result < threshold, fall back to unfiltered search
+    3. Source capping: prevents one source from dominating results
+    4. Similarity sorting: applies source cap AFTER sorting by relevance
+    
+    Embed the query → route based on intent → retrieve → apply caps → return.
     """
     query_vector = embed([query])[0]
     
+    # Step 1: Determine routing intent
+    where_filter = route_query(query)
+    routing_attempted = where_filter is not None
+    
+    # Step 2: Retrieve 3x what we need to account for filtering
     results = collection.query(
         query_embeddings=[query_vector],
-        n_results=n,
+        n_results=n * 3,
+        where=where_filter,
         include=["documents", "metadatas", "distances"],
     )
     
-    retrieved = []
+    # Step 3: Build results list (already sorted by similarity from ChromaDB)
+    all_results = []
     for doc, meta, dist in zip(
         results["documents"][0],
         results["metadatas"][0],
         results["distances"][0],
     ):
-        retrieved.append({
+        all_results.append({
             "content":    doc,
             "source":     meta["source"],
             "heading":    meta["heading"],
             "similarity": round(1 - dist, 3),
         })
+    
+    # Step 4: Confidence-based fallback
+    # If routing was attempted but top result is below threshold, retry without filter
+    if routing_attempted and all_results and all_results[0]["similarity"] < confidence_threshold:
+        print(f"  [ROUTING] Low confidence ({all_results[0]['similarity']}). Falling back to full search.\n")
+        results = collection.query(
+            query_embeddings=[query_vector],
+            n_results=n * 3,
+            include=["documents", "metadatas", "distances"],
+        )
+        all_results = []
+        for doc, meta, dist in zip(
+            results["documents"][0],
+            results["metadatas"][0],
+            results["distances"][0],
+        ):
+            all_results.append({
+                "content":    doc,
+                "source":     meta["source"],
+                "heading":    meta["heading"],
+                "similarity": round(1 - dist, 3),
+            })
+    elif routing_attempted and all_results:
+        print(f"  [ROUTING] Filtered: {all_results[0]['source']} (confidence: {all_results[0]['similarity']}).\n")
+    elif routing_attempted:
+        print(f"  [ROUTING] Filter returned no results. Falling back to full search.\n")
+        results = collection.query(
+            query_embeddings=[query_vector],
+            n_results=n * 3,
+            include=["documents", "metadatas", "distances"],
+        )
+        all_results = []
+        for doc, meta, dist in zip(
+            results["documents"][0],
+            results["metadatas"][0],
+            results["distances"][0],
+        ):
+            all_results.append({
+                "content":    doc,
+                "source":     meta["source"],
+                "heading":    meta["heading"],
+                "similarity": round(1 - dist, 3),
+            })
+    
+    # Step 5: Source capping with proper sorting
+    # All_results are already sorted by similarity. Now apply per-source limit.
+    source_counts = {}
+    retrieved = []
+    
+    for result in all_results:
+        source = result["source"]
+        count = source_counts.get(source, 0)
+        
+        if count < max_per_source:
+            retrieved.append(result)
+            source_counts[source] = count + 1
+        
+        if len(retrieved) >= n:
+            break
     
     return retrieved
 
@@ -111,9 +205,14 @@ def generate_with_anthropic(question: str, context_chunks: list[dict]) -> str:
     ])
     
     system = """You are Daud Rahim's personal career assistant.
-Answer questions about his experience, skills, and projects using ONLY the context provided.
-Be specific and concrete. Use numbers and project names when they appear in the context.
-If the context doesn't contain enough information, say so."""
+
+Guidelines:
+- Answer ONLY using the context provided. Do not speculate or use external knowledge.
+- Be specific and concrete: mention actual project names, numbers, technologies, and companies when they appear.
+- If uncertain about a skill or experience, admit it rather than guessing.
+- If the context doesn't contain enough information to answer, clearly state that.
+- Highlight impact where possible: users reached, revenue processed, companies served, etc.
+- Format lists clearly when appropriate."""
 
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
@@ -142,9 +241,14 @@ def generate_with_openai(question: str, context_chunks: list[dict]) -> str:
     ])
     
     system = """You are Daud Rahim's personal career assistant.
-Answer questions about his experience, skills, and projects using ONLY the context provided.
-Be specific and concrete. Use numbers and project names when they appear in the context.
-If the context doesn't contain enough information, say so."""
+
+Guidelines:
+- Answer ONLY using the context provided. Do not speculate or use external knowledge.
+- Be specific and concrete: mention actual project names, numbers, technologies, and companies when they appear.
+- If uncertain about a skill or experience, admit it rather than guessing.
+- If the context doesn't contain enough information to answer, clearly state that.
+- Highlight impact where possible: users reached, revenue processed, companies served, etc.
+- Format lists clearly when appropriate."""
 
     response = client.chat.completions.create(
         model="gpt-4o",
