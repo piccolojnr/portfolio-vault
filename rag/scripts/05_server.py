@@ -25,6 +25,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from portfolio_vault import retrieve_and_answer, USE_DEMO, print_config
+from portfolio_vault.retrieval import retrieve as _retrieve
 from portfolio_vault.database import get_collection
 
 
@@ -39,6 +40,12 @@ class RetrievedChunk(BaseModel):
     source: str
     heading: str
     similarity: float
+
+
+class RetrieveResponse(BaseModel):
+    question: str
+    retrieved_chunks: list[RetrievedChunk]
+    mode: str
 
 
 class QueryResponse(BaseModel):
@@ -74,7 +81,8 @@ async def root():
         "description": "Ask questions about Daud Rahim's experience, skills, and projects",
         "endpoints": {
             "health": "GET /health",
-            "query": "POST /query",
+            "retrieve": "POST /retrieve (chunks only, no LLM)",
+            "query": "POST /query (chunks + LLM answer)",
             "docs": "GET /docs (interactive Swagger UI)",
         },
         "example_questions": [
@@ -97,6 +105,36 @@ async def health():
             "demo_mode": USE_DEMO,
         }
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/retrieve", response_model=RetrieveResponse)
+async def retrieve_endpoint(request: QueryRequest):
+    """Retrieve relevant chunks without generating an LLM answer."""
+    try:
+        chunks = _retrieve(request.question, n=request.n_results)
+
+        if not chunks:
+            raise HTTPException(status_code=404, detail="No relevant chunks found")
+
+        return RetrieveResponse(
+            question=request.question,
+            retrieved_chunks=[
+                RetrievedChunk(
+                    content=c["content"],
+                    source=c["source"],
+                    heading=c["heading"],
+                    similarity=c["similarity"],
+                )
+                for c in chunks
+            ],
+            mode="demo" if USE_DEMO else "real",
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in /retrieve: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

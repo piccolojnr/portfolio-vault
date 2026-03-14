@@ -1,7 +1,7 @@
 /**
  * lib/retrieval.ts
  * ----------------
- * The RAG client. Calls the Python backend for all RAG operations.
+ * The RAG client. Calls the Python backend for retrieval only.
  * Server-side only (in the API route). Never imported by the browser.
  *
  * Why delegate to Python?
@@ -10,10 +10,14 @@
  *   - Python FastAPI handles all the sophisticated RAG features
  *
  * One operation:
- *   retrieve(query, n) → call Python /query endpoint, return chunks + answer
+ *   retrieve(query, n) → call Python /retrieve endpoint, return chunks
+ *
+ * LLM generation happens in route.ts (streamed, with conversation history).
+ * The Python /query endpoint also generates answers but is not used here
+ * to avoid a duplicate LLM call per message.
  */
 
-const RAG_BACKEND_URL = process.env.RAG_BACKEND_URL ?? "http://localhost:8000";
+import { RAG_BACKEND_URL } from "./config";
 
 export interface RetrievedChunk {
     content: string;
@@ -22,31 +26,29 @@ export interface RetrievedChunk {
     similarity: number;
 }
 
-export interface RAGResponse {
+export interface RetrieveResponse {
     question: string;
-    answer: string;
     retrieved_chunks: RetrievedChunk[];
     mode: "real" | "demo";
 }
 
 /**
- * retrieve — call the Python RAG backend
+ * retrieve — call the Python RAG backend (retrieval only, no LLM)
  *
  * The Python server handles:
  *   1. Embedding the query via OpenAI or demo vectors
  *   2. Searching Qdrant (or ChromaDB) with intent-based filtering
  *   3. Applying source capping (max N chunks per source)
  *   4. Falling back to unfiltered search if confidence is low
- *   5. Generating an answer via Anthropic or OpenAI
  *
- * We get back the full RAG result, which includes both the chunks
- * and a ready-to-use answer.
+ * We get back the chunks; LLM generation happens in route.ts so that
+ * streaming and conversation history are handled in a single place.
  */
 export async function retrieve(
     query: string,
     n: number = 5
-): Promise<RAGResponse> {
-    const response = await fetch(`${RAG_BACKEND_URL}/query`, {
+): Promise<RetrieveResponse> {
+    const response = await fetch(`${RAG_BACKEND_URL}/retrieve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: query, n_results: n }),
@@ -56,7 +58,7 @@ export async function retrieve(
         throw new Error(`RAG backend error: ${response.statusText}`);
     }
 
-    return response.json() as Promise<RAGResponse>;
+    return response.json() as Promise<RetrieveResponse>;
 }
 
 /**

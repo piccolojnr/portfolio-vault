@@ -26,7 +26,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
-import { retrieve, formatContext } from "@/lib/retrieval";
+import { retrieve, formatContext, type RetrieveResponse } from "@/lib/retrieval";
 import {
     ANTHROPIC_API_KEY,
     OPENAI_API_KEY,
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
         const { message, history } = await req.json();
 
         // ── Step 1: Retrieve relevant chunks from Python RAG backend ──────
-        const ragResult = await retrieve(message, 5);
+        const ragResult: RetrieveResponse = await retrieve(message, 5);
         const context = formatContext(ragResult.retrieved_chunks);
 
         // Log what was retrieved (useful during development)

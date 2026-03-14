@@ -1,6 +1,14 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { ArrowUp, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { MarkdownMessage } from "@/components/markdown-message";
 
 interface Message {
   role: "user" | "assistant";
@@ -25,12 +33,10 @@ export default function Home() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Auto-scroll to bottom when messages change
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Auto-resize textarea
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -67,7 +73,6 @@ export default function Home() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         if (!res.body) throw new Error("No response body");
 
-        // Read the Server-Sent Events stream
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let accumulated = "";
@@ -87,7 +92,6 @@ export default function Home() {
             try {
               const { text } = JSON.parse(payload);
               accumulated += text;
-              // Update the streaming message in place
               setMessages((prev) => {
                 const updated = [...prev];
                 updated[updated.length - 1] = {
@@ -101,7 +105,6 @@ export default function Home() {
           }
         }
 
-        // Mark streaming done
         setMessages((prev) => {
           const updated = [...prev];
           updated[updated.length - 1] = {
@@ -139,372 +142,144 @@ export default function Home() {
   const isEmpty = messages.length === 0;
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100vh",
-        background: "var(--bg)",
-      }}
-    >
+    <div className="flex flex-col h-screen bg-bg">
       {/* ── Header ── */}
-      <header
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 14,
-          padding: "18px 28px",
-          borderBottom: "1px solid var(--border)",
-          background: "rgba(20,20,22,0.8)",
-          backdropFilter: "blur(12px)",
-          position: "sticky",
-          top: 0,
-          zIndex: 20,
-          flexShrink: 0,
-        }}
-      >
-        {/* Logo mark */}
-        <div
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 10,
-            background: "var(--accent-dim)",
-            border: "1px solid rgba(200,169,110,0.25)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontFamily: "var(--font-mono)",
-            fontSize: 13,
-            fontWeight: 500,
-            color: "var(--accent)",
-            letterSpacing: "0.05em",
-            flexShrink: 0,
-          }}
-        >
-          DR
-        </div>
+      <header className="flex items-center gap-3.5 px-6 py-4 border-b border-border bg-bg/80 backdrop-blur-md sticky top-0 z-20 shrink-0">
+        <Avatar className="h-9 w-9 rounded-[10px] ring-1 ring-primary/20 bg-accent-dim shrink-0">
+          <AvatarFallback className="rounded-[10px] bg-accent-dim text-primary text-[13px] font-medium font-mono tracking-wide">
+            DR
+          </AvatarFallback>
+        </Avatar>
 
         <div>
-          <div
-            style={{ fontSize: 14, fontWeight: 600, letterSpacing: "-0.01em" }}
-          >
+          <div className="text-sm font-semibold tracking-tight text-foreground">
             Portfolio Assistant
           </div>
-          <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 1 }}>
-            RAG-powered · Claude or GPT-4o · knows your vault
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <Badge variant="outline" className="h-4 px-1.5 text-[10px] font-mono border-primary/20 text-primary/70 py-0">
+              RAG
+            </Badge>
+            <span className="text-[11px] text-muted-foreground">knows your vault</span>
           </div>
         </div>
 
         {/* Status indicator */}
-        <div
-          style={{
-            marginLeft: "auto",
-            display: "flex",
-            alignItems: "center",
-            gap: 7,
-            fontSize: 11,
-            color: "var(--muted)",
-            fontFamily: "var(--font-mono)",
-          }}
-        >
+        <div className="ml-auto flex items-center gap-2 text-[11px] text-muted-foreground font-mono">
           <div
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              background: loading ? "var(--accent)" : "#4ade80",
-              animation: loading ? "pulse-dot 1s ease-in-out infinite" : "none",
-            }}
+            className={`w-1.5 h-1.5 rounded-full transition-colors ${
+              loading ? "bg-primary animate-pulse-dot" : "bg-[#4ade80]"
+            }`}
           />
-          {loading ? "thinking" : "ready"}
+          {loading ? "thinking…" : "ready"}
         </div>
       </header>
 
       {/* ── Messages ── */}
-      <main
-        style={{
-          flex: 1,
-          overflowY: "auto",
-          padding: "0 0 160px",
-        }}
-      >
-        {isEmpty ? (
-          // ── Empty state ──
-          <div
-            style={{
-              maxWidth: 680,
-              margin: "0 auto",
-              padding: "64px 24px 0",
-              animation: "fade-up 0.4s ease both",
-            }}
-          >
-            <div style={{ marginBottom: 10 }}>
-              <span
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 11,
-                  color: "var(--accent)",
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                }}
-              >
+      {isEmpty ? (
+        // ── Empty state ──
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-[680px] mx-auto px-6 pt-16 pb-48 animate-fade-up">
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
+              <span className="font-mono text-[11px] text-primary tracking-[0.1em] uppercase">
                 Portfolio vault · RAG-powered
               </span>
             </div>
-            <h1
-              style={{
-                fontSize: 32,
-                fontWeight: 600,
-                letterSpacing: "-0.03em",
-                lineHeight: 1.15,
-                marginBottom: 14,
-                color: "var(--text)",
-              }}
-            >
+            <h1 className="text-3xl font-semibold tracking-tight leading-[1.15] mb-3 text-foreground">
               What do you need,
               <br />
               Daud?
             </h1>
-            <p
-              style={{
-                fontSize: 15,
-                color: "var(--muted)",
-                lineHeight: 1.65,
-                marginBottom: 48,
-                maxWidth: 480,
-              }}
-            >
+            <p className="text-[15px] text-muted-foreground leading-relaxed mb-2 max-w-[480px]">
               I retrieve only the relevant parts of your vault for each question
-              — no context stuffing. Ask me to write, tailor, or prepare
-              anything.
+              — no context stuffing. Ask me to write, tailor, or prepare anything.
             </p>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 8,
-              }}
-            >
+            <Separator className="my-8 bg-border" />
+
+            <div className="grid grid-cols-2 gap-2">
               {SUGGESTIONS.map((s, i) => (
-                <button
+                <Button
                   key={i}
+                  variant="outline"
                   onClick={() => send(s)}
-                  style={{
-                    background: "var(--surface)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 10,
-                    padding: "13px 15px",
-                    textAlign: "left",
-                    cursor: "pointer",
-                    color: "rgba(226,221,214,0.65)",
-                    fontSize: 13,
-                    lineHeight: 1.45,
-                    fontFamily: "var(--font-sans)",
-                    transition: "all 0.15s",
-                    animation: `fade-up 0.4s ease ${i * 0.05}s both`,
-                  }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLButtonElement).style.borderColor =
-                      "rgba(200,169,110,0.3)";
-                    (e.currentTarget as HTMLButtonElement).style.color =
-                      "var(--text)";
-                    (e.currentTarget as HTMLButtonElement).style.background =
-                      "rgba(200,169,110,0.05)";
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLButtonElement).style.borderColor =
-                      "var(--border)";
-                    (e.currentTarget as HTMLButtonElement).style.color =
-                      "rgba(226,221,214,0.65)";
-                    (e.currentTarget as HTMLButtonElement).style.background =
-                      "var(--surface)";
-                  }}
+                  style={{ animationDelay: `${i * 0.05}s` }}
+                  className="h-auto px-4 py-3 text-left justify-start text-[13px] leading-snug text-muted-foreground font-normal whitespace-normal bg-surface border-border hover:border-primary/30 hover:text-foreground hover:bg-primary/5 animate-fade-up transition-all"
                 >
                   {s}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
-        ) : (
-          // ── Conversation ──
-          <div
-            style={{
-              maxWidth: 740,
-              margin: "0 auto",
-              padding: "36px 24px 0",
-            }}
-          >
+        </div>
+      ) : (
+        // ── Conversation ──
+        <ScrollArea className="flex-1 pb-40">
+          <div className="max-w-[740px] mx-auto px-6 pt-8 pb-48">
             {messages.map((m, i) => (
               <div
                 key={i}
-                style={{
-                  marginBottom: 28,
-                  display: "flex",
-                  flexDirection: m.role === "user" ? "row-reverse" : "row",
-                  gap: 12,
-                  alignItems: "flex-start",
-                  animation:
-                    i === messages.length - 1 || i === messages.length - 2
-                      ? "fade-up 0.25s ease both"
-                      : "none",
-                }}
+                className={`mb-6 flex gap-3 items-start ${
+                  m.role === "user" ? "flex-row-reverse" : "flex-row"
+                } ${
+                  i === messages.length - 1 || i === messages.length - 2
+                    ? "animate-fade-up"
+                    : ""
+                }`}
               >
-                {/* Avatar — only for assistant */}
                 {m.role === "assistant" && (
-                  <div
-                    style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: 8,
-                      flexShrink: 0,
-                      background: "var(--accent-dim)",
-                      border: "1px solid rgba(200,169,110,0.2)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 10,
-                      fontWeight: 500,
-                      color: "var(--accent)",
-                      marginTop: 3,
-                    }}
-                  >
-                    DR
-                  </div>
+                  <Avatar className="h-7 w-7 rounded-lg shrink-0 ring-1 ring-primary/20 bg-accent-dim mt-0.5">
+                    <AvatarFallback className="rounded-lg bg-accent-dim text-primary text-[10px] font-medium font-mono">
+                      DR
+                    </AvatarFallback>
+                  </Avatar>
                 )}
 
-                <div
-                  style={{
-                    maxWidth: "80%",
-                    background:
-                      m.role === "user" ? "var(--user-bg)" : "transparent",
-                    border:
-                      m.role === "user"
-                        ? "1px solid var(--user-border)"
-                        : "none",
-                    borderRadius: m.role === "user" ? "14px 3px 14px 14px" : 0,
-                    padding: m.role === "user" ? "11px 16px" : "4px 0",
-                    fontSize: 14,
-                    lineHeight: 1.75,
-                    color:
-                      m.role === "user"
-                        ? "rgba(226,221,214,0.9)"
-                        : "rgba(226,221,214,0.85)",
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                  }}
-                >
-                  {m.content}
-                  {/* Blinking cursor while streaming */}
-                  {m.streaming && (
-                    <span
-                      style={{
-                        display: "inline-block",
-                        width: 2,
-                        height: "1em",
-                        background: "var(--accent)",
-                        marginLeft: 2,
-                        verticalAlign: "text-bottom",
-                        animation: "blink 0.9s step-end infinite",
-                      }}
-                    />
-                  )}
-                </div>
+                {m.role === "user" ? (
+                  <div className="max-w-[80%] text-sm leading-[1.75] whitespace-pre-wrap break-words bg-user-bg border border-user-border rounded-[16px_4px_16px_16px] px-4 py-2.5 text-foreground/90">
+                    {m.content}
+                  </div>
+                ) : (
+                  <div className="max-w-[80%] text-sm text-foreground/85 pt-0.5">
+                    <MarkdownMessage content={m.content} />
+                    {m.streaming && (
+                      <span className="inline-block w-0.5 h-[1em] bg-primary ml-0.5 align-text-bottom animate-blink" />
+                    )}
+                  </div>
+                )}
               </div>
             ))}
+            <div ref={bottomRef} />
           </div>
-        )}
-        <div ref={bottomRef} />
-      </main>
+        </ScrollArea>
+      )}
+
+      {isEmpty && <div ref={bottomRef} />}
 
       {/* ── Input bar ── */}
-      <div
-        style={{
-          position: "fixed",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          background: "linear-gradient(to top, var(--bg) 65%, transparent)",
-          padding: "16px 24px 28px",
-        }}
-      >
-        <div style={{ maxWidth: 740, margin: "0 auto" }}>
-          <div
-            style={{
-              display: "flex",
-              gap: 10,
-              alignItems: "flex-end",
-              background: "var(--surface)",
-              border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: 14,
-              padding: "10px 12px",
-            }}
-          >
-            <textarea
+      <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-bg via-bg/95 to-transparent pt-6 px-6 pb-6">
+        <div className="max-w-[740px] mx-auto">
+          <div className="flex gap-3 items-end bg-surface border border-border rounded-2xl px-4 py-3 focus-within:ring-1 focus-within:ring-primary/40 focus-within:border-primary/30 transition-all">
+            <Textarea
               ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKey}
-              placeholder="Ask anything about your portfolio..."
+              placeholder="Ask anything about your portfolio…"
               rows={1}
-              style={{
-                flex: 1,
-                background: "transparent",
-                border: "none",
-                outline: "none",
-                color: "var(--text)",
-                fontSize: 14,
-                lineHeight: 1.6,
-                fontFamily: "var(--font-sans)",
-                resize: "none",
-                minHeight: 24,
-                maxHeight: 180,
-                caretColor: "var(--accent)",
-              }}
+              className="flex-1 bg-transparent border-none shadow-none outline-none focus-visible:ring-0 text-foreground text-sm leading-relaxed font-sans resize-none min-h-6 max-h-[180px] caret-primary placeholder:text-muted-foreground p-0"
             />
-            <button
+            <Button
+              size="icon"
               onClick={() => send()}
               disabled={!input.trim() || loading}
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 8,
-                flexShrink: 0,
-                background:
-                  input.trim() && !loading
-                    ? "var(--accent)"
-                    : "rgba(255,255,255,0.06)",
-                border: "none",
-                cursor: input.trim() && !loading ? "pointer" : "default",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                transition: "all 0.15s",
-                color:
-                  input.trim() && !loading
-                    ? "#0c0c0e"
-                    : "rgba(255,255,255,0.2)",
-                fontSize: 15,
-                fontWeight: 600,
-              }}
+              className="h-8 w-8 shrink-0 rounded-lg transition-all disabled:opacity-30"
             >
-              ↑
-            </button>
+              <ArrowUp className="h-4 w-4" />
+            </Button>
           </div>
 
-          {/* Footer hint */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              marginTop: 8,
-              fontSize: 11,
-              color: "rgba(255,255,255,0.18)",
-              fontFamily: "var(--font-mono)",
-            }}
-          >
+          <div className="flex justify-between mt-2 text-[11px] text-muted-foreground/50 font-mono">
             <span>enter to send · shift+enter for newline</span>
             <span>rag · claude or gpt-4o</span>
           </div>
