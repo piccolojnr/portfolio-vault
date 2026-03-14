@@ -91,7 +91,7 @@ async def add_message(
 ):
     try:
         msg = await svc.add_message(
-            session, conv_id, body.role, body.content, body.doc_type
+            session, conv_id, body.role, body.content, body.doc_type, body.meta
         )
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Copy, FileText, FileDown, Check } from "lucide-react";
 import { MarkdownMessage } from "@/components/markdown-message";
-import { Button } from "@/components/ui/button";
+import { type MessageMeta } from "@/lib/conversations";
 
 const DOC_RE =
   /<document\s+type="([^"]+)"\s+title="([^"]+)">([\s\S]+?)<\/document>/;
@@ -119,6 +119,21 @@ function ActionBar({ doc }: { doc: ParsedDoc }) {
   );
 }
 
+function MessageMetaBadges({ meta }: { meta: MessageMeta }) {
+  return (
+    <div className="mt-2 flex items-center gap-1.5">
+      <span className="px-1.5 py-0.5 rounded bg-muted/30 font-mono text-[10px] text-muted-foreground/50">
+        {meta.intent}
+      </span>
+      {meta.rag_retrieved && (
+        <span className="px-1.5 py-0.5 rounded bg-muted/30 font-mono text-[10px] text-muted-foreground/50">
+          • {meta.chunks_count} chunk{meta.chunks_count !== 1 ? "s" : ""}
+        </span>
+      )}
+    </div>
+  );
+}
+
 /**
  * DocumentMessage — renders assistant content.
  * If the content contains a <document> wrapper, shows a styled doc panel + action bar.
@@ -127,9 +142,11 @@ function ActionBar({ doc }: { doc: ParsedDoc }) {
 export function DocumentMessage({
   content,
   streaming,
+  meta,
 }: {
   content: string;
   streaming?: boolean;
+  meta?: MessageMeta | null;
 }) {
   const doc = !streaming ? parseDocument(content) : null;
 
@@ -142,7 +159,7 @@ export function DocumentMessage({
           <span className="text-[11px] font-mono text-muted-foreground/70 uppercase tracking-wide">
             {doc.docType.replace("_", " ")}
           </span>
-          <span className="ml-auto text-[11px] font-mono text-foreground/60 truncate max-w-[240px]">
+          <span className="ml-auto text-[11px] font-mono text-foreground/60 truncate max-w-60">
             {doc.title}
           </span>
         </div>
@@ -156,6 +173,12 @@ export function DocumentMessage({
         <div className="px-4 py-2.5 border-t border-border/40 bg-muted/10">
           <ActionBar doc={doc} />
         </div>
+
+        {!streaming && meta && meta.intent !== "conversational" && (
+          <div className="px-4 pb-2.5">
+            <MessageMetaBadges meta={meta} />
+          </div>
+        )}
       </div>
     );
   }
@@ -165,6 +188,9 @@ export function DocumentMessage({
       <MarkdownMessage content={content} />
       {streaming && (
         <span className="inline-block w-0.5 h-[1em] bg-primary ml-0.5 align-text-bottom animate-blink" />
+      )}
+      {!streaming && meta && meta.intent !== "conversational" && (
+        <MessageMetaBadges meta={meta} />
       )}
     </>
   );

@@ -19,6 +19,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { retrieve, formatContext } from "./retrieval";
 import { type Classification } from "./intent";
+import { type MessageMeta } from "./conversations";
 import {
     ANTHROPIC_API_KEY,
     OPENAI_API_KEY,
@@ -63,6 +64,7 @@ async function persistMessages(
     userMessage: string,
     assistantContent: string,
     docType: string | null,
+    meta: MessageMeta | null = null,
 ): Promise<void> {
     const base = `${RAG_BACKEND_URL}/api/v1/conversations/${convId}/messages`;
     const headers = { "Content-Type": "application/json" };
@@ -76,7 +78,7 @@ async function persistMessages(
     await fetch(base, {
         method: "POST",
         headers,
-        body: JSON.stringify({ role: "assistant", content: assistantContent, doc_type: docType }),
+        body: JSON.stringify({ role: "assistant", content: assistantContent, doc_type: docType, meta }),
     });
 }
 
@@ -96,14 +98,15 @@ async function streamResponse(
     messages: ChatMessage[],
     userMessage: string,
     convId: string | undefined,
+    meta: MessageMeta | null = null,
 ): Promise<ReadableStream<Uint8Array>> {
     const provider = getLLMProvider();
 
     if (provider === "anthropic" && anthropic) {
-        return streamAnthropic(messages, userMessage, convId);
+        return streamAnthropic(messages, userMessage, convId, meta);
     }
     if (provider === "openai" && openai) {
-        return streamOpenAI(messages, userMessage, convId);
+        return streamOpenAI(messages, userMessage, convId, meta);
     }
 
     throw new Error(
@@ -115,6 +118,7 @@ function streamAnthropic(
     messages: ChatMessage[],
     userMessage: string,
     convId: string | undefined,
+    meta: MessageMeta | null,
 ): ReadableStream<Uint8Array> {
     const stream = anthropic!.messages.stream({
         model: LLM_CONFIG.anthropic.model,
@@ -141,8 +145,8 @@ function streamAnthropic(
 
                 if (convId) {
                     const docType = extractDocType(accumulated);
-                    await persistMessages(convId, userMessage, accumulated, docType);
-                    enqueue(`data: ${JSON.stringify({ saved: { doc_type: docType } })}\n\n`);
+                    await persistMessages(convId, userMessage, accumulated, docType, meta);
+                    enqueue(`data: ${JSON.stringify({ saved: { doc_type: docType, meta } })}\n\n`);
                 }
 
                 enqueue("data: [DONE]\n\n");
@@ -158,6 +162,7 @@ async function streamOpenAI(
     messages: ChatMessage[],
     userMessage: string,
     convId: string | undefined,
+    meta: MessageMeta | null,
 ): Promise<ReadableStream<Uint8Array>> {
     const stream = await openai!.chat.completions.create({
         model: LLM_CONFIG.openai.model,
@@ -182,8 +187,8 @@ async function streamOpenAI(
 
                 if (convId) {
                     const docType = extractDocType(accumulated);
-                    await persistMessages(convId, userMessage, accumulated, docType);
-                    enqueue(`data: ${JSON.stringify({ saved: { doc_type: docType } })}\n\n`);
+                    await persistMessages(convId, userMessage, accumulated, docType, meta);
+                    enqueue(`data: ${JSON.stringify({ saved: { doc_type: docType, meta } })}\n\n`);
                 }
 
                 enqueue("data: [DONE]\n\n");
@@ -207,7 +212,8 @@ async function handleConversational(
     convId: string | undefined,
 ): Promise<ReadableStream<Uint8Array>> {
     console.log("[chat] conversational — skipping RAG");
-    return streamResponse([...history, { role: "user", content: message }], message, convId);
+    const meta: MessageMeta = { intent: "conversational", rag_retrieved: false, chunks_count: 0 };
+    return streamResponse([...history, { role: "user", content: message }], message, convId, meta);
 }
 
 /**
@@ -231,7 +237,8 @@ async function handleRetrieval(
         },
     ];
 
-    return streamResponse(messages, message, convId);
+    const meta: MessageMeta = { intent: "retrieval", rag_retrieved: true, chunks_count: ragResult.retrieved_chunks.length };
+    return streamResponse(messages, message, convId, meta);
 }
 
 /**
@@ -256,7 +263,8 @@ async function handleDocument(
         },
     ];
 
-    return streamResponse(messages, message, convId);
+    const meta: MessageMeta = { intent: "document", rag_retrieved: true, chunks_count: ragResult.retrieved_chunks.length };
+    return streamResponse(messages, message, convId, meta);
 }
 
 /**
@@ -274,8 +282,10 @@ async function handleRefinement(
         ? `Here is the document you previously generated:\n\n${priorDoc}\n\n`
         : "";
 
+    let chunksCount = 0;
     if (needsRag) {
         const ragResult = await retrieve(message, 5);
+        chunksCount = ragResult.retrieved_chunks.length;
         const chunks = formatContext(ragResult.retrieved_chunks);
         contextBlock += `Additional context from my portfolio vault:\n\n${chunks}\n\n`;
         console.log(`[chat] refinement + RAG — ${ragResult.retrieved_chunks.length} chunks`);
@@ -287,7 +297,8 @@ async function handleRefinement(
         ? `${contextBlock}---\n\nUser's request: ${message}`
         : message;
 
-    return streamResponse([...history, { role: "user", content: userContent }], message, convId);
+    const meta: MessageMeta = { intent: "refinement", rag_retrieved: needsRag, chunks_count: chunksCount };
+    return streamResponse([...history, { role: "user", content: userContent }], message, convId, meta);
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────

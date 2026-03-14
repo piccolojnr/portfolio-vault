@@ -4,11 +4,18 @@
  * Typed API client for conversation endpoints.
  */
 
+export interface MessageMeta {
+  intent: "conversational" | "retrieval" | "document" | "refinement";
+  rag_retrieved: boolean;
+  chunks_count: number;
+}
+
 export interface MessageRead {
   id: string;
   role: "user" | "assistant";
   content: string;
   doc_type: string | null;
+  meta: MessageMeta | null;
   created_at: string;
 }
 
@@ -83,10 +90,11 @@ export function addMessage(
   role: "user" | "assistant",
   content: string,
   docType?: string | null,
+  meta?: MessageMeta | null,
 ): Promise<MessageRead> {
   return apiFetch(`/api/conversations/${convId}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ role, content, doc_type: docType ?? null }),
+    body: JSON.stringify({ role, content, doc_type: docType ?? null, meta: meta ?? null }),
   });
 }

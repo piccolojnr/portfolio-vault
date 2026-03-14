@@ -13,6 +13,7 @@ class MessageRead(BaseModel):
     role: str
     content: str
     doc_type: str | None
+    meta: dict | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -46,3 +47,4 @@ class MessageCreate(BaseModel):
     role: str
     content: str
     doc_type: str | None = None
+    meta: dict | None = None

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Plus, Trash2, MessageSquare } from "lucide-react";
 import type { ConversationSummary } from "@/lib/conversations";
+import Link from "next/link";
 
 // ── Date grouping ──────────────────────────────────────────────────────────────
 
@@ -39,13 +40,11 @@ function groupConversations(
 function ConvEntry({
   conv,
   active,
-  onSelect,
   onDelete,
   onRename,
 }: {
   conv: ConversationSummary;
   active: boolean;
-  onSelect: () => void;
   onDelete: () => void;
   onRename: (title: string) => void;
 }) {
@@ -61,13 +60,13 @@ function ConvEntry({
   }
 
   return (
-    <div
+    <Link
       className={`group relative flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
         active
           ? "bg-primary/10 text-foreground"
           : "text-muted-foreground hover:bg-muted/30 hover:text-foreground"
       }`}
-      onClick={() => !editing && onSelect()}
+      href={`/${conv.id}`}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -113,7 +112,7 @@ function ConvEntry({
           <Trash2 className="h-3 w-3" />
         </button>
       )}
-    </div>
+    </Link>
   );
 }
 
@@ -122,15 +121,11 @@ function ConvEntry({
 export function ConversationSidebar({
   conversations,
   activeId,
-  onSelect,
-  onNew,
   onDelete,
   onRename,
 }: {
   conversations: ConversationSummary[];
   activeId: string | null;
-  onSelect: (id: string) => void;
-  onNew: () => void;
   onDelete: (id: string) => void;
   onRename: (id: string, title: string) => void;
 }) {
@@ -140,13 +135,13 @@ export function ConversationSidebar({
     <aside className="w-56 shrink-0 flex flex-col border-r border-border bg-bg h-full overflow-hidden">
       {/* New chat button */}
       <div className="p-3 border-b border-border/50">
-        <button
-          onClick={onNew}
+        <Link
           className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] font-mono text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors"
+          href="/"
         >
           <Plus className="h-3.5 w-3.5" />
           New chat
-        </button>
+        </Link>
       </div>
 
       {/* Conversation list */}
@@ -168,7 +163,6 @@ export function ConversationSidebar({
                   key={conv.id}
                   conv={conv}
                   active={conv.id === activeId}
-                  onSelect={() => onSelect(conv.id)}
                   onDelete={() => onDelete(conv.id)}
                   onRename={(title) => onRename(conv.id, title)}
                 />

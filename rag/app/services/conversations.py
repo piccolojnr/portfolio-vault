@@ -48,6 +48,8 @@ async def get_conversation(session: AsyncSession, conv_id: UUID) -> Conversation
         title=conv.title,
         created_at=conv.created_at,
         updated_at=conv.updated_at,
+        summary=conv.summary,
+        summarised_up_to_message_id=conv.summarised_up_to_message_id,
         messages=[MessageRead.model_validate(m) for m in messages],
     )
 
@@ -91,6 +93,7 @@ async def add_message(
     role: str,
     content: str,
     doc_type: str | None = None,
+    meta: dict | None = None,
 ) -> Message:
     conv = await session.get(Conversation, conv_id)
     if not conv:
@@ -101,6 +104,7 @@ async def add_message(
         role=role,
         content=content,
         doc_type=doc_type,
+        meta=meta,
     )
     session.add(msg)
 

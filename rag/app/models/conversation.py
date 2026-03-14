@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from uuid import UUID, uuid4
-from sqlalchemy import Column, DateTime
+from sqlalchemy import Column, DateTime, JSON
 from sqlmodel import Field, SQLModel
 
 from app.models.base import utcnow
@@ -34,6 +34,7 @@ class Message(SQLModel, table=True):
     role: str          # 'user' | 'assistant'
     content: str
     doc_type: str | None = None   # None | 'cv' | 'cover_letter' | 'resume' | 'bio'
+    meta: dict | None = Field(default=None, sa_column=Column("meta", JSON, nullable=True))
     created_at: datetime = Field(
         default_factory=utcnow, sa_column=Column(DateTime(timezone=True), nullable=False)
     )
