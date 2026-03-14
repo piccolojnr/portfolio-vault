@@ -4,11 +4,10 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { ArrowUp, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { MarkdownMessage } from "@/components/markdown-message";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 interface Message {
   role: "user" | "assistant";
@@ -142,37 +141,16 @@ export default function Home() {
   const isEmpty = messages.length === 0;
 
   return (
-    <div className="flex flex-col h-screen bg-bg">
-      {/* ── Header ── */}
-      <header className="flex items-center gap-3.5 px-6 py-4 border-b border-border bg-bg/80 backdrop-blur-md sticky top-0 z-20 shrink-0">
-        <Avatar className="h-9 w-9 rounded-[10px] ring-1 ring-primary/20 bg-accent-dim shrink-0">
-          <AvatarFallback className="rounded-[10px] bg-accent-dim text-primary text-[13px] font-medium font-mono tracking-wide">
-            DR
-          </AvatarFallback>
-        </Avatar>
-
-        <div>
-          <div className="text-sm font-semibold tracking-tight text-foreground">
-            Portfolio Assistant
-          </div>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <Badge variant="outline" className="h-4 px-1.5 text-[10px] font-mono border-primary/20 text-primary/70 py-0">
-              RAG
-            </Badge>
-            <span className="text-[11px] text-muted-foreground">knows your vault</span>
-          </div>
-        </div>
-
-        {/* Status indicator */}
-        <div className="ml-auto flex items-center gap-2 text-[11px] text-muted-foreground font-mono">
-          <div
-            className={`w-1.5 h-1.5 rounded-full transition-colors ${
-              loading ? "bg-primary animate-pulse-dot" : "bg-[#4ade80]"
-            }`}
-          />
-          {loading ? "thinking…" : "ready"}
-        </div>
-      </header>
+    <div className="flex flex-col h-[calc(100vh-61px)] bg-bg">
+      {/* Status indicator */}
+      <div className="fixed top-0 right-0 z-30 flex items-center gap-2 px-6 py-[1.1rem] text-[11px] text-muted-foreground font-mono pointer-events-none">
+        <div
+          className={`w-1.5 h-1.5 rounded-full transition-colors ${
+            loading ? "bg-primary animate-pulse-dot" : "bg-[#4ade80]"
+          }`}
+        />
+        {loading ? "thinking…" : "ready"}
+      </div>
 
       {/* ── Messages ── */}
       {isEmpty ? (
@@ -192,7 +170,8 @@ export default function Home() {
             </h1>
             <p className="text-[15px] text-muted-foreground leading-relaxed mb-2 max-w-[480px]">
               I retrieve only the relevant parts of your vault for each question
-              — no context stuffing. Ask me to write, tailor, or prepare anything.
+              — no context stuffing. Ask me to write, tailor, or prepare
+              anything.
             </p>
 
             <Separator className="my-8 bg-border" />
