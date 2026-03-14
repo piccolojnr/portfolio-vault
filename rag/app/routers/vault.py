@@ -13,16 +13,20 @@ from datetime import datetime, timezone
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+import math
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select
+from sqlmodel import func, select
 
 from app.config import get_settings
 from app.db import get_db_conn
 from app.models import PipelineRun, VaultDocument
 from app.schemas import (
+    PaginatedDocs,
     ReindexResponse,
     ReindexStatus,
+    VaultDocCreate,
     VaultDocDetail,
     VaultDocSummary,
     VaultDocUpdate,
@@ -35,22 +39,42 @@ router = APIRouter(prefix="/vault", tags=["vault"])
 DBSession = Annotated[AsyncSession, Depends(get_db_conn)]
 
 
-@router.get("/documents", response_model=list[VaultDocSummary])
-async def list_documents(session: DBSession):
-    result = await session.execute(
-        select(VaultDocument).order_by(VaultDocument.type, VaultDocument.slug)
-    )
-    docs = result.scalars().all()
-    return [
-        VaultDocSummary(
-            id=str(d.id),
-            slug=d.slug,
-            type=d.type,
-            title=d.title,
-            updated_at=d.updated_at,
+@router.get("/documents", response_model=PaginatedDocs)
+async def list_documents(
+    session: DBSession,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+):
+    total: int = (
+        await session.execute(select(func.count()).select_from(VaultDocument))
+    ).scalar_one()
+
+    offset = (page - 1) * page_size
+    rows = (
+        await session.execute(
+            select(VaultDocument)
+            .order_by(VaultDocument.type, VaultDocument.slug)
+            .offset(offset)
+            .limit(page_size)
         )
-        for d in docs
-    ]
+    ).scalars().all()
+
+    return PaginatedDocs(
+        items=[
+            VaultDocSummary(
+                id=str(d.id),
+                slug=d.slug,
+                type=d.type,
+                title=d.title,
+                updated_at=d.updated_at,
+            )
+            for d in rows
+        ],
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=max(1, math.ceil(total / page_size)),
+    )
 
 
 @router.get("/documents/{slug}", response_model=VaultDocDetail)
@@ -98,6 +122,41 @@ async def update_document(slug: str, patch: VaultDocUpdate, session: DBSession):
         updated_at=doc.updated_at,
         content=doc.content,
     )
+
+
+@router.post("/documents", response_model=VaultDocDetail, status_code=201)
+async def create_document(data: VaultDocCreate, session: DBSession):
+    existing = (await session.execute(
+        select(VaultDocument).where(VaultDocument.slug == data.slug)
+    )).scalars().first()
+    if existing:
+        raise HTTPException(status_code=409, detail=f"Slug '{data.slug}' already exists")
+
+    doc = VaultDocument(
+        type=data.type,
+        slug=data.slug,
+        title=data.title,
+        content=data.content,
+    )
+    session.add(doc)
+    await session.commit()
+    await session.refresh(doc)
+    return VaultDocDetail(
+        id=str(doc.id), slug=doc.slug, type=doc.type,
+        title=doc.title, updated_at=doc.updated_at, content=doc.content,
+    )
+
+
+@router.delete("/documents/{slug}", status_code=204)
+async def delete_document(slug: str, session: DBSession):
+    result = await session.execute(
+        select(VaultDocument).where(VaultDocument.slug == slug)
+    )
+    doc = result.scalars().first()
+    if doc is None:
+        raise HTTPException(status_code=404, detail=f"Document '{slug}' not found")
+    await session.delete(doc)
+    await session.commit()
 
 
 @router.post("/reindex", response_model=ReindexResponse, status_code=202)

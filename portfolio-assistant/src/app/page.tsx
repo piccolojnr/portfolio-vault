@@ -141,17 +141,7 @@ export default function Home() {
   const isEmpty = messages.length === 0;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-61px)] bg-bg">
-      {/* Status indicator */}
-      <div className="fixed top-0 right-0 z-30 flex items-center gap-2 px-6 py-[1.1rem] text-[11px] text-muted-foreground font-mono pointer-events-none">
-        <div
-          className={`w-1.5 h-1.5 rounded-full transition-colors ${
-            loading ? "bg-primary animate-pulse-dot" : "bg-[#4ade80]"
-          }`}
-        />
-        {loading ? "thinking…" : "ready"}
-      </div>
-
+    <div className="flex flex-col h-full bg-bg">
       {/* ── Messages ── */}
       {isEmpty ? (
         // ── Empty state ──
@@ -260,7 +250,14 @@ export default function Home() {
 
           <div className="flex justify-between mt-2 text-[11px] text-muted-foreground/50 font-mono">
             <span>enter to send · shift+enter for newline</span>
-            <span>rag · claude or gpt-4o</span>
+            <span className="flex items-center gap-1.5">
+              <span
+                className={`inline-block w-1.5 h-1.5 rounded-full transition-colors ${
+                  loading ? "bg-primary animate-pulse-dot" : "bg-[#4ade80]"
+                }`}
+              />
+              {loading ? "thinking…" : "ready"}
+            </span>
           </div>
         </div>
       </div>

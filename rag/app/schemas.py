@@ -38,6 +38,14 @@ class QueryResponse(BaseModel):
 
 # ── Vault schemas ─────────────────────────────────────────────────────────────
 
+class PaginatedDocs(BaseModel):
+    items: list["VaultDocSummary"]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+
+
 class VaultDocSummary(BaseModel):
     id: str
     slug: str
@@ -48,6 +56,13 @@ class VaultDocSummary(BaseModel):
 
 class VaultDocDetail(VaultDocSummary):
     content: str
+
+
+class VaultDocCreate(BaseModel):
+    slug: str
+    title: str
+    type: str
+    content: str = ""
 
 
 class VaultDocUpdate(BaseModel):

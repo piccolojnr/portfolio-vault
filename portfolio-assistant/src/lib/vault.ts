@@ -13,8 +13,23 @@ export interface VaultDocSummary {
   updated_at: string;
 }
 
+export interface PaginatedDocs {
+  items: VaultDocSummary[];
+  total: number;
+  page: number;
+  page_size: number;
+  pages: number;
+}
+
 export interface VaultDocDetail extends VaultDocSummary {
   content: string;
+}
+
+export interface VaultDocCreate {
+  slug: string;
+  title: string;
+  type: string;
+  content?: string;
 }
 
 export interface VaultDocUpdate {
@@ -42,15 +57,25 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     const text = await res.text().catch(() => res.statusText);
     throw new Error(`${res.status}: ${text}`);
   }
+  // 204 No Content
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
-export function listDocuments(): Promise<VaultDocSummary[]> {
-  return apiFetch("/api/vault/documents");
+export function listDocuments(page = 1, pageSize = 20): Promise<PaginatedDocs> {
+  return apiFetch(`/api/vault/documents?page=${page}&page_size=${pageSize}`);
 }
 
 export function getDocument(slug: string): Promise<VaultDocDetail> {
   return apiFetch(`/api/vault/documents/${encodeURIComponent(slug)}`);
+}
+
+export function createDocument(data: VaultDocCreate): Promise<VaultDocDetail> {
+  return apiFetch("/api/vault/documents", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
 }
 
 export function updateDocument(
@@ -61,6 +86,12 @@ export function updateDocument(
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
+  });
+}
+
+export function deleteDocument(slug: string): Promise<void> {
+  return apiFetch(`/api/vault/documents/${encodeURIComponent(slug)}`, {
+    method: "DELETE",
   });
 }
 
