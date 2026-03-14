@@ -57,7 +57,19 @@ Rules:
 - Use the provided context to answer. Be specific — use numbers, project names, technologies.
 - If asked something not in the context, be honest but try to infer from what you know.
 - When drafting documents, write in first person as Daud.
-- Keep responses concise unless drafting a longer document.`;
+- Keep responses concise unless drafting a longer document.
+
+Document generation:
+When generating a formal document (CV, cover letter, resume, or bio), wrap the entire document like this:
+
+<document type="cover_letter" title="Cover Letter — Company Name">
+# Cover Letter
+
+[full document content here]
+</document>
+
+Valid types: cv, cover_letter, resume, bio
+For regular conversational answers, respond normally — no wrapper.`;
 
 /**
  * LLM Configuration
@@ -65,10 +77,10 @@ Rules:
 export const LLM_CONFIG = {
     anthropic: {
         model: "claude-sonnet-4-20250514",
-        max_tokens: 1024,
+        max_tokens: 2000,
     },
     openai: {
         model: "gpt-4o",
-        max_tokens: 1024,
+        max_tokens: 2000,
     },
 };

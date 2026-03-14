@@ -28,6 +28,13 @@ from app.schemas.pipeline import (
     PipelineRunSummary,
 )
 from app.schemas.settings import SettingsRead, SettingsUpdate
+from app.schemas.conversation import (
+    ConversationSummary,
+    ConversationDetail,
+    ConversationPatch,
+    MessageRead,
+    MessageCreate,
+)
 
 __all__ = [
     "QueryRequest",

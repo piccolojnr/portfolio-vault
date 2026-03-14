@@ -37,11 +37,11 @@ if __name__ == "__main__":
 
     engine = create_engine(settings.database_url)
 
-    # Step 1: apply reference DDL
-    sql_file = MIGRATIONS_DIR / "001_init.sql"
-    apply_sql_file(engine, sql_file)
+    # Step 1: apply all SQL migration files in order
+    for sql_file in sorted(MIGRATIONS_DIR.glob("*.sql")):
+        apply_sql_file(engine, sql_file)
 
-    # Step 2: safety net — create any model tables not in the SQL file
+    # Step 2: safety net — create any model tables not covered by SQL files
     SQLModel.metadata.create_all(engine)
     print("SQLModel.metadata.create_all() complete")
 

@@ -233,6 +233,38 @@ Keys are encrypted with Fernet (AES-128-CBC + HMAC) using a SHA-256 derived key 
 - **Generation**: Anthropic/OpenAI return input/output token counts; cost computed per model.
 - Both are logged to `query_logs` (per query) and `pipeline_runs` (per index run).
 
+### Conversations
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/conversations` | Create a new conversation |
+| `GET` | `/conversations` | List all conversations (newest first) |
+| `GET` | `/conversations/{id}` | Conversation detail + full message history |
+| `PATCH` | `/conversations/{id}` | Update title |
+| `DELETE` | `/conversations/{id}` | Delete conversation + all messages (cascade) |
+| `POST` | `/conversations/{id}/messages` | Persist a message; triggers auto-title after first assistant message |
+
+**Message body:**
+```json
+{ "role": "user", "content": "...", "doc_type": null }
+```
+
+`doc_type` is set to `"cover_letter"`, `"cv"`, `"resume"`, or `"bio"` by the frontend when the LLM wraps its response in a `<document>` tag.
+
+### Export
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/export/docx` | Markdown → `.docx` download |
+| `POST` | `/export/pdf` | Markdown → `.pdf` download |
+
+**Export request body:**
+```json
+{ "content": "# My Cover Letter\n\n...", "title": "Cover Letter — Stripe" }
+```
+
+Requires `python-docx`, `markdown`, and `weasyprint` — all installed via `pip install -e .`.
+
 ## Script Reference
 
 | Script | Description |
