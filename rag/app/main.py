@@ -19,9 +19,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers import health, retrieve, query
 from app.config import get_settings
+from app.db import open_db_engine
 
 
-def _print_startup_banner() -> None:
+def _print_startup_banner(db_connected: bool = False) -> None:
     settings = get_settings()
     print("=" * 60)
     print("Portfolio Vault RAG API  v1.0.0")
@@ -30,6 +31,7 @@ def _print_startup_banner() -> None:
     print(f"  OpenAI key:     {'yes' if settings.openai_api_key else 'no'}")
     print(f"  Anthropic key:  {'yes' if settings.anthropic_api_key else 'no'}")
     print(f"  Qdrant URL:     {'yes' if settings.qdrant_url else 'no'}")
+    print(f"  Database:       {'connected' if db_connected else 'not configured'}")
     print("=" * 60)
     print("  Docs:     http://localhost:8000/docs")
     print("  Health:   GET  http://localhost:8000/api/v1/health")
@@ -40,8 +42,19 @@ def _print_startup_banner() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    _print_startup_banner()
+    settings = get_settings()
+    if settings.database_url:
+        engine, factory = await open_db_engine(settings.database_url)
+        app.state.db_engine = engine
+        app.state.db_session_factory = factory
+        _print_startup_banner(db_connected=True)
+    else:
+        app.state.db_engine = None
+        app.state.db_session_factory = None
+        _print_startup_banner(db_connected=False)
     yield
+    if app.state.db_engine:
+        await app.state.db_engine.dispose()
 
 
 def create_app() -> FastAPI:

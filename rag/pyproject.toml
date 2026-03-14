@@ -1,3 +1,11 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*", "portfolio_vault*"]
+
 [project]
 name = "portfolio-vault-rag"
 version = "1.0.0"
@@ -10,4 +18,7 @@ dependencies = [
     "anthropic>=0.50",
     "openai>=1.0",
     "qdrant-client>=1.13",
+    "sqlmodel>=0.0.21",
+    "asyncpg>=0.30",
+    "psycopg2-binary>=2.9",
 ]

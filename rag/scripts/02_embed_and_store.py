@@ -3,6 +3,7 @@ STAGE 1B: Embedding + Storage
 ==============================
 
 Embed chunks and store them in Qdrant (local or cloud).
+Records a PipelineRun in the DB for audit purposes.
 
 Run:
   cd rag
@@ -16,83 +17,124 @@ from qdrant_client.models import Distance, VectorParams, PointStruct, PayloadSch
 from app.config import get_settings
 from portfolio_vault.embedding import embed
 from portfolio_vault.database import get_qdrant_client
+from portfolio_vault.vault_db import get_docs, start_pipeline_run, finish_pipeline_run
 
-
-def get_category(source: str) -> str:
-    if source.startswith("project_"):
-        return "project"
-    if source == "brag_sheet":
-        return "brag"
-    return "general"
+TYPE_TO_CATEGORY = {
+    "project":    "project",
+    "brag":       "brag",
+    "bio":        "general",
+    "skills":     "general",
+    "experience": "general",
+}
 
 
 if __name__ == "__main__":
     settings = get_settings()
 
-    # Load chunks
-    chunks = json.load(open(settings.chunks_file))
-    chunks = [c for c in chunks if c["word_count"] >= 10]
-    print(f"Chunks to embed: {len(chunks)}")
+    # Build slug → doc map from DB
+    docs = get_docs(settings.database_url) if settings.database_url else []
+    slug_to_doc = {doc.slug: doc for doc in docs}
+    doc_ids = [str(doc.id) for doc in docs]
 
-    # Embed
-    print(f"\nEmbedding {len(chunks)} chunks {'(DEMO)' if settings.use_demo else '(OpenAI)'}...")
-    texts = [c["content"] for c in chunks]
-    vectors = embed(texts, settings=settings)
-    print(f"Vector dimensions: {len(vectors[0])}")
-    print(f"Sample (first 6 nums): {[round(x, 4) for x in vectors[0][:6]]}")
-
-    # Connect to Qdrant
-    client = get_qdrant_client(settings)
-    if settings.qdrant_url:
-        print(f"\nConnected to Qdrant at {settings.qdrant_url}")
-    else:
-        print(f"\nUsing local Qdrant at {settings.qdrant_local_path}")
-
-    # Recreate collection
-    collection = settings.qdrant_collection
-    if client.collection_exists(collection):
-        client.delete_collection(collection)
-        print(f"Deleted existing '{collection}' collection")
-
-    client.create_collection(
-        collection_name=collection,
-        vectors_config=VectorParams(size=len(vectors[0]), distance=Distance.COSINE),
-    )
-    print(f"Created collection '{collection}'")
-
-    # Index payload fields for filtering
-    client.create_payload_index(
-        collection_name=collection,
-        field_name="source",
-        field_schema=PayloadSchemaType.KEYWORD,
-    )
-    client.create_payload_index(
-        collection_name=collection,
-        field_name="category",
-        field_schema=PayloadSchemaType.KEYWORD,
-    )
-    print("Indexed 'source' and 'category' payload fields")
-
-    # Upsert points
-    points = [
-        PointStruct(
-            id=i,
-            vector=vector,
-            payload={
-                "chunk_id": chunk["id"],
-                "source": chunk["source"],
-                "category": get_category(chunk["source"]),
-                "heading": chunk["heading"],
-                "word_count": chunk["word_count"],
-                "content": chunk["content"],
-            },
+    # Start pipeline run audit record
+    run_id: str | None = None
+    if settings.database_url and doc_ids:
+        run_id = start_pipeline_run(
+            settings.database_url,
+            doc_ids=doc_ids,
+            model=settings.embedding_model,
         )
-        for i, (chunk, vector) in enumerate(zip(chunks, vectors))
-    ]
+        print(f"Pipeline run started: {run_id}")
 
-    client.upsert(collection_name=collection, points=points)
-    count = client.count(collection_name=collection).count
-    print(f"\nStored {count} chunks in Qdrant")
+    try:
+        # Load chunks
+        chunks = json.load(open(settings.chunks_file))
+        chunks = [c for c in chunks if c["word_count"] >= 10]
+        print(f"Chunks to embed: {len(chunks)}")
+
+        # Embed
+        print(f"\nEmbedding {len(chunks)} chunks {'(DEMO)' if settings.use_demo else '(OpenAI)'}...")
+        texts = [c["content"] for c in chunks]
+        vectors = embed(texts, settings=settings)
+        print(f"Vector dimensions: {len(vectors[0])}")
+        print(f"Sample (first 6 nums): {[round(x, 4) for x in vectors[0][:6]]}")
+
+        # Connect to Qdrant
+        client = get_qdrant_client(settings)
+        if settings.qdrant_url:
+            print(f"\nConnected to Qdrant at {settings.qdrant_url}")
+        else:
+            print(f"\nUsing local Qdrant at {settings.qdrant_local_path}")
+
+        # Recreate collection
+        collection = settings.qdrant_collection
+        if client.collection_exists(collection):
+            client.delete_collection(collection)
+            print(f"Deleted existing '{collection}' collection")
+
+        client.create_collection(
+            collection_name=collection,
+            vectors_config=VectorParams(size=len(vectors[0]), distance=Distance.COSINE),
+        )
+        print(f"Created collection '{collection}'")
+
+        # Index payload fields for filtering
+        client.create_payload_index(
+            collection_name=collection,
+            field_name="source",
+            field_schema=PayloadSchemaType.KEYWORD,
+        )
+        client.create_payload_index(
+            collection_name=collection,
+            field_name="category",
+            field_schema=PayloadSchemaType.KEYWORD,
+        )
+        print("Indexed 'source' and 'category' payload fields")
+
+        # Upsert points
+        points = [
+            PointStruct(
+                id=i,
+                vector=vector,
+                payload={
+                    "chunk_id": chunk["id"],
+                    "source": chunk["source"],
+                    "category": TYPE_TO_CATEGORY.get(
+                        slug_to_doc[chunk["source"]].type if chunk["source"] in slug_to_doc else "",
+                        "general",
+                    ),
+                    "heading": chunk["heading"],
+                    "word_count": chunk["word_count"],
+                    "content": chunk["content"],
+                },
+            )
+            for i, (chunk, vector) in enumerate(zip(chunks, vectors))
+        ]
+
+        client.upsert(collection_name=collection, points=points)
+        count = client.count(collection_name=collection).count
+        print(f"\nStored {count} chunks in Qdrant")
+
+        # Finish pipeline run — success
+        if run_id and settings.database_url:
+            finish_pipeline_run(
+                settings.database_url,
+                run_id=run_id,
+                status="success",
+                chunk_count=count,
+            )
+            print(f"Pipeline run {run_id} → success ({count} chunks)")
+
+    except Exception as exc:
+        if run_id and settings.database_url:
+            finish_pipeline_run(
+                settings.database_url,
+                run_id=run_id,
+                status="failed",
+                error=str(exc),
+            )
+            print(f"Pipeline run {run_id} → failed: {exc}")
+        raise
 
     # Test retrieval
     print("\n" + "=" * 60)
