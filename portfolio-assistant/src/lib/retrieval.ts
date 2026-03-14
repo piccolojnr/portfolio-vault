@@ -48,7 +48,7 @@ export async function retrieve(
     query: string,
     n: number = 5
 ): Promise<RetrieveResponse> {
-    const response = await fetch(`${RAG_BACKEND_URL}/retrieve`, {
+    const response = await fetch(`${RAG_BACKEND_URL}/api/v1/retrieve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: query, n_results: n }),

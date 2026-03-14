@@ -3,35 +3,42 @@ Embedding Functions
 ===================
 
 Convert text to dense vectors using OpenAI or demo mode.
+Accepts a Settings instance for dependency injection.
 """
 
 import math
 import random
-from portfolio_vault.config import USE_DEMO, OPENAI_KEY, EMBEDDING_MODEL, EMBEDDING_DIMS
 
-def embed(texts: list[str]) -> list[list[float]]:
+
+def embed(texts: list[str], settings=None) -> list[list[float]]:
     """Embed texts using OpenAI or demo vectors."""
-    if USE_DEMO:
-        return _embed_demo(texts)
-    return _embed_openai(texts)
+    if settings is None:
+        from app.config import get_settings
+        settings = get_settings()
 
-def _embed_openai(texts: list[str]) -> list[list[float]]:
+    if settings.use_demo:
+        return _embed_demo(texts)
+    return _embed_openai(texts, settings)
+
+
+def _embed_openai(texts: list[str], settings) -> list[list[float]]:
     """Embed using OpenAI API."""
     from openai import OpenAI
-    
-    client = OpenAI(api_key=OPENAI_KEY)
+
+    client = OpenAI(api_key=settings.openai_api_key)
     response = client.embeddings.create(
-        model=EMBEDDING_MODEL,
-        input=texts
+        model=settings.embedding_model,
+        input=texts,
     )
     return [item.embedding for item in response.data]
 
+
 def _embed_demo(texts: list[str]) -> list[list[float]]:
-    """Generate fake vectors for demo mode."""
+    """Generate fake vectors for demo mode (16-dim, normalised)."""
     vectors = []
     for text in texts:
         random.seed(hash(text) % (2**32))
-        vec = [random.gauss(0, 1) for _ in range(16)]  # Demo uses 16 dims
+        vec = [random.gauss(0, 1) for _ in range(16)]
         magnitude = math.sqrt(sum(x**2 for x in vec))
         vectors.append([x / magnitude for x in vec])
     return vectors

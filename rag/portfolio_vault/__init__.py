@@ -7,31 +7,33 @@ Daud Rahim's portfolio, experience, and skills.
 
 Main API:
   from portfolio_vault import retrieve_and_answer
+  from app.config import get_settings
 
-  answer, chunks = retrieve_and_answer("Which projects involved payment processing?")
+  settings = get_settings()
+  answer, chunks = retrieve_and_answer("Which projects involved payment processing?", settings)
   print(answer)
 """
 
-from portfolio_vault.config import (
-    USE_DEMO,
-    OPENAI_KEY,
-    ANTHROPIC_KEY,
-    print_config,
-)
 from portfolio_vault.embedding import embed
 from portfolio_vault.retrieval import retrieve, route_query
 from portfolio_vault.generation import generate
-from portfolio_vault.database import get_collection
+from portfolio_vault.database import get_qdrant_client, get_collection
 
-def retrieve_and_answer(question: str, n_results: int = 5) -> tuple[str, list[dict]]:
+
+def retrieve_and_answer(question: str, settings=None, n_results: int = 5) -> tuple[str, list[dict]]:
     """
     High-level API: Ask a question and get an answer with retrieved context.
-    
+
     Returns: (answer_text, retrieved_chunks)
     """
-    chunks = retrieve(question, n=n_results)
-    answer = generate(question, chunks)
+    if settings is None:
+        from app.config import get_settings
+        settings = get_settings()
+
+    chunks = retrieve(question, settings=settings, n=n_results)
+    answer = generate(question, chunks, settings=settings)
     return answer, chunks
+
 
 __all__ = [
     "retrieve_and_answer",
@@ -39,7 +41,6 @@ __all__ = [
     "generate",
     "embed",
     "route_query",
+    "get_qdrant_client",
     "get_collection",
-    "USE_DEMO",
-    "print_config",
 ]

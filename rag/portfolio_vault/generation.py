@@ -3,12 +3,8 @@ LLM Generation
 ==============
 
 Generate answers using Anthropic Claude or OpenAI GPT.
+Accepts a Settings instance for dependency injection.
 """
-
-from portfolio_vault.config import (
-    USE_DEMO, ANTHROPIC_KEY, OPENAI_KEY,
-    ANTHROPIC_MODEL, OPENAI_MODEL
-)
 
 SYSTEM_PROMPT = """You are Daud Rahim's personal career assistant.
 
@@ -21,69 +17,69 @@ Guidelines:
 - Format lists clearly when appropriate."""
 
 
-def generate(question: str, context_chunks: list[dict]) -> str:
+def generate(question: str, context_chunks: list[dict], settings=None) -> str:
     """
     Generate answer using the configured LLM.
     Defaults to Anthropic Claude, falls back to OpenAI GPT.
     """
-    if USE_DEMO:
+    if settings is None:
+        from app.config import get_settings
+        settings = get_settings()
+
+    if settings.use_demo:
         return "[DEMO MODE — no real LLM call]"
-    
-    if ANTHROPIC_KEY:
-        return generate_with_anthropic(question, context_chunks)
-    elif OPENAI_KEY:
-        return generate_with_openai(question, context_chunks)
+
+    if settings.anthropic_api_key:
+        return _generate_with_anthropic(question, context_chunks, settings)
+    elif settings.openai_api_key:
+        return _generate_with_openai(question, context_chunks, settings)
     else:
         return "[ERROR] No API keys available."
 
 
-def generate_with_anthropic(question: str, context_chunks: list[dict]) -> str:
-    """Generate answer using Anthropic's Claude."""
+def _generate_with_anthropic(question: str, context_chunks: list[dict], settings) -> str:
     import anthropic
-    
-    client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
-    
-    # Format context
+
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+
     context = "\n\n---\n\n".join([
         f"[Source: {c['source']} / {c['heading']}]\n{c['content']}"
         for c in context_chunks
     ])
-    
+
     response = client.messages.create(
-        model=ANTHROPIC_MODEL,
+        model=settings.anthropic_model,
         max_tokens=600,
         system=SYSTEM_PROMPT,
         messages=[{
             "role": "user",
-            "content": f"Context from Daud's portfolio vault:\n\n{context}\n\n---\n\nQuestion: {question}"
-        }]
+            "content": f"Context from Daud's portfolio vault:\n\n{context}\n\n---\n\nQuestion: {question}",
+        }],
     )
-    
+
     return response.content[0].text
 
 
-def generate_with_openai(question: str, context_chunks: list[dict]) -> str:
-    """Generate answer using OpenAI's GPT."""
+def _generate_with_openai(question: str, context_chunks: list[dict], settings) -> str:
     from openai import OpenAI
-    
-    client = OpenAI(api_key=OPENAI_KEY)
-    
-    # Format context
+
+    client = OpenAI(api_key=settings.openai_api_key)
+
     context = "\n\n---\n\n".join([
         f"[Source: {c['source']} / {c['heading']}]\n{c['content']}"
         for c in context_chunks
     ])
-    
+
     response = client.chat.completions.create(
-        model=OPENAI_MODEL,
+        model=settings.openai_model,
         max_tokens=600,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {
                 "role": "user",
-                "content": f"Context from Daud's portfolio vault:\n\n{context}\n\n---\n\nQuestion: {question}"
-            }
-        ]
+                "content": f"Context from Daud's portfolio vault:\n\n{context}\n\n---\n\nQuestion: {question}",
+            },
+        ],
     )
-    
+
     return response.choices[0].message.content

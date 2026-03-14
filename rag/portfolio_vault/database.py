@@ -2,25 +2,25 @@
 Vector Database Connection
 ===========================
 
-Handles ChromaDB and Qdrant connections.
+Qdrant client factory. Uses cloud Qdrant when qdrant_url is set,
+falls back to local file storage for development / demo mode.
 """
 
-import chromadb
-from portfolio_vault.config import CHROMA_PATH, CHROMA_COLLECTION
+from qdrant_client import QdrantClient
 
-# Global collection instance (lazy-loaded)
-_chroma_collection = None
 
-def get_chroma_collection():
-    """Get or initialize ChromaDB collection."""
-    global _chroma_collection
-    
-    if _chroma_collection is None:
-        client = chromadb.PersistentClient(path=str(CHROMA_PATH))
-        _chroma_collection = client.get_collection(CHROMA_COLLECTION)
-    
-    return _chroma_collection
+def get_qdrant_client(settings) -> QdrantClient:
+    """Return a configured Qdrant client using injected settings."""
+    if settings.qdrant_url:
+        return QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key or None)
+    # Local file-based storage for development / demo
+    settings.qdrant_local_path.mkdir(parents=True, exist_ok=True)
+    return QdrantClient(path=str(settings.qdrant_local_path))
 
-def get_collection():
-    """Alias for backward compatibility."""
-    return get_chroma_collection()
+
+# Backward-compat alias used by scripts
+def get_collection(settings=None):
+    if settings is None:
+        from app.config import get_settings
+        settings = get_settings()
+    return get_qdrant_client(settings)

@@ -1,91 +1,118 @@
 """
-STAGE 1B: Embedding + Storage (using package imports)
-=====================================================
+STAGE 1B: Embedding + Storage
+==============================
 
-Embed chunks and store them in ChromaDB.
+Embed chunks and store them in Qdrant (local or cloud).
 
 Run:
   cd rag
-  .\.venv\Scripts\python.exe scripts/02_embed_and_store.py
+  .venv/Scripts/python.exe scripts/02_embed_and_store.py
 """
 
-import sys
-from pathlib import Path
 import json
-import chromadb
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, VectorParams, PointStruct, PayloadSchemaType
 
-# Add parent directory to path so portfolio_vault can be imported
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from portfolio_vault.config import (
-    USE_DEMO, OPENAI_KEY, CHROMA_PATH, CHROMA_COLLECTION,
-    CHUNKS_FILE, print_config
-)
+from app.config import get_settings
 from portfolio_vault.embedding import embed
+from portfolio_vault.database import get_qdrant_client
+
+
+def get_category(source: str) -> str:
+    if source.startswith("project_"):
+        return "project"
+    if source == "brag_sheet":
+        return "brag"
+    return "general"
+
 
 if __name__ == "__main__":
-    print_config()
-    
+    settings = get_settings()
+
     # Load chunks
-    chunks = json.load(open(CHUNKS_FILE))
+    chunks = json.load(open(settings.chunks_file))
     chunks = [c for c in chunks if c["word_count"] >= 10]
-    print(f"\nChunks to embed: {len(chunks)}")
-    
-    # Create ChromaDB collection
-    chroma_client = chromadb.PersistentClient(path=str(CHROMA_PATH))
-    try:
-        chroma_client.delete_collection(CHROMA_COLLECTION)
-    except:
-        pass
-    
-    collection = chroma_client.create_collection(
-        name=CHROMA_COLLECTION,
-        metadata={"hnsw:space": "cosine"}
-    )
-    
-    # Embed chunks
-    print(f"\nEmbedding {len(chunks)} chunks {'(DEMO)' if USE_DEMO else '(OpenAI)'}...")
+    print(f"Chunks to embed: {len(chunks)}")
+
+    # Embed
+    print(f"\nEmbedding {len(chunks)} chunks {'(DEMO)' if settings.use_demo else '(OpenAI)'}...")
     texts = [c["content"] for c in chunks]
-    vectors = embed(texts)
+    vectors = embed(texts, settings=settings)
     print(f"Vector dimensions: {len(vectors[0])}")
     print(f"Sample (first 6 nums): {[round(x, 4) for x in vectors[0][:6]]}")
-    
-    # Store in ChromaDB
-    collection.add(
-        ids=[c["id"] for c in chunks],
-        embeddings=vectors,
-        documents=texts,
-        metadatas=[{
-            "source": c["source"],
-            "heading": c["heading"],
-            "word_count": c["word_count"]
-        } for c in chunks],
+
+    # Connect to Qdrant
+    client = get_qdrant_client(settings)
+    if settings.qdrant_url:
+        print(f"\nConnected to Qdrant at {settings.qdrant_url}")
+    else:
+        print(f"\nUsing local Qdrant at {settings.qdrant_local_path}")
+
+    # Recreate collection
+    collection = settings.qdrant_collection
+    if client.collection_exists(collection):
+        client.delete_collection(collection)
+        print(f"Deleted existing '{collection}' collection")
+
+    client.create_collection(
+        collection_name=collection,
+        vectors_config=VectorParams(size=len(vectors[0]), distance=Distance.COSINE),
     )
-    print(f"\nStored {collection.count()} chunks in ChromaDB")
-    
-    # Test retrieval
-    print("\n" + "="*60)
-    print("RAW RETRIEVAL TEST" + (" (DEMO - results random)" if USE_DEMO else " (real similarity)"))
-    print("="*60)
-    
-    for query in ["payment integration Paystack", "IoT hardware kiosk", "university permit students"]:
-        qvec = embed([query])[0]
-        results = collection.query(
-            query_embeddings=[qvec],
-            n_results=3,
-            include=["documents", "metadatas", "distances"]
+    print(f"Created collection '{collection}'")
+
+    # Index payload fields for filtering
+    client.create_payload_index(
+        collection_name=collection,
+        field_name="source",
+        field_schema=PayloadSchemaType.KEYWORD,
+    )
+    client.create_payload_index(
+        collection_name=collection,
+        field_name="category",
+        field_schema=PayloadSchemaType.KEYWORD,
+    )
+    print("Indexed 'source' and 'category' payload fields")
+
+    # Upsert points
+    points = [
+        PointStruct(
+            id=i,
+            vector=vector,
+            payload={
+                "chunk_id": chunk["id"],
+                "source": chunk["source"],
+                "category": get_category(chunk["source"]),
+                "heading": chunk["heading"],
+                "word_count": chunk["word_count"],
+                "content": chunk["content"],
+            },
         )
+        for i, (chunk, vector) in enumerate(zip(chunks, vectors))
+    ]
+
+    client.upsert(collection_name=collection, points=points)
+    count = client.count(collection_name=collection).count
+    print(f"\nStored {count} chunks in Qdrant")
+
+    # Test retrieval
+    print("\n" + "=" * 60)
+    print("RAW RETRIEVAL TEST" + (" (DEMO - results random)" if settings.use_demo else " (real similarity)"))
+    print("=" * 60)
+
+    for query in ["payment integration Paystack", "IoT hardware kiosk", "university permit students"]:
+        qvec = embed([query], settings=settings)[0]
+        results = client.query_points(
+            collection_name=collection,
+            query=qvec,
+            limit=3,
+            with_payload=True,
+        ).points
         print(f"\nQuery: \"{query}\"")
-        for doc, meta, dist in zip(
-            results["documents"][0],
-            results["metadatas"][0],
-            results["distances"][0]
-        ):
-            sim = round(1 - dist, 3)
-            icon = "G" if sim > 0.7 else "Y" if sim > 0.4 else "R"
-            print(f"  [{icon}] sim={sim}  [{meta['source']} / {meta['heading']}]")
-            print(f"       \"{doc[:90].replace(chr(10),' ')}...\"")
-    
-    if USE_DEMO:
+        for r in results:
+            icon = "G" if r.score > 0.7 else "Y" if r.score > 0.4 else "R"
+            print(f"  [{icon}] sim={r.score:.3f}  [{r.payload['source']} / {r.payload['heading']}]")
+            print(f"       \"{r.payload['content'][:90].replace(chr(10), ' ')}...\"")
+
+    if settings.use_demo:
         print("\n[DEMO] Results are random. With real OpenAI embeddings,")
         print("       results would be meaningful.")

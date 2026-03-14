@@ -1,0 +1,13 @@
+[project]
+name = "portfolio-vault-rag"
+version = "1.0.0"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.7",
+    "anthropic>=0.50",
+    "openai>=1.0",
+    "qdrant-client>=1.13",
+]
