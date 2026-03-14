@@ -2,7 +2,7 @@
 STAGE 1C: Query
 ===============
 
-Example usage of the portfolio_vault RAG package.
+Example usage of the core RAG package.
 
 Run:
   cd rag
@@ -10,7 +10,7 @@ Run:
 """
 
 from app.config import get_settings
-from portfolio_vault import retrieve_and_answer
+from core import retrieve_and_answer
 
 if __name__ == "__main__":
     settings = get_settings()

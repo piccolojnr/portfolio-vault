@@ -11,8 +11,8 @@ Run:
 """
 
 from app.config import get_settings
-from portfolio_vault.indexer import index_all_docs
-from portfolio_vault.vault_db import get_docs, start_pipeline_run
+from core.indexer import index_all_docs
+from core.vault_db import get_docs, start_pipeline_run
 
 
 if __name__ == "__main__":

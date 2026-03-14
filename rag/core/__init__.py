@@ -1,12 +1,12 @@
 """
-Portfolio Vault RAG Package
-===========================
+Core RAG Package
+================
 
 A modular RAG (Retrieval-Augmented Generation) system for querying
 Daud Rahim's portfolio, experience, and skills.
 
 Main API:
-  from portfolio_vault import retrieve_and_answer
+  from core import retrieve_and_answer
   from app.config import get_settings
 
   settings = get_settings()
@@ -14,10 +14,10 @@ Main API:
   print(answer)
 """
 
-from portfolio_vault.embedding import embed
-from portfolio_vault.retrieval import retrieve, route_query
-from portfolio_vault.generation import generate
-from portfolio_vault.database import get_qdrant_client, get_collection
+from core.embedding import embed
+from core.retrieval import retrieve, route_query
+from core.generation import generate
+from core.database import get_qdrant_client, get_collection
 
 
 def retrieve_and_answer(question: str, settings=None, n_results: int = 5) -> tuple[str, list[dict]]:

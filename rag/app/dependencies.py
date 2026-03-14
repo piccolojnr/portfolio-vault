@@ -8,7 +8,7 @@ Centralises all Depends() helpers so routers stay lean.
 from fastapi import Depends
 from app.config import Settings, get_settings
 from app.db import get_db_conn
-from portfolio_vault.database import get_qdrant_client
+from core.database import get_qdrant_client
 
 __all__ = ["get_client", "get_db_conn"]
 

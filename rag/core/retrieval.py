@@ -6,8 +6,8 @@ Intent-based routing, Qdrant similarity search, and source capping.
 Accepts a Settings instance for dependency injection.
 """
 
-from portfolio_vault.embedding import embed
-from portfolio_vault.database import get_qdrant_client
+from core.embedding import embed
+from core.database import get_qdrant_client
 
 
 def route_query(query: str):

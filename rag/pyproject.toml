@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["app*", "portfolio_vault*"]
+include = ["app*", "core*"]
 
 [project]
 name = "portfolio-vault-rag"

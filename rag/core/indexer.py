@@ -10,10 +10,10 @@ from __future__ import annotations
 
 from qdrant_client.models import Distance, VectorParams, PointStruct, PayloadSchemaType
 
-from portfolio_vault.chunking import chunk_document
-from portfolio_vault.embedding import embed
-from portfolio_vault.database import get_qdrant_client
-from portfolio_vault.vault_db import get_docs, start_pipeline_run, finish_pipeline_run
+from core.chunking import chunk_document
+from core.embedding import embed
+from core.database import get_qdrant_client
+from core.vault_db import get_docs, start_pipeline_run, finish_pipeline_run
 
 TYPE_TO_CATEGORY = {
     "project":    "project",
@@ -48,7 +48,6 @@ def index_all_docs(
     doc_ids = [str(d.id) for d in docs]
     slug_to_doc = {d.slug: d for d in docs}
 
-    # Create pipeline run if not pre-created
     own_run = run_id is None
     if own_run and settings.database_url and doc_ids:
         run_id = start_pipeline_run(

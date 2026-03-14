@@ -2,8 +2,8 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from app.config import Settings, get_settings
-from app.schemas import QueryRequest, RetrieveResponse, RetrievedChunk
-from portfolio_vault.retrieval import retrieve
+from app.schemas.rag import QueryRequest, RetrieveResponse, RetrievedChunk
+from core.retrieval import retrieve
 
 router = APIRouter(tags=["rag"])
 

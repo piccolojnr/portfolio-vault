@@ -12,8 +12,8 @@ Run:
 import json
 
 from app.config import get_settings
-from portfolio_vault.chunking import chunk_document
-from portfolio_vault.vault_db import get_docs
+from core.chunking import chunk_document
+from core.vault_db import get_docs
 
 settings = get_settings()
 
