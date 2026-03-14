@@ -7,6 +7,8 @@ CRUD for conversations and messages under /api/v1/conversations.
 
 from __future__ import annotations
 
+from datetime import datetime
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
@@ -19,6 +21,7 @@ from app.schemas.conversation import (
     ConversationSummary,
     MessageCreate,
     MessageRead,
+    MessagesPage,
     SummaryUpdate,
 )
 from app.services import conversations as svc
@@ -75,6 +78,25 @@ async def update_summary(
     try:
         await svc.update_summary(
             session, conv_id, body.summary, body.summarised_up_to_message_id
+        )
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/{conv_id}/messages", response_model=MessagesPage)
+async def get_messages(
+    conv_id: UUID,
+    cursor: Optional[datetime] = None,
+    limit: int = 20,
+    session=Depends(get_db_conn),
+):
+    try:
+        msgs, has_more = await svc.get_messages_page(
+            session, conv_id, limit=limit, cursor=cursor
+        )
+        return MessagesPage(
+            messages=[MessageRead.model_validate(m) for m in msgs],
+            has_more=has_more,
         )
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))

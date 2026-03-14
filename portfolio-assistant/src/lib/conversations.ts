@@ -30,6 +30,12 @@ export interface ConversationSummary {
 
 export interface ConversationDetail extends ConversationSummary {
   messages: MessageRead[];
+  has_more: boolean;
+}
+
+export interface MessagesPage {
+  messages: MessageRead[];
+  has_more: boolean;
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -83,6 +89,15 @@ export function updateConversationSummary(
       summarised_up_to_message_id: summarisedUpToMessageId,
     }),
   }).then(() => undefined);
+}
+
+export function getMessagesBefore(
+  id: string,
+  cursor: string,
+  limit = 20,
+): Promise<MessagesPage> {
+  const qs = new URLSearchParams({ cursor, limit: String(limit) });
+  return apiFetch(`/api/conversations/${id}/messages?${qs}`);
 }
 
 export function addMessage(

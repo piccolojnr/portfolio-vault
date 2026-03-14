@@ -8,21 +8,11 @@ import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DocumentMessage } from "@/components/document-message";
 import { ConversationMemoryPanel } from "@/components/conversation-memory-panel";
-import {
-  getConversation,
-  createConversation,
-  type MessageMeta,
-} from "@/lib/conversations";
+import { createConversation, type MessageMeta } from "@/lib/conversations";
 import { useConversations } from "./conversation-context";
 import { useRouter } from "next/navigation";
-
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-  doc_type?: string | null;
-  meta?: MessageMeta | null;
-  streaming?: boolean;
-}
+import { type VirtualItem } from "@tanstack/react-virtual";
+import { useConversation, type Message } from "@/hooks/use-conversation";
 
 const SUGGESTIONS = [
   "Write a cover letter for a remote Next.js role",
@@ -33,46 +23,67 @@ const SUGGESTIONS = [
   "How would I answer: tell me about a hard technical problem you solved?",
 ];
 
+function MessageRow({
+  message,
+  isRecent,
+}: {
+  message: Message;
+  isRecent?: boolean;
+}) {
+  return (
+    <div
+      className={`mb-5 sm:mb-6 flex gap-2 sm:gap-3 items-start ${
+        message.role === "user" ? "flex-row-reverse" : "flex-row"
+      } ${isRecent ? "animate-fade-up" : ""}`}
+    >
+      {message.role === "assistant" && (
+        <Avatar className="h-7 w-7 rounded-lg shrink-0 ring-1 ring-primary/20 bg-accent-dim mt-0.5">
+          <AvatarFallback className="rounded-lg bg-accent-dim text-primary text-[10px] font-medium font-mono">
+            DR
+          </AvatarFallback>
+        </Avatar>
+      )}
+
+      {message.role === "user" ? (
+        <div className="max-w-[85%] sm:max-w-[80%] text-sm leading-[1.75] whitespace-pre-wrap break-words bg-user-bg border border-user-border rounded-[16px_4px_16px_16px] px-3.5 sm:px-4 py-2.5 text-foreground/90">
+          {message.content}
+        </div>
+      ) : (
+        <div className="flex-1 min-w-0 text-sm text-foreground/85 pt-0.5">
+          <DocumentMessage
+            content={message.content}
+            streaming={message.streaming}
+            meta={!message.streaming ? message.meta : null}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ChatInterface({ slug }: { slug?: string }) {
   const { createLocalConversation, refreshConversations } = useConversations();
   const router = useRouter();
 
-  const [messages, setMessages] = useState<Message[]>([]);
+  const {
+    messages,
+    hasOlderMessages,
+    isLoadingOlder,
+    isLoadingConversation,
+    conversationSummary,
+    scrollElRef,
+    sentinelRef,
+    virtualizer,
+    pushUserAndPlaceholder,
+    updateStreamingContent,
+    finalizeMessage,
+  } = useConversation(slug);
+
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [conversationSummary, setConversationSummary] = useState<string | null>(null);
 
-  const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    if (slug) {
-      getConversation(slug)
-        .then((detail) => {
-          setMessages(
-            detail.messages.map((m) => ({
-              role: m.role,
-              content: m.content,
-              doc_type: m.doc_type,
-              meta: m.meta,
-            })),
-          );
-          setConversationSummary(detail.summary ?? null);
-        })
-        .catch(() => {
-          setMessages([]);
-          setConversationSummary(null);
-        });
-    } else {
-      setMessages([]);
-      setConversationSummary(null);
-    }
-  }, [slug]);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -104,11 +115,7 @@ export function ChatInterface({ slug }: { slug?: string }) {
         .filter((m) => !m.streaming)
         .map(({ role, content }) => ({ role, content }));
 
-      setMessages((prev) => [
-        ...prev,
-        { role: "user", content: userMsg },
-        { role: "assistant", content: "", streaming: true },
-      ]);
+      pushUserAndPlaceholder(userMsg);
 
       abortRef.current = new AbortController();
 
@@ -132,6 +139,8 @@ export function ChatInterface({ slug }: { slug?: string }) {
         let accumulated = "";
         let docType: string | null = null;
         let messageMeta: MessageMeta | null = null;
+        let savedId: string | undefined;
+        let savedCreatedAt: string | undefined;
         let buf = "";
 
         while (true) {
@@ -151,34 +160,24 @@ export function ChatInterface({ slug }: { slug?: string }) {
               const parsed = JSON.parse(payload);
               if (parsed.text !== undefined) {
                 accumulated += parsed.text;
-                setMessages((prev) => {
-                  const updated = [...prev];
-                  updated[updated.length - 1] = {
-                    role: "assistant",
-                    content: accumulated,
-                    streaming: true,
-                  };
-                  return updated;
-                });
+                updateStreamingContent(accumulated);
               }
               if (parsed.saved !== undefined) {
                 docType = parsed.saved.doc_type ?? null;
                 messageMeta = parsed.saved.meta ?? null;
+                savedId = parsed.saved.id;
+                savedCreatedAt = parsed.saved.created_at;
               }
             } catch {}
           }
         }
 
-        setMessages((prev) => {
-          const updated = [...prev];
-          updated[updated.length - 1] = {
-            role: "assistant",
-            content: accumulated,
-            doc_type: docType,
-            meta: messageMeta,
-            streaming: false,
-          };
-          return updated;
+        finalizeMessage({
+          content: accumulated,
+          doc_type: docType,
+          meta: messageMeta,
+          id: savedId,
+          created_at: savedCreatedAt,
         });
 
         if (!slug && currentId) {
@@ -189,20 +188,27 @@ export function ChatInterface({ slug }: { slug?: string }) {
         }
       } catch (err: any) {
         if (err.name === "AbortError") return;
-        setMessages((prev) => {
-          const updated = [...prev];
-          updated[updated.length - 1] = {
-            role: "assistant",
-            content: "Something went wrong. Check the console.",
-            streaming: false,
-          };
-          return updated;
+        finalizeMessage({
+          content: "Something went wrong. Check the console.",
+          doc_type: null,
+          meta: null,
         });
       } finally {
         setLoading(false);
       }
     },
-    [input, loading, messages, slug, createLocalConversation, refreshConversations, router],
+    [
+      input,
+      loading,
+      messages,
+      slug,
+      createLocalConversation,
+      refreshConversations,
+      router,
+      pushUserAndPlaceholder,
+      updateStreamingContent,
+      finalizeMessage,
+    ],
   );
 
   function handleKey(e: React.KeyboardEvent) {
@@ -212,11 +218,10 @@ export function ChatInterface({ slug }: { slug?: string }) {
     }
   }
 
-  const isEmpty = messages.length === 0 && !loading;
+  const isEmpty = messages.length === 0 && !loading && !isLoadingConversation;
 
   return (
     <div className="flex-1 min-h-0 relative overflow-hidden flex flex-col">
-
       {/* Memory panel — pinned above scroll, only when summary exists */}
       {conversationSummary && (
         <div className="shrink-0 px-3 sm:px-6 pt-2 max-w-[680px] mx-auto w-full">
@@ -225,8 +230,26 @@ export function ChatInterface({ slug }: { slug?: string }) {
       )}
 
       {/* Message / empty area */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        {isEmpty ? (
+      <div ref={scrollElRef} className="flex-1 min-h-0 overflow-y-auto scroll-smooth">
+        {isLoadingConversation ? (
+          /* ── Loading skeleton ── */
+          <div className="max-w-[680px] mx-auto px-4 sm:px-6 pt-6 sm:pt-8 space-y-6">
+            {[80, 56, 120, 48].map((w, i) => (
+              <div
+                key={i}
+                className={`flex gap-3 items-start ${i % 2 === 0 ? "flex-row-reverse" : "flex-row"}`}
+              >
+                {i % 2 !== 0 && (
+                  <div className="h-7 w-7 rounded-lg shrink-0 bg-muted/40 animate-pulse" />
+                )}
+                <div
+                  className="h-9 rounded-2xl bg-muted/40 animate-pulse"
+                  style={{ width: `${w}%` }}
+                />
+              </div>
+            ))}
+          </div>
+        ) : isEmpty ? (
           /* ── Empty state ── */
           <div className="max-w-[620px] mx-auto px-4 sm:px-6 pt-10 sm:pt-16 pb-48 animate-fade-up">
             <div className="flex items-center gap-2 mb-4">
@@ -243,9 +266,9 @@ export function ChatInterface({ slug }: { slug?: string }) {
             </h1>
 
             <p className="text-[14px] sm:text-[15px] text-muted-foreground leading-relaxed mb-2 max-w-[480px]">
-              I retrieve only the relevant parts of your vault for each
-              question — no context stuffing. Ask me to write, tailor, or
-              prepare anything.
+              I retrieve only the relevant parts of your vault for each question
+              — no context stuffing. Ask me to write, tailor, or prepare
+              anything.
             </p>
 
             <Separator className="my-6 sm:my-8 bg-border" />
@@ -266,49 +289,55 @@ export function ChatInterface({ slug }: { slug?: string }) {
             </div>
           </div>
         ) : (
-          /* ── Message list ── */
-          <div className="max-w-[680px] mx-auto px-4 sm:px-6 pt-6 sm:pt-8 pb-36 sm:pb-48">
-            {messages.map((m, i) => (
-              <div
-                key={i}
-                className={`mb-5 sm:mb-6 flex gap-2 sm:gap-3 items-start ${
-                  m.role === "user" ? "flex-row-reverse" : "flex-row"
-                } ${i >= messages.length - 2 ? "animate-fade-up" : ""}`}
-              >
-                {m.role === "assistant" && (
-                  <Avatar className="h-7 w-7 rounded-lg shrink-0 ring-1 ring-primary/20 bg-accent-dim mt-0.5">
-                    <AvatarFallback className="rounded-lg bg-accent-dim text-primary text-[10px] font-medium font-mono">
-                      DR
-                    </AvatarFallback>
-                  </Avatar>
-                )}
+          /* ── Virtualised message list ── */
+          <div
+            style={{ height: virtualizer.getTotalSize(), position: "relative" }}
+            className="max-w-[680px] mx-auto px-4 sm:px-6"
+          >
+            {virtualizer.getVirtualItems().map((vitem: VirtualItem) => {
+              const isSentinel = hasOlderMessages && vitem.index === 0;
+              const msgIndex = vitem.index - (hasOlderMessages ? 1 : 0);
+              const msg = isSentinel ? null : messages[msgIndex];
+              const isRecent = !isSentinel && msgIndex >= messages.length - 2;
 
-                {m.role === "user" ? (
-                  <div className="max-w-[85%] sm:max-w-[80%] text-sm leading-[1.75] whitespace-pre-wrap break-words bg-user-bg border border-user-border rounded-[16px_4px_16px_16px] px-3.5 sm:px-4 py-2.5 text-foreground/90">
-                    {m.content}
-                  </div>
-                ) : (
-                  <div className="flex-1 min-w-0 text-sm text-foreground/85 pt-0.5">
-                    <DocumentMessage
-                      content={m.content}
-                      streaming={m.streaming}
-                      meta={!m.streaming ? m.meta : null}
-                    />
-                  </div>
-                )}
-              </div>
-            ))}
-            <div ref={bottomRef} />
+              return (
+                <div
+                  key={vitem.key}
+                  data-index={vitem.index}
+                  ref={isSentinel ? sentinelRef : virtualizer.measureElement}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    transform: `translateY(${vitem.start}px)`,
+                  }}
+                >
+                  {isSentinel ? (
+                    <div className="py-3 flex justify-center text-muted-foreground/40">
+                      {isLoadingOlder ? (
+                        <span className="text-[11px] font-mono">loading…</span>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <MessageRow message={msg!} isRecent={isRecent} />
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
+        <div
+          style={{ height: virtualizer.getVirtualItems().length ? 200 : 0 }}
+        />
       </div>
 
       {/* ── Floating input bar ── */}
-      <div
-        className="absolute bottom-0 left-0 right-0 pointer-events-none z-10 bg-gradient-to-t from-bg via-bg/95 to-transparent pt-14 sm:pt-20 px-3 sm:px-6"
-        style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
-      >
-        <div className="max-w-[680px] mx-auto pointer-events-auto">
+      <div className="absolute bottom-0 left-0 right-0 pointer-events-none z-10  pt-14 sm:pt-20 px-3 sm:px-6">
+        <div
+          className="max-w-170 mx-auto pointer-events-auto bg-background rounded-t-2xl"
+          style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+        >
           <div className="flex gap-2 sm:gap-3 items-end bg-surface border border-border rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 focus-within:ring-1 focus-within:ring-primary/40 focus-within:border-primary/30 transition-all">
             <Textarea
               ref={textareaRef}
@@ -329,9 +358,11 @@ export function ChatInterface({ slug }: { slug?: string }) {
             </Button>
           </div>
 
-          <div className="flex justify-between mt-1.5 text-[11px] text-muted-foreground/50 font-mono">
+          <div className="flex justify-between pt-1.5 px-4 text-[11px] text-muted-foreground/50 font-mono bg-background">
             {/* Keyboard hint — only meaningful on desktop */}
-            <span className="hidden sm:block">enter to send · shift+enter for newline</span>
+            <span className="hidden sm:block text-center">
+              enter to send · shift+enter for newline
+            </span>
             <span className="sm:hidden" />
 
             <span className="flex items-center gap-1.5">
@@ -345,7 +376,6 @@ export function ChatInterface({ slug }: { slug?: string }) {
           </div>
         </div>
       </div>
-
     </div>
   );
 }

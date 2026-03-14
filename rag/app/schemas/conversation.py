@@ -32,6 +32,12 @@ class ConversationSummary(BaseModel):
 
 class ConversationDetail(ConversationSummary):
     messages: list[MessageRead]
+    has_more: bool = False
+
+
+class MessagesPage(BaseModel):
+    messages: list[MessageRead]
+    has_more: bool
 
 
 class ConversationPatch(BaseModel):

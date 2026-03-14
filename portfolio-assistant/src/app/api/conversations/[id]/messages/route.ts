@@ -1,5 +1,19 @@
 import { RAG_BACKEND_URL } from "@/lib/config";
 
+export async function GET(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const { searchParams } = new URL(req.url);
+  const qs = searchParams.toString();
+  const res = await fetch(
+    `${RAG_BACKEND_URL}/api/v1/conversations/${id}/messages${qs ? `?${qs}` : ""}`,
+  );
+  const data = await res.json();
+  return Response.json(data, { status: res.status });
+}
+
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },

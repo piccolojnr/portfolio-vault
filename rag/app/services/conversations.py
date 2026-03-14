@@ -9,6 +9,7 @@ Auto-title runs as a FastAPI BackgroundTask with its own DB session.
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,18 +31,31 @@ async def list_conversations(session: AsyncSession) -> list[ConversationSummary]
     return [ConversationSummary.model_validate(c) for c in rows]
 
 
-async def get_conversation(session: AsyncSession, conv_id: UUID) -> ConversationDetail:
+async def get_messages_page(
+    session: AsyncSession,
+    conv_id: UUID,
+    limit: int = 20,
+    cursor: datetime | None = None,
+) -> tuple[list[Message], bool]:
+    q = select(Message).where(Message.conversation_id == conv_id)
+    if cursor:
+        q = q.where(Message.created_at < cursor)
+    q = q.order_by(Message.created_at.desc()).limit(limit + 1)
+    rows = list((await session.execute(q)).scalars())
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+    rows.reverse()
+    return rows, has_more
+
+
+async def get_conversation(
+    session: AsyncSession, conv_id: UUID, limit: int = 50
+) -> ConversationDetail:
     conv = await session.get(Conversation, conv_id)
     if not conv:
         raise LookupError(f"Conversation {conv_id} not found")
 
-    messages = (
-        await session.execute(
-            select(Message)
-            .where(Message.conversation_id == conv_id)
-            .order_by(Message.created_at)
-        )
-    ).scalars().all()
+    messages, has_more = await get_messages_page(session, conv_id, limit=limit)
 
     return ConversationDetail(
         id=conv.id,
@@ -51,6 +65,7 @@ async def get_conversation(session: AsyncSession, conv_id: UUID) -> Conversation
         summary=conv.summary,
         summarised_up_to_message_id=conv.summarised_up_to_message_id,
         messages=[MessageRead.model_validate(m) for m in messages],
+        has_more=has_more,
     )
 
 

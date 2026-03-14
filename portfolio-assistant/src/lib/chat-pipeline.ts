@@ -19,7 +19,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { retrieve, formatContext } from "./retrieval";
 import { type Classification } from "./intent";
-import { type MessageMeta } from "./conversations";
+import { type MessageMeta, type MessageRead } from "./conversations";
 import {
     ANTHROPIC_API_KEY,
     OPENAI_API_KEY,
@@ -65,7 +65,7 @@ async function persistMessages(
     assistantContent: string,
     docType: string | null,
     meta: MessageMeta | null = null,
-): Promise<void> {
+): Promise<MessageRead | null> {
     const base = `${RAG_BACKEND_URL}/api/v1/conversations/${convId}/messages`;
     const headers = { "Content-Type": "application/json" };
 
@@ -75,11 +75,13 @@ async function persistMessages(
         body: JSON.stringify({ role: "user", content: userMessage, doc_type: null }),
     });
 
-    await fetch(base, {
+    const res = await fetch(base, {
         method: "POST",
         headers,
         body: JSON.stringify({ role: "assistant", content: assistantContent, doc_type: docType, meta }),
     });
+    if (!res.ok) return null;
+    return res.json() as Promise<MessageRead>;
 }
 
 /** Returns an enqueue function that UTF-8 encodes strings into the controller. */
@@ -145,8 +147,8 @@ function streamAnthropic(
 
                 if (convId) {
                     const docType = extractDocType(accumulated);
-                    await persistMessages(convId, userMessage, accumulated, docType, meta);
-                    enqueue(`data: ${JSON.stringify({ saved: { doc_type: docType, meta } })}\n\n`);
+                    const saved = await persistMessages(convId, userMessage, accumulated, docType, meta);
+                    enqueue(`data: ${JSON.stringify({ saved: { doc_type: docType, meta, id: saved?.id, created_at: saved?.created_at } })}\n\n`);
                 }
 
                 enqueue("data: [DONE]\n\n");
@@ -187,8 +189,8 @@ async function streamOpenAI(
 
                 if (convId) {
                     const docType = extractDocType(accumulated);
-                    await persistMessages(convId, userMessage, accumulated, docType, meta);
-                    enqueue(`data: ${JSON.stringify({ saved: { doc_type: docType, meta } })}\n\n`);
+                    const saved = await persistMessages(convId, userMessage, accumulated, docType, meta);
+                    enqueue(`data: ${JSON.stringify({ saved: { doc_type: docType, meta, id: saved?.id, created_at: saved?.created_at } })}\n\n`);
                 }
 
                 enqueue("data: [DONE]\n\n");
