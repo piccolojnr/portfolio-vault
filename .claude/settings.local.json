@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/Scripts/python.exe -c \"\nfrom core.costs import embedding_cost, generation_cost, EMBEDDING_MODELS, ANTHROPIC_MODELS\nfrom app.services.crypto import encrypt, decrypt\nfrom app.services.settings_db import load_overrides, save_settings\nfrom app.services.settings import get_effective_settings, apply_update\nfrom app.dependencies import get_live_settings\nfrom core.indexer import index_all_docs\nfrom core.generation import generate\nprint\\('all imports OK'\\)\nprint\\('final layout:'\\)\nimport pathlib\nfor p in sorted\\(pathlib.Path\\('app/services'\\).glob\\('*.py'\\)\\):\n    print\\(' ', p\\)\nfor p in sorted\\(pathlib.Path\\('core'\\).glob\\('*.py'\\)\\):\n    print\\(' ', p\\)\n\" 2>&1)"
+    ]
+  }
+}

@@ -21,4 +21,5 @@ dependencies = [
     "sqlmodel>=0.0.21",
     "asyncpg>=0.30",
     "psycopg2-binary>=2.9",
+    "cryptography>=42",
 ]

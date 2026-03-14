@@ -16,8 +16,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
+from app.config import Settings
 from app.db import get_db_conn
+from app.dependencies import get_live_settings
 from app.schemas.pipeline import CostEstimate, PipelineRunList, PipelineRunSummary
 from app.services import pipeline as svc
 
@@ -47,15 +48,15 @@ async def get_run(run_id: str, session: DBSession):
 
 
 @router.get("/cost-estimate", response_model=CostEstimate)
-async def cost_estimate():
-    return svc.compute_cost_estimate(get_settings())
+async def cost_estimate(settings: Settings = Depends(get_live_settings)):
+    return svc.compute_cost_estimate(settings)
 
 
 @router.post("/run")
-async def run_pipeline():
-    """Start the full pipeline and stream SSE progress events."""
+async def run_pipeline(settings: Settings = Depends(get_live_settings)):
+    """Start the full pipeline and stream SSE events."""
     return StreamingResponse(
-        svc.pipeline_event_stream(get_settings()),
+        svc.pipeline_event_stream(settings),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

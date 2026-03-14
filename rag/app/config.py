@@ -29,13 +29,19 @@ class Settings(BaseSettings):
     qdrant_api_key: str = ""
     database_url: str = ""
 
+    # Secret key for encrypting sensitive DB settings (32+ char recommended)
+    secret_key: str = ""
+
     # Optional override
     demo_mode: str = ""
 
-    # Model constants (not from .env, but kept here as the single source of truth)
+    # Model selection — overridable from DB settings at runtime
     embedding_model: str = "text-embedding-3-small"
-    anthropic_model: str = "claude-sonnet-4-20250514"
+    anthropic_model: str = "claude-sonnet-4-6"
     openai_model: str = "gpt-4o"
+
+    # Cost guard — pipeline run is blocked if estimated cost exceeds this (0 = no limit)
+    cost_limit_usd: float = 0.0
 
     @computed_field  # type: ignore[prop-decorator]
     @property

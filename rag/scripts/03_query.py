@@ -26,7 +26,7 @@ if __name__ == "__main__":
         print(f"\nQuestion: {question}")
         print("-" * 50)
 
-        answer, chunks = retrieve_and_answer(question, settings=settings, n_results=5)
+        answer, chunks, usage = retrieve_and_answer(question, settings=settings, n_results=5)
 
         print(f"Retrieved {len(chunks)} chunks:")
         for c in chunks:

@@ -44,7 +44,7 @@ export default function RootLayout({
             </span>
             <Badge
               variant="outline"
-              className="h-[18px] px-1.5 text-[9px] font-mono border-primary/20 text-primary/60 py-0 shrink-0"
+              className="h-4.5 px-1.5 text-[9px] font-mono border-primary/20 text-primary/60 py-0 shrink-0"
             >
               RAG
             </Badge>
@@ -56,9 +56,7 @@ export default function RootLayout({
         </header>
 
         {/* ── Page content ── */}
-        <div className="flex-1 overflow-hidden">
-          {children}
-        </div>
+        <div className="flex-1 overflow-hidden">{children}</div>
       </body>
     </html>
   );

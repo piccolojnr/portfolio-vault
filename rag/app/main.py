@@ -17,7 +17,7 @@ import uvicorn
 from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import health, retrieve, query, vault, pipeline
+from app.routers import health, retrieve, query, vault, pipeline, settings
 from app.config import get_settings
 from app.db import open_db_engine
 
@@ -79,6 +79,7 @@ def create_app() -> FastAPI:
     v1.include_router(query.router)
     v1.include_router(vault.router)
     v1.include_router(pipeline.router)
+    v1.include_router(settings.router)
     app.include_router(v1)
 
     @app.get("/")

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from qdrant_client.models import Distance, VectorParams, PointStruct, PayloadSchemaType
 
+from core.costs import embedding_cost
 from core.chunking import chunk_document
 from core.embedding import embed
 from core.database import get_qdrant_client
@@ -68,9 +69,10 @@ def index_all_docs(
 
         _notify("chunked", chunk_count=len(all_chunks))
 
-        vectors = embed([c["content"] for c in all_chunks], settings=settings)
+        vectors, token_count = embed([c["content"] for c in all_chunks], settings=settings)
+        cost_usd = embedding_cost(token_count, settings.embedding_model)
 
-        _notify("embedded", chunk_count=len(all_chunks))
+        _notify("embedded", chunk_count=len(all_chunks), token_count=token_count, cost_usd=cost_usd)
 
         client = get_qdrant_client(settings)
         collection = settings.qdrant_collection
@@ -122,6 +124,8 @@ def index_all_docs(
                 run_id=run_id,
                 status="success",
                 chunk_count=count,
+                token_count=token_count,
+                cost_usd=cost_usd,
             )
 
         _notify("done", chunk_count=count, run_id=run_id or "")

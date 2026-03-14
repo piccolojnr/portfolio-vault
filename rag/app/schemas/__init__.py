@@ -27,6 +27,7 @@ from app.schemas.pipeline import (
     PipelineRunList,
     PipelineRunSummary,
 )
+from app.schemas.settings import SettingsRead, SettingsUpdate
 
 __all__ = [
     "QueryRequest",

@@ -3,8 +3,10 @@ LLM Generation
 ==============
 
 Generate answers using Anthropic Claude or OpenAI GPT.
-Accepts a Settings instance for dependency injection.
+Returns (answer, usage_info) where usage_info carries token counts and cost.
 """
+
+from __future__ import annotations
 
 SYSTEM_PROMPT = """You are Daud Rahim's personal career assistant.
 
@@ -17,35 +19,48 @@ Guidelines:
 - Format lists clearly when appropriate."""
 
 
-def generate(question: str, context_chunks: list[dict], settings=None) -> str:
+def generate(
+    question: str,
+    context_chunks: list[dict],
+    settings=None,
+) -> tuple[str, dict]:
     """
     Generate answer using the configured LLM.
-    Defaults to Anthropic Claude, falls back to OpenAI GPT.
+
+    Returns:
+        (answer_text, usage_info)
+        usage_info keys: provider, model, input_tokens, output_tokens, total_tokens, cost_usd
     """
     if settings is None:
         from app.config import get_settings
         settings = get_settings()
 
     if settings.use_demo:
-        return "[DEMO MODE — no real LLM call]"
+        return "[DEMO MODE — no real LLM call]", {}
 
     if settings.anthropic_api_key:
-        return _generate_with_anthropic(question, context_chunks, settings)
+        return _generate_anthropic(question, context_chunks, settings)
     elif settings.openai_api_key:
-        return _generate_with_openai(question, context_chunks, settings)
+        return _generate_openai(question, context_chunks, settings)
     else:
-        return "[ERROR] No API keys available."
+        return "[ERROR] No API keys available.", {}
 
 
-def _generate_with_anthropic(question: str, context_chunks: list[dict], settings) -> str:
-    import anthropic
-
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-
-    context = "\n\n---\n\n".join([
+def _build_context(context_chunks: list[dict]) -> str:
+    return "\n\n---\n\n".join(
         f"[Source: {c['source']} / {c['heading']}]\n{c['content']}"
         for c in context_chunks
-    ])
+    )
+
+
+def _generate_anthropic(
+    question: str, context_chunks: list[dict], settings
+) -> tuple[str, dict]:
+    import anthropic
+    from core.costs import generation_cost
+
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    context = _build_context(context_chunks)
 
     response = client.messages.create(
         model=settings.anthropic_model,
@@ -57,18 +72,27 @@ def _generate_with_anthropic(question: str, context_chunks: list[dict], settings
         }],
     )
 
-    return response.content[0].text
+    in_tok = response.usage.input_tokens
+    out_tok = response.usage.output_tokens
+    usage = {
+        "provider": "anthropic",
+        "model": settings.anthropic_model,
+        "input_tokens": in_tok,
+        "output_tokens": out_tok,
+        "total_tokens": in_tok + out_tok,
+        "cost_usd": generation_cost(in_tok, out_tok, settings.anthropic_model),
+    }
+    return response.content[0].text, usage
 
 
-def _generate_with_openai(question: str, context_chunks: list[dict], settings) -> str:
+def _generate_openai(
+    question: str, context_chunks: list[dict], settings
+) -> tuple[str, dict]:
     from openai import OpenAI
+    from core.costs import generation_cost
 
     client = OpenAI(api_key=settings.openai_api_key)
-
-    context = "\n\n---\n\n".join([
-        f"[Source: {c['source']} / {c['heading']}]\n{c['content']}"
-        for c in context_chunks
-    ])
+    context = _build_context(context_chunks)
 
     response = client.chat.completions.create(
         model=settings.openai_model,
@@ -82,4 +106,14 @@ def _generate_with_openai(question: str, context_chunks: list[dict], settings) -
         ],
     )
 
-    return response.choices[0].message.content
+    in_tok = response.usage.prompt_tokens
+    out_tok = response.usage.completion_tokens
+    usage = {
+        "provider": "openai",
+        "model": settings.openai_model,
+        "input_tokens": in_tok,
+        "output_tokens": out_tok,
+        "total_tokens": in_tok + out_tok,
+        "cost_usd": generation_cost(in_tok, out_tok, settings.openai_model),
+    }
+    return response.choices[0].message.content, usage

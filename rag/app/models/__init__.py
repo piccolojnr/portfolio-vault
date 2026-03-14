@@ -10,5 +10,6 @@ from app.models.base import utcnow
 from app.models.vault import VaultDocument
 from app.models.pipeline import PipelineRun
 from app.models.settings import AppSetting
+from app.models.query import QueryLog
 
-__all__ = ["VaultDocument", "PipelineRun", "AppSetting", "utcnow"]
+__all__ = ["VaultDocument", "PipelineRun", "AppSetting", "QueryLog", "utcnow"]

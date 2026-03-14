@@ -1,7 +1,8 @@
 """POST /api/v1/retrieve — return chunks only, no LLM call."""
 
 from fastapi import APIRouter, Depends, HTTPException
-from app.config import Settings, get_settings
+from app.config import Settings
+from app.dependencies import get_live_settings
 from app.schemas.rag import QueryRequest, RetrieveResponse, RetrievedChunk
 from core.retrieval import retrieve
 
@@ -11,7 +12,7 @@ router = APIRouter(tags=["rag"])
 @router.post("/retrieve", response_model=RetrieveResponse)
 async def retrieve_endpoint(
     request: QueryRequest,
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_live_settings),
 ):
     try:
         chunks = retrieve(request.question, settings=settings, n=request.n_results)

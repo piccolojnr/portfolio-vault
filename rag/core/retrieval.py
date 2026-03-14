@@ -49,7 +49,8 @@ def retrieve(
         settings = get_settings()
 
     client = get_qdrant_client(settings)
-    query_vector = embed([query], settings=settings)[0]
+    vectors, _ = embed([query], settings=settings)
+    query_vector = vectors[0]
 
     where_filter = route_query(query)
     routing_attempted = where_filter is not None
