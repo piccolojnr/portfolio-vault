@@ -2,8 +2,17 @@
 
 import { useState } from "react";
 import { Plus, Trash2, MessageSquare } from "lucide-react";
-import type { ConversationSummary } from "@/lib/conversations";
 import Link from "next/link";
+import type { ConversationSummary } from "@/lib/conversations";
+import {
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from "@/components/ui/sidebar";
 
 // ── Date grouping ──────────────────────────────────────────────────────────────
 
@@ -35,7 +44,7 @@ function groupConversations(
   return map;
 }
 
-// ── Sidebar entry ──────────────────────────────────────────────────────────────
+// ── Conversation entry ─────────────────────────────────────────────────────────
 
 function ConvEntry({
   conv,
@@ -60,65 +69,65 @@ function ConvEntry({
   }
 
   return (
-    <Link
-      className={`group relative flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
-        active
-          ? "bg-primary/10 text-foreground"
-          : "text-muted-foreground hover:bg-muted/30 hover:text-foreground"
-      }`}
-      href={`/${conv.id}`}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      <MessageSquare className="h-3.5 w-3.5 shrink-0 opacity-50" />
-
-      {editing ? (
-        <input
-          autoFocus
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commitRename}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") commitRename();
-            if (e.key === "Escape") {
-              setEditing(false);
-              setDraft(conv.title ?? "");
-            }
-          }}
-          onClick={(e) => e.stopPropagation()}
-          className="flex-1 min-w-0 bg-transparent border-none outline-none text-[12px] font-mono text-foreground"
-        />
-      ) : (
-        <span
-          className="flex-1 min-w-0 truncate text-[12px] font-mono"
-          onDoubleClick={(e) => {
-            e.stopPropagation();
-            setEditing(true);
-            setDraft(conv.title ?? "New conversation");
-          }}
-        >
-          {conv.title ?? "New conversation"}
-        </span>
-      )}
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        isActive={active}
+        render={editing ? <div /> : <Link href={`/${conv.id}`} />}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        className="pr-7"
+      >
+        <MessageSquare className="h-3.5 w-3.5 shrink-0 opacity-50" />
+        {editing ? (
+          <input
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitRename();
+              if (e.key === "Escape") {
+                setEditing(false);
+                setDraft(conv.title ?? "");
+              }
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="flex-1 min-w-0 bg-transparent border-none outline-none text-[12px] font-mono"
+          />
+        ) : (
+          <span
+            className="flex-1 min-w-0 truncate text-[12px] font-mono"
+            onDoubleClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setEditing(true);
+              setDraft(conv.title ?? "New conversation");
+            }}
+          >
+            {conv.title ?? "New conversation"}
+          </span>
+        )}
+      </SidebarMenuButton>
 
       {hovered && !editing && (
         <button
           onClick={(e) => {
+            e.preventDefault();
             e.stopPropagation();
             onDelete();
           }}
-          className="shrink-0 p-0.5 rounded text-muted-foreground/50 hover:text-destructive transition-colors"
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-sidebar-foreground/30 hover:text-destructive transition-colors z-10"
         >
           <Trash2 className="h-3 w-3" />
         </button>
       )}
-    </Link>
+    </SidebarMenuItem>
   );
 }
 
-// ── Sidebar ────────────────────────────────────────────────────────────────────
+// ── Sidebar content ────────────────────────────────────────────────────────────
 
-export function ConversationSidebar({
+export function ConversationSidebarContent({
   conversations,
   activeId,
   onDelete,
@@ -132,32 +141,31 @@ export function ConversationSidebar({
   const groups = groupConversations(conversations);
 
   return (
-    <aside className="w-56 shrink-0 flex flex-col border-r border-border bg-bg h-full overflow-hidden">
-      {/* New chat button */}
-      <div className="p-3 border-b border-border/50">
-        <Link
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] font-mono text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors"
-          href="/"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          New chat
-        </Link>
-      </div>
+    <>
+      <SidebarHeader className="px-2 py-3">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton render={<Link href="/" />}>
+              <Plus className="h-3.5 w-3.5" />
+              <span className="font-mono text-[12px]">New chat</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarHeader>
 
-      {/* Conversation list */}
-      <div className="flex-1 overflow-y-auto p-2 space-y-4">
+      <SidebarContent>
         {conversations.length === 0 && (
-          <p className="px-3 py-6 text-[11px] font-mono text-muted-foreground/40 text-center">
+          <p className="px-4 py-6 text-[11px] font-mono text-sidebar-foreground/30 text-center">
             No conversations yet
           </p>
         )}
 
         {GROUP_ORDER.filter((g) => groups.has(g)).map((group) => (
-          <div key={group}>
-            <p className="px-3 mb-1 text-[10px] font-mono text-muted-foreground/40 uppercase tracking-wider">
+          <SidebarGroup key={group}>
+            <SidebarGroupLabel className="font-mono text-[10px] tracking-wider uppercase text-sidebar-foreground/40">
               {group}
-            </p>
-            <div className="space-y-0.5">
+            </SidebarGroupLabel>
+            <SidebarMenu>
               {groups.get(group)!.map((conv) => (
                 <ConvEntry
                   key={conv.id}
@@ -167,10 +175,10 @@ export function ConversationSidebar({
                   onRename={(title) => onRename(conv.id, title)}
                 />
               ))}
-            </div>
-          </div>
+            </SidebarMenu>
+          </SidebarGroup>
         ))}
-      </div>
-    </aside>
+      </SidebarContent>
+    </>
   );
 }

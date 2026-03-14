@@ -84,14 +84,14 @@ function ApiKeyRow({
   return (
     <FieldRow label={label}>
       {editing ? (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <input
             type="password"
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder="sk-…"
             autoFocus
-            className="flex-1 min-w-0 bg-surface border border-border rounded-md px-3 py-1.5 text-[12px] font-mono focus:outline-none focus:ring-1 focus:ring-primary/40"
+            className="flex-1 min-w-0 basis-full sm:basis-auto bg-surface border border-border rounded-md px-3 py-1.5 text-[12px] font-mono focus:outline-none focus:ring-1 focus:ring-primary/40"
           />
           <Button
             size="sm"

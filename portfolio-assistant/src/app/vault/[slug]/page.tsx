@@ -115,7 +115,7 @@ export default function VaultEditorPage({
   return (
     <div className="h-full flex flex-col bg-bg text-foreground overflow-hidden">
       {/* Toolbar */}
-      <div className="shrink-0 border-b border-border px-5 py-2.5 flex items-center gap-3">
+      <div className="shrink-0 border-b border-border px-4 sm:px-5 py-2 sm:py-2.5 flex items-center gap-2 sm:gap-3">
         <button
           onClick={() => router.push("/vault")}
           className="text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors shrink-0 flex items-center gap-1"
@@ -126,17 +126,17 @@ export default function VaultEditorPage({
           vault
         </button>
 
-        <span className="text-border/60 text-xs">/</span>
+        <span className="text-border/60 text-xs shrink-0">/</span>
 
-        <span className="text-[12px] font-mono text-muted-foreground truncate">
+        <span className="text-[12px] font-mono text-muted-foreground truncate min-w-0 flex-1 sm:flex-none">
           {slug}
         </span>
 
         {doc && <TypePill type={doc.type} />}
 
-        <div className="ml-auto flex items-center gap-3">
-          {/* Auto-reindex toggle */}
-          <label className="flex items-center gap-1.5 cursor-pointer select-none" title="Automatically re-index after saving">
+        <div className="ml-auto sm:ml-0 flex items-center gap-1.5 sm:gap-3 shrink-0">
+          {/* Auto-reindex toggle — hidden on mobile to save space */}
+          <label className="hidden sm:flex items-center gap-1.5 cursor-pointer select-none" title="Automatically re-index after saving">
             <div
               role="switch"
               aria-checked={autoReindex}
@@ -152,7 +152,7 @@ export default function VaultEditorPage({
 
           {/* Save status */}
           {dirty && !saveMsg && (
-            <span className="text-[11px] text-muted-foreground/60 font-mono hidden sm:block">
+            <span className="hidden sm:block text-[11px] text-muted-foreground/60 font-mono">
               unsaved
             </span>
           )}
@@ -174,22 +174,21 @@ export default function VaultEditorPage({
 
           {/* Delete */}
           {deleteConfirm ? (
-            <span className="flex items-center gap-1.5">
-              <span className="text-[11px] text-muted-foreground">Delete?</span>
+            <span className="flex items-center gap-1">
               <Button
                 onClick={handleDelete}
                 disabled={deleting}
                 size="sm"
                 variant="destructive"
               >
-                {deleting ? "…" : "Confirm"}
+                {deleting ? "…" : "Delete"}
               </Button>
               <Button
                 onClick={() => setDeleteConfirm(false)}
                 size="sm"
                 variant="ghost"
               >
-                Cancel
+                ✕
               </Button>
             </span>
           ) : (

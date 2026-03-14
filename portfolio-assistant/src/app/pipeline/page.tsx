@@ -99,8 +99,8 @@ function RunTable({
             <tr className="border-b border-border bg-surface/50 text-left text-muted-foreground font-mono">
               <th className="px-4 py-2 font-medium">status</th>
               <th className="px-4 py-2 font-medium">chunks</th>
-              <th className="px-4 py-2 font-medium">model</th>
-              <th className="px-4 py-2 font-medium">by</th>
+              <th className="px-4 py-2 font-medium hidden sm:table-cell">model</th>
+              <th className="px-4 py-2 font-medium hidden sm:table-cell">by</th>
               <th className="px-4 py-2 font-medium">duration</th>
               <th className="px-4 py-2 font-medium">started</th>
             </tr>
@@ -158,10 +158,10 @@ function RunRow({ run }: { run: PipelineRunSummary }) {
         <td className="px-4 py-2.5 font-mono text-foreground">
           {run.chunk_count ?? "—"}
         </td>
-        <td className="px-4 py-2.5 text-muted-foreground font-mono text-[10px]">
+        <td className="px-4 py-2.5 text-muted-foreground font-mono text-[10px] hidden sm:table-cell">
           {run.model ?? "—"}
         </td>
-        <td className="px-4 py-2.5 text-muted-foreground font-mono">
+        <td className="px-4 py-2.5 text-muted-foreground font-mono hidden sm:table-cell">
           {run.triggered_by}
         </td>
         <td className="px-4 py-2.5 text-muted-foreground font-mono">

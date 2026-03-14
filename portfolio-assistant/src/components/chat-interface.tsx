@@ -40,15 +40,12 @@ export function ChatInterface({ slug }: { slug?: string }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [conversationSummary, setConversationSummary] = useState<string | null>(
-    null,
-  );
+  const [conversationSummary, setConversationSummary] = useState<string | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Load conversation if slug is provided
   useEffect(() => {
     if (slug) {
       getConversation(slug)
@@ -73,17 +70,15 @@ export function ChatInterface({ slug }: { slug?: string }) {
     }
   }, [slug]);
 
-  // Auto-scroll on new messages
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Auto-resize textarea
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 180) + "px";
+    el.style.height = Math.min(el.scrollHeight, 160) + "px";
   }, [input]);
 
   const send = useCallback(
@@ -100,7 +95,6 @@ export function ChatInterface({ slug }: { slug?: string }) {
           const conv = await createConversation();
           currentId = conv.id;
           createLocalConversation(conv);
-          // We don't push yet, we'll continue the stream here
         } catch (err) {
           console.error("Failed to create conversation", err);
         }
@@ -187,13 +181,10 @@ export function ChatInterface({ slug }: { slug?: string }) {
           return updated;
         });
 
-        // If it was a new conversation, redirect to the new slug
         if (!slug && currentId) {
           router.push(`/${currentId}`);
-          // Refresh list to show the new title
           setTimeout(() => refreshConversations(), 1000);
         } else if (currentId) {
-          // Just refresh for title updates
           setTimeout(() => refreshConversations(), 2000);
         }
       } catch (err: any) {
@@ -211,15 +202,7 @@ export function ChatInterface({ slug }: { slug?: string }) {
         setLoading(false);
       }
     },
-    [
-      input,
-      loading,
-      messages,
-      slug,
-      createLocalConversation,
-      refreshConversations,
-      router,
-    ],
+    [input, loading, messages, slug, createLocalConversation, refreshConversations, router],
   );
 
   function handleKey(e: React.KeyboardEvent) {
@@ -233,96 +216,100 @@ export function ChatInterface({ slug }: { slug?: string }) {
 
   return (
     <div className="flex-1 min-h-0 relative overflow-hidden flex flex-col">
-      {/* {conversationSummary && ( */}
-      <ConversationMemoryPanel
-        summary={
-          conversationSummary ||
-          "New conversation Memory summary will appear here after the first response."
-        }
-      />
-      {/* )} */}
-      <div className="flex-1 min-h-0">
-        <div className="h-full w-full">
-          {isEmpty ? (
-            <div className="h-full overflow-y-auto">
-              <div className="max-w-155 mx-auto px-6 pt-16 pb-48 animate-fade-up">
-                <div className="flex items-center gap-2 mb-4">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  <span className="font-mono text-[11px] text-primary tracking-widest uppercase">
-                    Portfolio vault · RAG-powered
-                  </span>
-                </div>
-                <h1 className="text-3xl font-semibold tracking-tight leading-[1.15] mb-3 text-foreground">
-                  What do you need,
-                  <br />
-                  Daud?
-                </h1>
-                <p className="text-[15px] text-muted-foreground leading-relaxed mb-2 max-w-120">
-                  I retrieve only the relevant parts of your vault for each
-                  question — no context stuffing. Ask me to write, tailor, or
-                  prepare anything.
-                </p>
 
-                <Separator className="my-8 bg-border" />
-
-                <div className="grid grid-cols-2 gap-2">
-                  {SUGGESTIONS.map((s, i) => (
-                    <Button
-                      key={i}
-                      variant="outline"
-                      onClick={() => send(s)}
-                      style={{ animationDelay: `${i * 0.05}s` }}
-                      className="h-auto px-4 py-3 text-left justify-start text-[13px] leading-snug text-muted-foreground font-normal whitespace-normal bg-surface border-border hover:border-primary/30 hover:text-foreground hover:bg-primary/5 animate-fade-up transition-all"
-                    >
-                      {s}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="h-full overflow-y-auto">
-              <div className="max-w-170 mx-auto pt-8 pb-48">
-                {messages.map((m, i) => (
-                  <div
-                    key={i}
-                    className={`mb-6 flex gap-3 items-start ${
-                      m.role === "user" ? "flex-row-reverse" : "flex-row"
-                    } ${i >= messages.length - 2 ? "animate-fade-up" : ""}`}
-                  >
-                    {m.role === "assistant" && (
-                      <Avatar className="h-7 w-7 rounded-lg shrink-0 ring-1 ring-primary/20 bg-accent-dim mt-0.5">
-                        <AvatarFallback className="rounded-lg bg-accent-dim text-primary text-[10px] font-medium font-mono">
-                          DR
-                        </AvatarFallback>
-                      </Avatar>
-                    )}
-
-                    {m.role === "user" ? (
-                      <div className="max-w-[80%] text-sm leading-[1.75] whitespace-pre-wrap wrap-break-word bg-user-bg border border-user-border rounded-[16px_4px_16px_16px] px-4 py-2.5 text-foreground/90">
-                        {m.content}
-                      </div>
-                    ) : (
-                      <div className="flex-1 min-w-0 text-sm text-foreground/85 pt-0.5">
-                        <DocumentMessage
-                          content={m.content}
-                          streaming={m.streaming}
-                          meta={!m.streaming ? m.meta : null}
-                        />
-                      </div>
-                    )}
-                  </div>
-                ))}
-                <div ref={bottomRef} />
-              </div>
-            </div>
-          )}
+      {/* Memory panel — pinned above scroll, only when summary exists */}
+      {conversationSummary && (
+        <div className="shrink-0 px-3 sm:px-6 pt-2 max-w-[680px] mx-auto w-full">
+          <ConversationMemoryPanel summary={conversationSummary} />
         </div>
+      )}
+
+      {/* Message / empty area */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {isEmpty ? (
+          /* ── Empty state ── */
+          <div className="max-w-[620px] mx-auto px-4 sm:px-6 pt-10 sm:pt-16 pb-48 animate-fade-up">
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
+              <span className="font-mono text-[10px] sm:text-[11px] text-primary tracking-widest uppercase">
+                Portfolio vault · RAG-powered
+              </span>
+            </div>
+
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight leading-[1.15] mb-3 text-foreground">
+              What do you need,
+              <br />
+              Daud?
+            </h1>
+
+            <p className="text-[14px] sm:text-[15px] text-muted-foreground leading-relaxed mb-2 max-w-[480px]">
+              I retrieve only the relevant parts of your vault for each
+              question — no context stuffing. Ask me to write, tailor, or
+              prepare anything.
+            </p>
+
+            <Separator className="my-6 sm:my-8 bg-border" />
+
+            {/* Single column on mobile, 2 cols on sm+ */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {SUGGESTIONS.map((s, i) => (
+                <Button
+                  key={i}
+                  variant="outline"
+                  onClick={() => send(s)}
+                  style={{ animationDelay: `${i * 0.05}s` }}
+                  className="h-auto px-4 py-3 text-left justify-start text-[13px] leading-snug text-muted-foreground font-normal whitespace-normal bg-surface border-border hover:border-primary/30 hover:text-foreground hover:bg-primary/5 animate-fade-up transition-all min-h-[52px]"
+                >
+                  {s}
+                </Button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          /* ── Message list ── */
+          <div className="max-w-[680px] mx-auto px-4 sm:px-6 pt-6 sm:pt-8 pb-36 sm:pb-48">
+            {messages.map((m, i) => (
+              <div
+                key={i}
+                className={`mb-5 sm:mb-6 flex gap-2 sm:gap-3 items-start ${
+                  m.role === "user" ? "flex-row-reverse" : "flex-row"
+                } ${i >= messages.length - 2 ? "animate-fade-up" : ""}`}
+              >
+                {m.role === "assistant" && (
+                  <Avatar className="h-7 w-7 rounded-lg shrink-0 ring-1 ring-primary/20 bg-accent-dim mt-0.5">
+                    <AvatarFallback className="rounded-lg bg-accent-dim text-primary text-[10px] font-medium font-mono">
+                      DR
+                    </AvatarFallback>
+                  </Avatar>
+                )}
+
+                {m.role === "user" ? (
+                  <div className="max-w-[85%] sm:max-w-[80%] text-sm leading-[1.75] whitespace-pre-wrap break-words bg-user-bg border border-user-border rounded-[16px_4px_16px_16px] px-3.5 sm:px-4 py-2.5 text-foreground/90">
+                    {m.content}
+                  </div>
+                ) : (
+                  <div className="flex-1 min-w-0 text-sm text-foreground/85 pt-0.5">
+                    <DocumentMessage
+                      content={m.content}
+                      streaming={m.streaming}
+                      meta={!m.streaming ? m.meta : null}
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
+            <div ref={bottomRef} />
+          </div>
+        )}
       </div>
 
-      <div className="absolute bottom-0 left-0 right-0 pointer-events-none z-10 bg-linear-to-t from-bg via-bg/95 to-transparent pt-20 px-6 pb-6">
-        <div className="max-w-170 mx-auto pointer-events-auto">
-          <div className="flex gap-3 items-end bg-surface border border-border rounded-2xl px-4 py-3 focus-within:ring-1 focus-within:ring-primary/40 focus-within:border-primary/30 transition-all">
+      {/* ── Floating input bar ── */}
+      <div
+        className="absolute bottom-0 left-0 right-0 pointer-events-none z-10 bg-gradient-to-t from-bg via-bg/95 to-transparent pt-14 sm:pt-20 px-3 sm:px-6"
+        style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+      >
+        <div className="max-w-[680px] mx-auto pointer-events-auto">
+          <div className="flex gap-2 sm:gap-3 items-end bg-surface border border-border rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 focus-within:ring-1 focus-within:ring-primary/40 focus-within:border-primary/30 transition-all">
             <Textarea
               ref={textareaRef}
               value={input}
@@ -330,20 +317,23 @@ export function ChatInterface({ slug }: { slug?: string }) {
               onKeyDown={handleKey}
               placeholder="Ask anything about your portfolio…"
               rows={1}
-              className="flex-1 bg-transparent border-none shadow-none outline-none focus-visible:ring-0 text-foreground text-sm leading-relaxed font-sans resize-none min-h-6 max-h-45 caret-primary placeholder:text-muted-foreground p-0"
+              className="flex-1 bg-transparent border-none shadow-none outline-none focus-visible:ring-0 text-foreground text-sm leading-relaxed font-sans resize-none min-h-6 max-h-40 caret-primary placeholder:text-muted-foreground p-0"
             />
             <Button
               size="icon"
               onClick={() => send()}
               disabled={!input.trim() || loading}
-              className="h-8 w-8 shrink-0 rounded-lg transition-all disabled:opacity-30"
+              className="h-9 w-9 sm:h-8 sm:w-8 shrink-0 rounded-lg transition-all disabled:opacity-30"
             >
               <ArrowUp className="h-4 w-4" />
             </Button>
           </div>
 
-          <div className="flex justify-between mt-2 text-[11px] text-muted-foreground/50 font-mono">
-            <span>enter to send · shift+enter for newline</span>
+          <div className="flex justify-between mt-1.5 text-[11px] text-muted-foreground/50 font-mono">
+            {/* Keyboard hint — only meaningful on desktop */}
+            <span className="hidden sm:block">enter to send · shift+enter for newline</span>
+            <span className="sm:hidden" />
+
             <span className="flex items-center gap-1.5">
               <span
                 className={`inline-block w-1.5 h-1.5 rounded-full transition-colors ${
@@ -355,6 +345,7 @@ export function ChatInterface({ slug }: { slug?: string }) {
           </div>
         </div>
       </div>
+
     </div>
   );
 }

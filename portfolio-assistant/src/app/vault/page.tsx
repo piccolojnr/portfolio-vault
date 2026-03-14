@@ -217,7 +217,7 @@ function DeleteCell({ slug, onDeleted }: DeleteCellProps) {
   return (
     <button
       onClick={(e) => { e.stopPropagation(); setConfirming(true); }}
-      className="opacity-0 group-hover:opacity-100 p-1 rounded text-muted-foreground hover:text-destructive transition-all"
+      className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-1.5 sm:p-1 rounded text-muted-foreground hover:text-destructive transition-all"
       title="Delete"
     >
       <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -335,8 +335,8 @@ export default function VaultPage() {
   return (
     <div className="h-full flex flex-col bg-bg text-foreground overflow-hidden">
       {/* Toolbar */}
-      <div className="shrink-0 px-6 pt-6 pb-4">
-        <div className="flex items-center gap-3">
+      <div className="shrink-0 px-4 sm:px-6 pt-4 sm:pt-6 pb-4">
+        <div className="flex items-center gap-2 sm:gap-3">
           <div>
             <h1 className="text-base font-semibold text-foreground">Vault Documents</h1>
             {data !== null && (
@@ -370,7 +370,7 @@ export default function VaultPage() {
       </div>
 
       {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto px-6 pb-6">
+      <div className="flex-1 overflow-y-auto px-4 sm:px-6 pb-6">
         {/* New doc form */}
         {showNew && (
           <NewDocForm
@@ -429,8 +429,8 @@ export default function VaultPage() {
                     </div>
                   </div>
 
-                  <div className="shrink-0 flex items-center gap-3">
-                    <span className="text-[11px] text-muted-foreground/50 font-mono">
+                  <div className="shrink-0 flex items-center gap-2">
+                    <span className="hidden sm:inline text-[11px] text-muted-foreground/50 font-mono">
                       {formatRelative(doc.updated_at)}
                     </span>
                     <DeleteCell

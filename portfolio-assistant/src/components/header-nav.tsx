@@ -6,31 +6,28 @@ import { cn } from "@/lib/utils";
 
 export function HeaderNav() {
   const pathname = usePathname();
-  const isChat = pathname === "/" || pathname.startsWith("/chat");
+
   const isVault = pathname.startsWith("/vault");
   const isPipeline = pathname.startsWith("/pipeline");
   const isSettings = pathname.startsWith("/settings");
 
-  const navLink = (href: string, label: string, active: boolean) =>
+  const navLink = (active: boolean) =>
     cn(
       "px-3 py-1 rounded-md text-[12px] font-mono transition-colors",
       active
         ? "text-primary bg-primary/10"
-        : "text-muted-foreground hover:text-foreground hover:bg-surface"
+        : "text-muted-foreground hover:text-foreground hover:bg-surface",
     );
 
   return (
     <nav className="flex items-center gap-1">
-      <Link href="/" className={navLink("/", "chat", isChat)}>
-        chat
-      </Link>
-      <Link href="/vault" className={navLink("/vault", "vault", isVault)}>
+      <Link href="/vault" className={navLink(isVault)}>
         vault
       </Link>
-      <Link href="/pipeline" className={navLink("/pipeline", "pipeline", isPipeline)}>
+      <Link href="/pipeline" className={navLink(isPipeline)}>
         pipeline
       </Link>
-      <Link href="/settings" className={navLink("/settings", "settings", isSettings)}>
+      <Link href="/settings" className={navLink(isSettings)}>
         settings
       </Link>
     </nav>
