@@ -24,14 +24,26 @@ TYPE_TO_CATEGORY = {
 }
 
 
-def index_all_docs(settings, *, run_id: str | None = None) -> int:
+def index_all_docs(
+    settings,
+    *,
+    run_id: str | None = None,
+    progress_cb=None,
+) -> int:
     """Read all docs from DB, chunk, embed, upsert to Qdrant.
 
     If run_id is None, a new PipelineRun is created and finished automatically.
     If run_id is provided (pre-created by the caller), only finish_pipeline_run is called.
 
+    progress_cb(event: str, data: dict) is called at key milestones when provided.
+
     Returns the number of chunks stored.
     """
+
+    def _notify(event: str, **data):
+        if progress_cb:
+            progress_cb(event, data)
+
     docs = get_docs(settings.database_url)
     doc_ids = [str(d.id) for d in docs]
     slug_to_doc = {d.slug: d for d in docs}
@@ -45,6 +57,8 @@ def index_all_docs(settings, *, run_id: str | None = None) -> int:
             model=settings.embedding_model,
         )
 
+    _notify("started", doc_count=len(docs), run_id=run_id or "")
+
     try:
         all_chunks = [
             c
@@ -53,7 +67,11 @@ def index_all_docs(settings, *, run_id: str | None = None) -> int:
             if c["word_count"] >= 10
         ]
 
+        _notify("chunked", chunk_count=len(all_chunks))
+
         vectors = embed([c["content"] for c in all_chunks], settings=settings)
+
+        _notify("embedded", chunk_count=len(all_chunks))
 
         client = get_qdrant_client(settings)
         collection = settings.qdrant_collection
@@ -107,6 +125,7 @@ def index_all_docs(settings, *, run_id: str | None = None) -> int:
                 chunk_count=count,
             )
 
+        _notify("done", chunk_count=count, run_id=run_id or "")
         return count
 
     except Exception as exc:

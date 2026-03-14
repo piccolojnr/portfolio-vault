@@ -104,4 +104,18 @@
     color: var(--text);
     font-family: var(--font-geist-sans), Arial, sans-serif;
   }
+
+     /* custom scrollbar */
+    ::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background: var(--color-primary);
+        border-radius: 3px;
+    }
 }

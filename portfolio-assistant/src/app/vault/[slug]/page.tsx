@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { use, useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { getDocument, updateDocument, deleteDocument, type VaultDocDetail } from "@/lib/vault";
+import { getDocument, updateDocument, deleteDocument, triggerReindex, type VaultDocDetail } from "@/lib/vault";
 import { Button } from "@/components/ui/button";
 
 const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
@@ -42,6 +42,7 @@ export default function VaultEditorPage({
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const saveMsgTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [autoReindex, setAutoReindex] = useState(false);
 
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -60,7 +61,12 @@ export default function VaultEditorPage({
       const updated = await updateDocument(slug, { title, content });
       setDoc(updated);
       setDirty(false);
-      setSaveMsg({ text: "Saved", ok: true });
+      if (autoReindex) {
+        setSaveMsg({ text: "Saved · reindexing…", ok: true });
+        triggerReindex().catch(() => {});
+      } else {
+        setSaveMsg({ text: "Saved", ok: true });
+      }
       if (saveMsgTimer.current) clearTimeout(saveMsgTimer.current);
       saveMsgTimer.current = setTimeout(() => setSaveMsg(null), 3000);
     } catch (e: unknown) {
@@ -128,7 +134,22 @@ export default function VaultEditorPage({
 
         {doc && <TypePill type={doc.type} />}
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-3">
+          {/* Auto-reindex toggle */}
+          <label className="flex items-center gap-1.5 cursor-pointer select-none" title="Automatically re-index after saving">
+            <div
+              role="switch"
+              aria-checked={autoReindex}
+              onClick={() => setAutoReindex((v) => !v)}
+              className={`relative w-7 h-4 rounded-full transition-colors ${autoReindex ? "bg-primary" : "bg-muted/60"}`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${autoReindex ? "translate-x-3" : ""}`}
+              />
+            </div>
+            <span className="text-[10px] font-mono text-muted-foreground/60">auto-index</span>
+          </label>
+
           {/* Save status */}
           {dirty && !saveMsg && (
             <span className="text-[11px] text-muted-foreground/60 font-mono hidden sm:block">
