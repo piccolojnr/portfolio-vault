@@ -19,6 +19,7 @@ from app.schemas.conversation import (
     ConversationSummary,
     MessageCreate,
     MessageRead,
+    SummaryUpdate,
 )
 from app.services import conversations as svc
 
@@ -61,6 +62,20 @@ async def patch_conversation(
 async def delete_conversation(conv_id: UUID, session=Depends(get_db_conn)):
     try:
         await svc.delete_conversation(session, conv_id)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.patch("/{conv_id}/summary", status_code=204)
+async def update_summary(
+    conv_id: UUID,
+    body: SummaryUpdate,
+    session=Depends(get_db_conn),
+):
+    try:
+        await svc.update_summary(
+            session, conv_id, body.summary, body.summarised_up_to_message_id
+        )
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

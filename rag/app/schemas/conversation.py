@@ -23,6 +23,8 @@ class ConversationSummary(BaseModel):
     title: str | None
     created_at: datetime
     updated_at: datetime
+    summary: str | None = None
+    summarised_up_to_message_id: UUID | None = None
 
     model_config = {"from_attributes": True}
 
@@ -33,6 +35,11 @@ class ConversationDetail(ConversationSummary):
 
 class ConversationPatch(BaseModel):
     title: str | None = None
+
+
+class SummaryUpdate(BaseModel):
+    summary: str
+    summarised_up_to_message_id: UUID
 
 
 class MessageCreate(BaseModel):

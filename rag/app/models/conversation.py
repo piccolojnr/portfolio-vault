@@ -19,6 +19,11 @@ class Conversation(SQLModel, table=True):
     updated_at: datetime = Field(
         default_factory=utcnow, sa_column=Column(DateTime(timezone=True), nullable=False)
     )
+    # Rolling summary — updated in the background after trimming occurs
+    summary: str | None = None
+    summarised_up_to_message_id: UUID | None = Field(
+        default=None, foreign_key="messages.id"
+    )
 
 
 class Message(SQLModel, table=True):

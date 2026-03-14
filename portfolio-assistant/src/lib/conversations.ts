@@ -17,6 +17,8 @@ export interface ConversationSummary {
   title: string | null;
   created_at: string;
   updated_at: string;
+  summary: string | null;
+  summarised_up_to_message_id: string | null;
 }
 
 export interface ConversationDetail extends ConversationSummary {
@@ -59,6 +61,21 @@ export function deleteConversation(id: string): Promise<void> {
   return fetch(`/api/conversations/${id}`, { method: "DELETE" }).then(
     () => undefined,
   );
+}
+
+export function updateConversationSummary(
+  convId: string,
+  summary: string,
+  summarisedUpToMessageId: string,
+): Promise<void> {
+  return fetch(`/api/conversations/${convId}/summary`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      summary,
+      summarised_up_to_message_id: summarisedUpToMessageId,
+    }),
+  }).then(() => undefined);
 }
 
 export function addMessage(

@@ -132,6 +132,24 @@ async def get_first_user_message(
     return msg.content if msg else None
 
 
+# ── Summary ────────────────────────────────────────────────────────────────────
+
+async def update_summary(
+    session: AsyncSession,
+    conv_id: UUID,
+    summary: str,
+    summarised_up_to_message_id: UUID,
+) -> None:
+    """Persist a rolling summary produced by the background summarisation job."""
+    conv = await session.get(Conversation, conv_id)
+    if not conv:
+        raise LookupError(f"Conversation {conv_id} not found")
+    conv.summary = summary
+    conv.summarised_up_to_message_id = summarised_up_to_message_id
+    session.add(conv)
+    await session.commit()
+
+
 # ── Auto-title (background task) ───────────────────────────────────────────────
 
 async def auto_title_bg(
