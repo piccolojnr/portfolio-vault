@@ -1,11 +1,17 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { 
-  listConversations, 
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
+import {
+  listConversations,
   deleteConversation as apiDeleteConversation,
   patchConversation as apiPatchConversation,
-  type ConversationSummary 
+  type ConversationSummary,
 } from "@/lib/conversations";
 import { useRouter, useParams } from "next/navigation";
 
@@ -18,9 +24,15 @@ interface ConversationContextType {
   renameConversation: (id: string, title: string) => Promise<void>;
 }
 
-const ConversationContext = createContext<ConversationContextType | undefined>(undefined);
+const ConversationContext = createContext<ConversationContextType | undefined>(
+  undefined,
+);
 
-export function ConversationProvider({ children }: { children: React.ReactNode }) {
+export function ConversationProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const router = useRouter();
   const params = useParams();
@@ -36,25 +48,29 @@ export function ConversationProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const createLocalConversation = useCallback((conv: ConversationSummary) => {
-    setConversations(prev => [conv, ...prev]);
+    setConversations((prev) => [conv, ...prev]);
   }, []);
 
-  const deleteConversation = useCallback(async (id: string) => {
-    await apiDeleteConversation(id);
-    setConversations(prev => prev.filter(c => c.id !== id));
-    if (activeId === id) {
-      router.push("/");
-    }
-  }, [activeId, router]);
+  const deleteConversation = useCallback(
+    async (id: string) => {
+      await apiDeleteConversation(id);
+      setConversations((prev) => prev.filter((c) => c.id !== id));
+      if (activeId === id) {
+        router.push("/");
+      }
+    },
+    [activeId, router],
+  );
 
   const renameConversation = useCallback(async (id: string, title: string) => {
     const updated = await apiPatchConversation(id, title);
-    setConversations(prev =>
-      prev.map(c => (c.id === id ? { ...c, title: updated.title } : c))
+    setConversations((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, title: updated.title } : c)),
     );
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshConversations();
   }, [refreshConversations]);
 
@@ -77,7 +93,9 @@ export function ConversationProvider({ children }: { children: React.ReactNode }
 export function useConversations() {
   const context = useContext(ConversationContext);
   if (context === undefined) {
-    throw new Error("useConversations must be used within a ConversationProvider");
+    throw new Error(
+      "useConversations must be used within a ConversationProvider",
+    );
   }
   return context;
 }
