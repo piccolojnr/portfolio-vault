@@ -7,7 +7,8 @@
       "Bash(pnpm add:*)",
       "Bash(pnpm tsc:*)",
       "Bash(python:*)",
-      "Bash(source:*)"
+      "Bash(source:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

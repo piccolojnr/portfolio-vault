@@ -45,7 +45,7 @@ function MessageRow({
       )}
 
       {message.role === "user" ? (
-        <div className="max-w-[85%] sm:max-w-[80%] text-sm leading-[1.75] whitespace-pre-wrap break-words bg-user-bg border border-user-border rounded-[16px_4px_16px_16px] px-3.5 sm:px-4 py-2.5 text-foreground/90">
+        <div className="max-w-[85%] sm:max-w-[80%] text-sm leading-[1.75] whitespace-pre-wrap wrap-break-word bg-user-bg border border-user-border rounded-[16px_4px_16px_16px] px-3.5 sm:px-4 py-2.5 text-foreground/90">
           {message.content}
         </div>
       ) : (
@@ -230,7 +230,10 @@ export function ChatInterface({ slug }: { slug?: string }) {
       )}
 
       {/* Message / empty area */}
-      <div ref={scrollElRef} className="flex-1 min-h-0 overflow-y-auto scroll-smooth">
+      <div
+        ref={scrollElRef}
+        className="flex-1 min-h-0 overflow-y-auto scroll-smooth"
+      >
         {isLoadingConversation ? (
           /* ── Loading skeleton ── */
           <div className="max-w-[680px] mx-auto px-4 sm:px-6 pt-6 sm:pt-8 space-y-6">
@@ -328,7 +331,7 @@ export function ChatInterface({ slug }: { slug?: string }) {
           </div>
         )}
         <div
-          style={{ height: virtualizer.getVirtualItems().length ? 200 : 0 }}
+          style={{ height: virtualizer.getVirtualItems().length ? 80 : 0 }}
         />
       </div>
 

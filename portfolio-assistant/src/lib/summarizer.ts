@@ -18,18 +18,13 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
-import { ANTHROPIC_API_KEY, OPENAI_API_KEY, RAG_BACKEND_URL } from "./config";
+import { RAG_BACKEND_URL, type RuntimeConfig } from "./config";
 import type { MessageRead } from "./conversations";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
 /** Only summarise if at least this many messages were trimmed. */
 const MIN_DROPPED_TO_SUMMARISE = 5;
-
-const SUMMARISER_MODELS = {
-    anthropic: "claude-haiku-4-5-20251001",
-    openai: "gpt-4o-mini",
-} as const;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -47,26 +42,26 @@ export interface SummaryTrigger {
  * Fire-and-forget — call this after streaming finishes.
  * Returns immediately; summarisation runs in the background.
  */
-export function maybeTriggerSummarization(trigger: SummaryTrigger): void {
+export function maybeTriggerSummarization(trigger: SummaryTrigger, config: RuntimeConfig): void {
     if (trigger.droppedMessages.length <= MIN_DROPPED_TO_SUMMARISE) return;
     if (trigger.newestTrimmedMessageId === trigger.summarisedUpToId) return;
 
     // Intentionally not awaited — runs after the response is already sent
-    runSummarization(trigger).catch((err) =>
+    runSummarization(trigger, config).catch((err) =>
         console.warn("[summarizer] Background job failed:", err),
     );
 }
 
 // ── Implementation ────────────────────────────────────────────────────────────
 
-async function runSummarization(trigger: SummaryTrigger): Promise<void> {
+async function runSummarization(trigger: SummaryTrigger, config: RuntimeConfig): Promise<void> {
     const { convId, droppedMessages, newestTrimmedMessageId, existingSummary } = trigger;
 
     const prompt = buildPrompt(droppedMessages, existingSummary);
 
-    const newSummary = ANTHROPIC_API_KEY
-        ? await summariseWithAnthropic(prompt)
-        : await summariseWithOpenAI(prompt);
+    const newSummary = config.anthropic_api_key
+        ? await summariseWithAnthropic(prompt, config.anthropic_api_key, config.summarizer_anthropic_model)
+        : await summariseWithOpenAI(prompt, config.openai_api_key, config.summarizer_openai_model);
 
     await persistSummary(convId, newSummary, newestTrimmedMessageId);
     console.log(`[summarizer] Updated summary for conversation ${convId}`);
@@ -95,10 +90,10 @@ function buildPrompt(dropped: MessageRead[], existingSummary: string | null): st
     );
 }
 
-async function summariseWithAnthropic(prompt: string): Promise<string> {
-    const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+async function summariseWithAnthropic(prompt: string, apiKey: string, model: string): Promise<string> {
+    const client = new Anthropic({ apiKey });
     const response = await client.messages.create({
-        model: SUMMARISER_MODELS.anthropic,
+        model,
         max_tokens: 256,
         messages: [{ role: "user", content: prompt }],
     });
@@ -109,10 +104,10 @@ async function summariseWithAnthropic(prompt: string): Promise<string> {
         .trim();
 }
 
-async function summariseWithOpenAI(prompt: string): Promise<string> {
-    const client = new OpenAI({ apiKey: OPENAI_API_KEY });
+async function summariseWithOpenAI(prompt: string, apiKey: string, model: string): Promise<string> {
+    const client = new OpenAI({ apiKey });
     const response = await client.chat.completions.create({
-        model: SUMMARISER_MODELS.openai,
+        model,
         max_tokens: 256,
         messages: [{ role: "user", content: prompt }],
     });

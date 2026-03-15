@@ -11,6 +11,11 @@ export interface SettingsRead {
   anthropic_model: string;
   openai_model: string;
   cost_limit_usd: number;
+  system_prompt: string;
+  classifier_anthropic_model: string;
+  classifier_openai_model: string;
+  summarizer_anthropic_model: string;
+  summarizer_openai_model: string;
   embedding_model_options: string[];
   anthropic_model_options: string[];
   openai_model_options: string[];
@@ -23,6 +28,11 @@ export interface SettingsUpdate {
   anthropic_model?: string;
   openai_model?: string;
   cost_limit_usd?: number;
+  system_prompt?: string;
+  classifier_anthropic_model?: string;
+  classifier_openai_model?: string;
+  summarizer_anthropic_model?: string;
+  summarizer_openai_model?: string;
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {

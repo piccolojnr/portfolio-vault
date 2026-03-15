@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db_conn
-from app.schemas.settings import SettingsRead, SettingsUpdate
+from app.schemas.settings import RuntimeConfig, SettingsRead, SettingsUpdate
 from app.services import settings as svc
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -32,3 +32,9 @@ async def read_settings(session: DBSession):
 @router.put("", response_model=SettingsRead)
 async def update_settings(patch: SettingsUpdate, session: DBSession):
     return await svc.apply_update(session, patch)
+
+
+@router.get("/runtime", response_model=RuntimeConfig)
+async def runtime_config(session: DBSession):
+    """Server-to-server only: returns decrypted API keys + effective config."""
+    return await svc.get_runtime_config(session)

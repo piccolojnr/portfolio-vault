@@ -20,23 +20,15 @@ import OpenAI from "openai";
 import { retrieve, formatContext } from "./retrieval";
 import { type Classification } from "./intent";
 import { type MessageMeta, type MessageRead } from "./conversations";
-import {
-    ANTHROPIC_API_KEY,
-    OPENAI_API_KEY,
-    RAG_BACKEND_URL,
-    getLLMProvider,
-    SYSTEM_PROMPT,
-    LLM_CONFIG,
-} from "./config";
+import { RAG_BACKEND_URL, type RuntimeConfig } from "./config";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
-// ── Lazy LLM clients ──────────────────────────────────────────────────────────
+// ── LLM constants (not user-facing settings) ──────────────────────────────────
 
-const anthropic = ANTHROPIC_API_KEY ? new Anthropic({ apiKey: ANTHROPIC_API_KEY }) : null;
-const openai = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null;
+const MAX_TOKENS = 2000;
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -100,19 +92,18 @@ async function streamResponse(
     messages: ChatMessage[],
     userMessage: string,
     convId: string | undefined,
+    config: RuntimeConfig,
     meta: MessageMeta | null = null,
 ): Promise<ReadableStream<Uint8Array>> {
-    const provider = getLLMProvider();
-
-    if (provider === "anthropic" && anthropic) {
-        return streamAnthropic(messages, userMessage, convId, meta);
+    if (config.anthropic_api_key) {
+        return streamAnthropic(messages, userMessage, convId, config, meta);
     }
-    if (provider === "openai" && openai) {
-        return streamOpenAI(messages, userMessage, convId, meta);
+    if (config.openai_api_key) {
+        return streamOpenAI(messages, userMessage, convId, config, meta);
     }
 
     throw new Error(
-        "No LLM provider available. Set ANTHROPIC_API_KEY or OPENAI_API_KEY in .env.local",
+        "No LLM provider available. Configure API keys in the settings page.",
     );
 }
 
@@ -120,12 +111,14 @@ function streamAnthropic(
     messages: ChatMessage[],
     userMessage: string,
     convId: string | undefined,
+    config: RuntimeConfig,
     meta: MessageMeta | null,
 ): ReadableStream<Uint8Array> {
-    const stream = anthropic!.messages.stream({
-        model: LLM_CONFIG.anthropic.model,
-        max_tokens: LLM_CONFIG.anthropic.max_tokens,
-        system: SYSTEM_PROMPT,
+    const client = new Anthropic({ apiKey: config.anthropic_api_key });
+    const stream = client.messages.stream({
+        model: config.anthropic_model,
+        max_tokens: MAX_TOKENS,
+        system: config.system_prompt,
         messages,
     });
 
@@ -164,12 +157,14 @@ async function streamOpenAI(
     messages: ChatMessage[],
     userMessage: string,
     convId: string | undefined,
+    config: RuntimeConfig,
     meta: MessageMeta | null,
 ): Promise<ReadableStream<Uint8Array>> {
-    const stream = await openai!.chat.completions.create({
-        model: LLM_CONFIG.openai.model,
-        max_tokens: LLM_CONFIG.openai.max_tokens,
-        messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
+    const client = new OpenAI({ apiKey: config.openai_api_key });
+    const stream = await client.chat.completions.create({
+        model: config.openai_model,
+        max_tokens: MAX_TOKENS,
+        messages: [{ role: "system", content: config.system_prompt }, ...messages],
         stream: true,
     });
 
@@ -204,28 +199,22 @@ async function streamOpenAI(
 
 // ── Intent handlers ───────────────────────────────────────────────────────────
 
-/**
- * conversational — no RAG, respond naturally.
- * Used for greetings, thanks, short reactions.
- */
 async function handleConversational(
     message: string,
     history: ChatMessage[],
     convId: string | undefined,
+    config: RuntimeConfig,
 ): Promise<ReadableStream<Uint8Array>> {
     console.log("[chat] conversational — skipping RAG");
     const meta: MessageMeta = { intent: "conversational", rag_retrieved: false, chunks_count: 0 };
-    return streamResponse([...history, { role: "user", content: message }], message, convId, meta);
+    return streamResponse([...history, { role: "user", content: message }], message, convId, config, meta);
 }
 
-/**
- * retrieval — RAG on, answer directly from vault chunks.
- * Used for questions about Daud's background, skills, projects.
- */
 async function handleRetrieval(
     message: string,
     history: ChatMessage[],
     convId: string | undefined,
+    config: RuntimeConfig,
 ): Promise<ReadableStream<Uint8Array>> {
     const ragResult = await retrieve(message, 5);
     const context = formatContext(ragResult.retrieved_chunks);
@@ -240,18 +229,14 @@ async function handleRetrieval(
     ];
 
     const meta: MessageMeta = { intent: "retrieval", rag_retrieved: true, chunks_count: ragResult.retrieved_chunks.length };
-    return streamResponse(messages, message, convId, meta);
+    return streamResponse(messages, message, convId, config, meta);
 }
 
-/**
- * document — RAG on, generate a formatted document (CV / cover letter / bio).
- * Same retrieval path as retrieval; the system prompt instructs the model
- * to wrap the output in a <document> block.
- */
 async function handleDocument(
     message: string,
     history: ChatMessage[],
     convId: string | undefined,
+    config: RuntimeConfig,
 ): Promise<ReadableStream<Uint8Array>> {
     const ragResult = await retrieve(message, 5);
     const context = formatContext(ragResult.retrieved_chunks);
@@ -266,18 +251,15 @@ async function handleDocument(
     ];
 
     const meta: MessageMeta = { intent: "document", rag_retrieved: true, chunks_count: ragResult.retrieved_chunks.length };
-    return streamResponse(messages, message, convId, meta);
+    return streamResponse(messages, message, convId, config, meta);
 }
 
-/**
- * refinement — the prior document becomes context; RAG is only triggered
- * when the edit request needs new vault information (e.g. "add my kiosk project").
- */
 async function handleRefinement(
     message: string,
     history: ChatMessage[],
     convId: string | undefined,
     needsRag: boolean,
+    config: RuntimeConfig,
 ): Promise<ReadableStream<Uint8Array>> {
     const priorDoc = extractLastDocument(history);
     let contextBlock = priorDoc
@@ -300,7 +282,7 @@ async function handleRefinement(
         : message;
 
     const meta: MessageMeta = { intent: "refinement", rag_retrieved: needsRag, chunks_count: chunksCount };
-    return streamResponse([...history, { role: "user", content: userContent }], message, convId, meta);
+    return streamResponse([...history, { role: "user", content: userContent }], message, convId, config, meta);
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -313,20 +295,21 @@ export async function orchestrate(
     message: string,
     history: ChatMessage[],
     convId: string | undefined,
+    config: RuntimeConfig,
 ): Promise<ReadableStream<Uint8Array>> {
     const { intent, needs_rag } = classification;
 
     switch (intent) {
         case "conversational":
-            return handleConversational(message, history, convId);
+            return handleConversational(message, history, convId, config);
         case "retrieval":
-            return handleRetrieval(message, history, convId);
+            return handleRetrieval(message, history, convId, config);
         case "document":
-            return handleDocument(message, history, convId);
+            return handleDocument(message, history, convId, config);
         case "refinement":
-            return handleRefinement(message, history, convId, needs_rag);
+            return handleRefinement(message, history, convId, needs_rag, config);
         default:
             // Exhaustiveness guard — unknown intent falls back to retrieval
-            return handleRetrieval(message, history, convId);
+            return handleRetrieval(message, history, convId, config);
     }
 }

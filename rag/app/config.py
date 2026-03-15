@@ -40,6 +40,12 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-sonnet-4-6"
     openai_model: str = "gpt-4o"
 
+    # Fast/cheap models for intent classification and summarisation
+    classifier_anthropic_model: str = "claude-haiku-4-5-20251001"
+    classifier_openai_model: str = "gpt-4o-mini"
+    summarizer_anthropic_model: str = "claude-haiku-4-5-20251001"
+    summarizer_openai_model: str = "gpt-4o-mini"
+
     # Cost guard — pipeline run is blocked if estimated cost exceeds this (0 = no limit)
     cost_limit_usd: float = 0.0
 

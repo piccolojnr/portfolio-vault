@@ -16,7 +16,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
-import { ANTHROPIC_API_KEY, OPENAI_API_KEY } from "./config";
+import type { RuntimeConfig } from "./config";
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
@@ -33,11 +33,6 @@ export interface Classification {
 
 // ── Classifier config ─────────────────────────────────────────────────────────
 
-/** Fast, cheap models used only for classification — never for generation. */
-const CLASSIFIER_MODELS = {
-    anthropic: "claude-haiku-4-5-20251001",
-    openai: "gpt-4o-mini",
-} as const;
 
 const CLASSIFIER_SYSTEM = `You are an intent classifier for a career assistant chatbot that helps a user named Daud with his portfolio, CV, cover letters, and job applications.
 
@@ -81,6 +76,7 @@ function recentHistory(
 export async function classifyIntent(
     message: string,
     history: Array<{ role: "user" | "assistant"; content: string }>,
+    config: RuntimeConfig,
 ): Promise<Classification> {
     const priorDocInHistory = scanForDocument(history);
 
@@ -90,7 +86,7 @@ export async function classifyIntent(
         has_prior_document: priorDocInHistory,
     };
 
-    if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) return fallback;
+    if (!config.anthropic_api_key && !config.openai_api_key) return fallback;
 
     const context = recentHistory(history);
     const userContent =
@@ -99,9 +95,9 @@ export async function classifyIntent(
             : `Current message: ${message}`;
 
     try {
-        const text = ANTHROPIC_API_KEY
-            ? await classifyWithAnthropic(userContent)
-            : await classifyWithOpenAI(userContent);
+        const text = config.anthropic_api_key
+            ? await classifyWithAnthropic(userContent, config.anthropic_api_key, config.classifier_anthropic_model)
+            : await classifyWithOpenAI(userContent, config.openai_api_key, config.classifier_openai_model);
 
         const parsed = JSON.parse(text) as Classification;
 
@@ -117,10 +113,10 @@ export async function classifyIntent(
     }
 }
 
-async function classifyWithAnthropic(userContent: string): Promise<string> {
-    const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+async function classifyWithAnthropic(userContent: string, apiKey: string, model: string): Promise<string> {
+    const client = new Anthropic({ apiKey });
     const response = await client.messages.create({
-        model: CLASSIFIER_MODELS.anthropic,
+        model,
         max_tokens: 128,
         system: CLASSIFIER_SYSTEM,
         messages: [{ role: "user", content: userContent }],
@@ -131,10 +127,10 @@ async function classifyWithAnthropic(userContent: string): Promise<string> {
         .join("");
 }
 
-async function classifyWithOpenAI(userContent: string): Promise<string> {
-    const client = new OpenAI({ apiKey: OPENAI_API_KEY });
+async function classifyWithOpenAI(userContent: string, apiKey: string, model: string): Promise<string> {
+    const client = new OpenAI({ apiKey });
     const response = await client.chat.completions.create({
-        model: CLASSIFIER_MODELS.openai,
+        model,
         max_tokens: 128,
         messages: [
             { role: "system", content: CLASSIFIER_SYSTEM },

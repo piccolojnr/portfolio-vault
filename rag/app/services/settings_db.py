@@ -26,6 +26,11 @@ _ALL_KEYS = {
     "anthropic_model",
     "openai_model",
     "cost_limit_usd",
+    "system_prompt",
+    "classifier_anthropic_model",
+    "classifier_openai_model",
+    "summarizer_anthropic_model",
+    "summarizer_openai_model",
 }
 
 

@@ -23,14 +23,12 @@
  *   Steps 1–3 are skipped; history from the request body is used directly.
  */
 
-import { validateConfig, RAG_BACKEND_URL } from "@/lib/config";
+import { getRuntimeConfig, RAG_BACKEND_URL } from "@/lib/config";
 import { classifyIntent } from "@/lib/intent";
 import { orchestrate, type ChatMessage } from "@/lib/chat-pipeline";
 import { trimToTokenBudget } from "@/lib/token-budget";
 import { maybeTriggerSummarization } from "@/lib/summarizer";
 import type { ConversationDetail } from "@/lib/conversations";
-
-validateConfig();
 
 const SSE_HEADERS = {
     "Content-Type": "text/event-stream",
@@ -40,10 +38,6 @@ const SSE_HEADERS = {
 
 // ── Server-side fetch helpers ─────────────────────────────────────────────────
 
-/**
- * Fetches the full conversation from the Python backend directly.
- * Must use RAG_BACKEND_URL (absolute) — relative URLs don't work server-side.
- */
 async function fetchConversation(convId: string): Promise<ConversationDetail | null> {
     try {
         const res = await fetch(`${RAG_BACKEND_URL}/api/v1/conversations/${convId}`);
@@ -56,10 +50,6 @@ async function fetchConversation(convId: string): Promise<ConversationDetail | n
 
 // ── Summary injection helpers ─────────────────────────────────────────────────
 
-/**
- * Prepends a synthetic user/assistant exchange that carries the rolling
- * summary, maintaining strict alternating-role order required by both APIs.
- */
 function injectSummary(summary: string, history: ChatMessage[]): ChatMessage[] {
     return [
         { role: "user", content: `[Earlier context: ${summary}]` },
@@ -78,6 +68,9 @@ export async function POST(req: Request) {
             conversation_id?: string;
         };
 
+        // Fetch runtime config once per request (server-to-server only)
+        const config = await getRuntimeConfig();
+
         let history = clientHistory;
         let summaryTriggerData: Parameters<typeof maybeTriggerSummarization>[0] | null = null;
 
@@ -88,7 +81,6 @@ export async function POST(req: Request) {
             if (conv && conv.messages.length > 0) {
                 const trimResult = trimToTokenBudget(conv.messages);
 
-                // Prepare summarisation trigger metadata (checked after streaming)
                 if (trimResult.droppedCount > 0 && trimResult.newestTrimmedMessageId) {
                     summaryTriggerData = {
                         convId: conversation_id,
@@ -99,7 +91,6 @@ export async function POST(req: Request) {
                     };
                 }
 
-                // Inject summary if we had to trim and one exists
                 history =
                     trimResult.droppedCount > 0 && conv.summary
                         ? injectSummary(conv.summary, trimResult.keptMessages)
@@ -108,14 +99,14 @@ export async function POST(req: Request) {
         }
 
         // ── Step 4: Classify intent ───────────────────────────────────────────
-        const classification = await classifyIntent(message, history);
+        const classification = await classifyIntent(message, history, config);
 
         // ── Step 5: Stream response ───────────────────────────────────────────
-        const readable = await orchestrate(classification, message, history, conversation_id);
+        const readable = await orchestrate(classification, message, history, conversation_id, config);
 
         // ── Step 6: Trigger background summarisation (fire-and-forget) ────────
         if (summaryTriggerData) {
-            maybeTriggerSummarization(summaryTriggerData);
+            maybeTriggerSummarization(summaryTriggerData, config);
         }
 
         return new Response(readable, { headers: SSE_HEADERS });

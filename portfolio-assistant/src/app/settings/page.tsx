@@ -186,12 +186,17 @@ export default function SettingsPage() {
     null,
   );
 
-  // Local draft for model/limit fields
+  // Local draft for model/limit/prompt fields
   const [draft, setDraft] = useState<{
     embedding_model: string;
     anthropic_model: string;
     openai_model: string;
     cost_limit_usd: string;
+    system_prompt: string;
+    classifier_anthropic_model: string;
+    classifier_openai_model: string;
+    summarizer_anthropic_model: string;
+    summarizer_openai_model: string;
   } | null>(null);
 
   useEffect(() => {
@@ -204,6 +209,11 @@ export default function SettingsPage() {
           openai_model: s.openai_model,
           cost_limit_usd:
             s.cost_limit_usd === 0 ? "" : String(s.cost_limit_usd),
+          system_prompt: s.system_prompt,
+          classifier_anthropic_model: s.classifier_anthropic_model,
+          classifier_openai_model: s.classifier_openai_model,
+          summarizer_anthropic_model: s.summarizer_anthropic_model,
+          summarizer_openai_model: s.summarizer_openai_model,
         });
       })
       .catch((e) => setLoadErr(e.message));
@@ -221,6 +231,11 @@ export default function SettingsPage() {
         openai_model: updated.openai_model,
         cost_limit_usd:
           updated.cost_limit_usd === 0 ? "" : String(updated.cost_limit_usd),
+        system_prompt: updated.system_prompt,
+        classifier_anthropic_model: updated.classifier_anthropic_model,
+        classifier_openai_model: updated.classifier_openai_model,
+        summarizer_anthropic_model: updated.summarizer_anthropic_model,
+        summarizer_openai_model: updated.summarizer_openai_model,
       });
       setSaveMsg({ text: "Saved", ok: true });
       setTimeout(() => setSaveMsg(null), 3000);
@@ -243,6 +258,11 @@ export default function SettingsPage() {
       cost_limit_usd: draft.cost_limit_usd
         ? parseFloat(draft.cost_limit_usd)
         : 0,
+      system_prompt: draft.system_prompt,
+      classifier_anthropic_model: draft.classifier_anthropic_model,
+      classifier_openai_model: draft.classifier_openai_model,
+      summarizer_anthropic_model: draft.summarizer_anthropic_model,
+      summarizer_openai_model: draft.summarizer_openai_model,
     });
   }, [draft, applyUpdate]);
 
@@ -337,6 +357,44 @@ export default function SettingsPage() {
             </div>
           </section>
 
+          {/* Classifier & Summariser models */}
+          <section className="rounded-xl border border-border bg-surface/40 p-5">
+            <SectionHeading>Classifier &amp; Summariser models</SectionHeading>
+            <p className="text-[11px] font-mono text-muted-foreground/60 mb-3">
+              Fast, cheap models used for intent classification and background summarisation. Defaults to Haiku / GPT-4o-mini.
+            </p>
+            <div className="divide-y divide-border/30">
+              <SelectRow
+                label="Classifier (Anthropic)"
+                value={draft.classifier_anthropic_model}
+                options={data.anthropic_model_options}
+                onChange={(v) => setDraft((d) => d && { ...d, classifier_anthropic_model: v })}
+                hint="used when Anthropic key is set"
+              />
+              <SelectRow
+                label="Classifier (OpenAI)"
+                value={draft.classifier_openai_model}
+                options={data.openai_model_options}
+                onChange={(v) => setDraft((d) => d && { ...d, classifier_openai_model: v })}
+                hint="fallback if no Anthropic key"
+              />
+              <SelectRow
+                label="Summariser (Anthropic)"
+                value={draft.summarizer_anthropic_model}
+                options={data.anthropic_model_options}
+                onChange={(v) => setDraft((d) => d && { ...d, summarizer_anthropic_model: v })}
+                hint="used when Anthropic key is set"
+              />
+              <SelectRow
+                label="Summariser (OpenAI)"
+                value={draft.summarizer_openai_model}
+                options={data.openai_model_options}
+                onChange={(v) => setDraft((d) => d && { ...d, summarizer_openai_model: v })}
+                hint="fallback if no Anthropic key"
+              />
+            </div>
+          </section>
+
           {/* Cost limits */}
           <section className="rounded-xl border border-border bg-surface/40 p-5">
             <SectionHeading>Cost limits</SectionHeading>
@@ -364,6 +422,20 @@ export default function SettingsPage() {
                 </span>
               </div>
             </FieldRow>
+          </section>
+
+          {/* System prompt */}
+          <section className="rounded-xl border border-border bg-surface/40 p-5">
+            <SectionHeading>System prompt</SectionHeading>
+            <p className="text-[11px] font-mono text-muted-foreground/60 mb-3">
+              Defines the assistant&apos;s persona and tone. Rules and document-format instructions are fixed and appended automatically — edit only the identity/job section here.
+            </p>
+            <textarea
+              value={draft.system_prompt}
+              onChange={(e) => setDraft((d) => d && { ...d, system_prompt: e.target.value })}
+              rows={12}
+              className="w-full bg-surface border border-border rounded-md px-3 py-2 text-[12px] font-mono focus:outline-none focus:ring-1 focus:ring-primary/40 resize-y"
+            />
           </section>
 
           {/* Save models + limits */}
