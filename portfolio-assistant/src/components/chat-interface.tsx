@@ -5,7 +5,7 @@ import { ArrowUp, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import Image from "next/image";
 import { DocumentMessage } from "@/components/document-message";
 import { ConversationMemoryPanel } from "@/components/conversation-memory-panel";
 import { createConversation, type MessageMeta } from "@/lib/conversations";
@@ -37,11 +37,13 @@ function MessageRow({
       } ${isRecent ? "animate-fade-up" : ""}`}
     >
       {message.role === "assistant" && (
-        <Avatar className="h-7 w-7 rounded-lg shrink-0 ring-1 ring-primary/20 bg-accent-dim mt-0.5">
-          <AvatarFallback className="rounded-lg bg-accent-dim text-primary text-[10px] font-medium font-mono">
-            DR
-          </AvatarFallback>
-        </Avatar>
+        <Image
+          src="/logo.png"
+          alt="Assistant"
+          width={28}
+          height={28}
+          className="rounded-full shrink-0 ring-1 ring-primary/20 mt-0.5"
+        />
       )}
 
       {message.role === "user" ? (
@@ -224,7 +226,7 @@ export function ChatInterface({ slug }: { slug?: string }) {
     <div className="flex-1 min-h-0 relative overflow-hidden flex flex-col">
       {/* Memory panel — pinned above scroll, only when summary exists */}
       {conversationSummary && (
-        <div className="shrink-0 px-3 sm:px-6 pt-2 max-w-[680px] mx-auto w-full">
+        <div className="shrink-0 px-3 sm:px-6 pt-2 max-w-170 mx-auto w-full">
           <ConversationMemoryPanel summary={conversationSummary} />
         </div>
       )}
@@ -236,7 +238,7 @@ export function ChatInterface({ slug }: { slug?: string }) {
       >
         {isLoadingConversation ? (
           /* ── Loading skeleton ── */
-          <div className="max-w-[680px] mx-auto px-4 sm:px-6 pt-6 sm:pt-8 space-y-6">
+          <div className="max-w-170 mx-auto px-4 sm:px-6 pt-6 sm:pt-8 space-y-6">
             {[80, 56, 120, 48].map((w, i) => (
               <div
                 key={i}
@@ -254,7 +256,7 @@ export function ChatInterface({ slug }: { slug?: string }) {
           </div>
         ) : isEmpty ? (
           /* ── Empty state ── */
-          <div className="max-w-[620px] mx-auto px-4 sm:px-6 pt-10 sm:pt-16 pb-48 animate-fade-up">
+          <div className="max-w-155 mx-auto px-4 sm:px-6 pt-10 sm:pt-16 pb-48 animate-fade-up">
             <div className="flex items-center gap-2 mb-4">
               <Sparkles className="h-3.5 w-3.5 text-primary" />
               <span className="font-mono text-[10px] sm:text-[11px] text-primary tracking-widest uppercase">
@@ -268,7 +270,7 @@ export function ChatInterface({ slug }: { slug?: string }) {
               Daud?
             </h1>
 
-            <p className="text-[14px] sm:text-[15px] text-muted-foreground leading-relaxed mb-2 max-w-[480px]">
+            <p className="text-[14px] sm:text-[15px] text-muted-foreground leading-relaxed mb-2 max-w-120">
               I retrieve only the relevant parts of your vault for each question
               — no context stuffing. Ask me to write, tailor, or prepare
               anything.
@@ -284,7 +286,7 @@ export function ChatInterface({ slug }: { slug?: string }) {
                   variant="outline"
                   onClick={() => send(s)}
                   style={{ animationDelay: `${i * 0.05}s` }}
-                  className="h-auto px-4 py-3 text-left justify-start text-[13px] leading-snug text-muted-foreground font-normal whitespace-normal bg-surface border-border hover:border-primary/30 hover:text-foreground hover:bg-primary/5 animate-fade-up transition-all min-h-[52px]"
+                  className="h-auto px-4 py-3 text-left justify-start text-[13px] leading-snug text-muted-foreground font-normal whitespace-normal bg-surface border-border hover:border-primary/30 hover:text-foreground hover:bg-primary/5 animate-fade-up transition-all min-h-13"
                 >
                   {s}
                 </Button>
@@ -295,7 +297,7 @@ export function ChatInterface({ slug }: { slug?: string }) {
           /* ── Virtualised message list ── */
           <div
             style={{ height: virtualizer.getTotalSize(), position: "relative" }}
-            className="max-w-[680px] mx-auto px-4 sm:px-6"
+            className="max-w-170 mx-auto px-4 sm:px-6"
           >
             {virtualizer.getVirtualItems().map((vitem: VirtualItem) => {
               const isSentinel = hasOlderMessages && vitem.index === 0;

@@ -1,6 +1,6 @@
 "use client";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import {
   Sidebar,
@@ -33,11 +33,13 @@ export function AppContent({ children }: { children: React.ReactNode }) {
           <SidebarTrigger className="shrink-0 text-muted-foreground hover:text-foreground" />
           <Separator orientation="vertical" className="h-4 shrink-0" />
 
-          <Avatar className="h-7 w-7 rounded-[7px] ring-1 ring-primary/20 bg-accent-dim shrink-0">
-            <AvatarFallback className="rounded-[7px] bg-accent-dim text-primary text-[10px] font-semibold font-mono tracking-wide">
-              DR
-            </AvatarFallback>
-          </Avatar>
+          <Image
+            src="/logo.png"
+            alt="Logo"
+            width={28}
+            height={28}
+            className="rounded-full shrink-0 ring-1 ring-primary/20"
+          />
 
           {/* Title — hidden on small screens to save space */}
           <div className="hidden sm:flex items-baseline gap-2 min-w-0">
