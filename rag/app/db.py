@@ -30,8 +30,19 @@ def _make_async_url(url: str) -> str:
 async def open_db_engine(
     database_url: str,
 ) -> tuple[AsyncEngine, async_sessionmaker[AsyncSession]]:
-    """Create async engine and session factory. Call once from lifespan."""
-    engine = create_async_engine(_make_async_url(database_url))
+    """Create async engine and session factory. Call once from lifespan.
+
+    pool_size=2 / max_overflow=0: keeps the per-instance connection count small,
+    which matters on serverless where many instances run in parallel.
+    pool_pre_ping=True: transparently reconnects if a connection goes stale
+    between warm invocations.
+    """
+    engine = create_async_engine(
+        _make_async_url(database_url),
+        pool_size=2,
+        max_overflow=0,
+        pool_pre_ping=True,
+    )
     factory = async_sessionmaker(engine, expire_on_commit=False)
     return engine, factory
 
