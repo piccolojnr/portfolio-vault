@@ -35,6 +35,7 @@ class Message(SQLModel, table=True):
     content: str
     doc_type: str | None = None   # None | 'cv' | 'cover_letter' | 'resume' | 'bio'
     meta: dict | None = Field(default=None, sa_column=Column("meta", JSON, nullable=True))
+    sources: list | None = Field(default=None, sa_column=Column("sources", JSON, nullable=True))
     created_at: datetime = Field(
         default_factory=utcnow, sa_column=Column(DateTime(timezone=True), nullable=False)
     )
