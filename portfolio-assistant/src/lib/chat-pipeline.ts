@@ -84,6 +84,10 @@ function makeEnqueuer(controller: ReadableStreamDefaultController<Uint8Array>) {
 
 // ── LLM streaming ─────────────────────────────────────────────────────────────
 
+function toErrorMessage(err: unknown): string {
+    return err instanceof Error ? err.message : String(err);
+}
+
 /**
  * Streams a response from the configured LLM provider (Anthropic preferred,
  * OpenAI as fallback). Persists messages to DB after the stream completes.
@@ -140,14 +144,24 @@ function streamAnthropic(
 
                 if (convId) {
                     const docType = extractDocType(accumulated);
-                    const saved = await persistMessages(convId, userMessage, accumulated, docType, meta);
-                    enqueue(`data: ${JSON.stringify({ saved: { doc_type: docType, meta, id: saved?.id, created_at: saved?.created_at } })}\n\n`);
+                    try {
+                        const saved = await persistMessages(convId, userMessage, accumulated, docType, meta);
+                        enqueue(`data: ${JSON.stringify({ saved: { doc_type: docType, meta, id: saved?.id, created_at: saved?.created_at } })}\n\n`);
+                    } catch (persistErr) {
+                        console.error("[chat-pipeline] persistMessages failed:", persistErr);
+                        enqueue(`data: ${JSON.stringify({ saved: { doc_type: docType, meta, id: undefined, created_at: undefined } })}\n\n`);
+                    }
                 }
 
                 enqueue("data: [DONE]\n\n");
                 controller.close();
             } catch (err) {
-                controller.error(err);
+                const stage = accumulated.length > 0 ? "llm_stream" : "llm_start";
+                try {
+                    enqueue(`data: ${JSON.stringify({ error: toErrorMessage(err), stage })}\n\n`);
+                    enqueue("data: [DONE]\n\n");
+                } catch { /* client disconnected */ }
+                controller.close();
             }
         },
     });
@@ -184,14 +198,24 @@ async function streamOpenAI(
 
                 if (convId) {
                     const docType = extractDocType(accumulated);
-                    const saved = await persistMessages(convId, userMessage, accumulated, docType, meta);
-                    enqueue(`data: ${JSON.stringify({ saved: { doc_type: docType, meta, id: saved?.id, created_at: saved?.created_at } })}\n\n`);
+                    try {
+                        const saved = await persistMessages(convId, userMessage, accumulated, docType, meta);
+                        enqueue(`data: ${JSON.stringify({ saved: { doc_type: docType, meta, id: saved?.id, created_at: saved?.created_at } })}\n\n`);
+                    } catch (persistErr) {
+                        console.error("[chat-pipeline] persistMessages failed:", persistErr);
+                        enqueue(`data: ${JSON.stringify({ saved: { doc_type: docType, meta, id: undefined, created_at: undefined } })}\n\n`);
+                    }
                 }
 
                 enqueue("data: [DONE]\n\n");
                 controller.close();
             } catch (err) {
-                controller.error(err);
+                const stage = accumulated.length > 0 ? "llm_stream" : "llm_start";
+                try {
+                    enqueue(`data: ${JSON.stringify({ error: toErrorMessage(err), stage })}\n\n`);
+                    enqueue("data: [DONE]\n\n");
+                } catch { /* client disconnected */ }
+                controller.close();
             }
         },
     });

@@ -18,6 +18,7 @@
  */
 
 import { RAG_BACKEND_URL } from "./config";
+import { withRetry } from "./utils";
 
 export interface RetrievedChunk {
     content: string;
@@ -48,17 +49,18 @@ export async function retrieve(
     query: string,
     n: number = 5
 ): Promise<RetrieveResponse> {
-    const response = await fetch(`${RAG_BACKEND_URL}/api/v1/retrieve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: query, n_results: n }),
-    });
-
-    if (!response.ok) {
-        throw new Error(`RAG backend error: ${response.statusText}`);
-    }
-
-    return response.json() as Promise<RetrieveResponse>;
+    return withRetry(
+        async () => {
+            const response = await fetch(`${RAG_BACKEND_URL}/api/v1/retrieve`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ question: query, n_results: n }),
+            });
+            if (!response.ok) throw new Error(`RAG backend error: ${response.statusText}`);
+            return response.json() as Promise<RetrieveResponse>;
+        },
+        { label: "retrieve" },
+    );
 }
 
 /**

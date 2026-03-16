@@ -10,7 +10,6 @@ import { DocumentMessage } from "@/components/document-message";
 import { ConversationMemoryPanel } from "@/components/conversation-memory-panel";
 import { createConversation, type MessageMeta } from "@/lib/conversations";
 import { useConversations } from "./conversation-context";
-import { useRouter } from "next/navigation";
 import { type VirtualItem } from "@tanstack/react-virtual";
 import { useConversation, type Message } from "@/hooks/use-conversation";
 
@@ -22,6 +21,15 @@ const SUGGESTIONS = [
   "Draft a LinkedIn summary from my bio",
   "How would I answer: tell me about a hard technical problem you solved?",
 ];
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function resolveErrorMessage(stage: string, _raw: string): string {
+  if (stage === "llm_start")
+    return "Could not reach the AI provider. Check API keys in settings.";
+  if (stage === "llm_stream")
+    return "The AI response was cut short due to an error.";
+  return "Something went wrong. Try again.";
+}
 
 function MessageRow({
   message,
@@ -57,6 +65,11 @@ function MessageRow({
             streaming={message.streaming}
             meta={!message.streaming ? message.meta : null}
           />
+          {message.error && !message.streaming && (
+            <p className="mt-1.5 text-xs font-mono text-destructive/70">
+              {message.error}
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -65,7 +78,6 @@ function MessageRow({
 
 export function ChatInterface({ slug }: { slug?: string }) {
   const { createLocalConversation, refreshConversations } = useConversations();
-  const router = useRouter();
 
   const {
     messages,
@@ -83,6 +95,7 @@ export function ChatInterface({ slug }: { slug?: string }) {
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [failedMessage, setFailedMessage] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -101,6 +114,7 @@ export function ChatInterface({ slug }: { slug?: string }) {
 
       setInput("");
       setLoading(true);
+      setFailedMessage(null);
 
       let currentId = slug;
       if (!currentId) {
@@ -108,6 +122,8 @@ export function ChatInterface({ slug }: { slug?: string }) {
           const conv = await createConversation();
           currentId = conv.id;
           createLocalConversation(conv);
+          // Update URL without triggering a Next.js route change (avoids remount)
+          window.history.replaceState(null, "", `/${currentId}`);
         } catch (err) {
           console.error("Failed to create conversation", err);
         }
@@ -144,8 +160,10 @@ export function ChatInterface({ slug }: { slug?: string }) {
         let savedId: string | undefined;
         let savedCreatedAt: string | undefined;
         let buf = "";
+        let receivedDone = false;
+        let streamError: { message: string; stage: string } | null = null;
 
-        while (true) {
+        outer: while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
@@ -156,7 +174,10 @@ export function ChatInterface({ slug }: { slug?: string }) {
           for (const line of lines) {
             if (!line.startsWith("data: ")) continue;
             const payload = line.slice(6);
-            if (payload === "[DONE]") break;
+            if (payload === "[DONE]") {
+              receivedDone = true;
+              break outer;
+            }
 
             try {
               const parsed = JSON.parse(payload);
@@ -170,31 +191,62 @@ export function ChatInterface({ slug }: { slug?: string }) {
                 savedId = parsed.saved.id;
                 savedCreatedAt = parsed.saved.created_at;
               }
-            } catch {}
+              if (parsed.error !== undefined) {
+                streamError = {
+                  message: parsed.error,
+                  stage: parsed.stage ?? "unknown",
+                };
+              }
+            } catch {
+              console.warn("[chat] Unparseable SSE event:", payload);
+            }
           }
         }
 
-        finalizeMessage({
-          content: accumulated,
-          doc_type: docType,
-          meta: messageMeta,
-          id: savedId,
-          created_at: savedCreatedAt,
-        });
-
-        if (!slug && currentId) {
-          router.push(`/${currentId}`);
-          setTimeout(() => refreshConversations(), 1000);
-        } else if (currentId) {
-          setTimeout(() => refreshConversations(), 2000);
+        if (streamError) {
+          finalizeMessage({
+            content: accumulated,
+            doc_type: docType,
+            meta: messageMeta,
+            id: savedId,
+            created_at: savedCreatedAt,
+            error: resolveErrorMessage(streamError.stage, streamError.message),
+          });
+          setFailedMessage(userMsg);
+        } else if (!receivedDone) {
+          finalizeMessage({
+            content: accumulated,
+            doc_type: docType,
+            meta: messageMeta,
+            id: savedId,
+            created_at: savedCreatedAt,
+            error: "Response interrupted.",
+          });
+          setFailedMessage(userMsg);
+        } else {
+          finalizeMessage({
+            content: accumulated,
+            doc_type: docType,
+            meta: messageMeta,
+            id: savedId,
+            created_at: savedCreatedAt,
+          });
+          setFailedMessage(null);
         }
-      } catch (err: any) {
-        if (err.name === "AbortError") return;
+
+        if (currentId) {
+          setTimeout(() => refreshConversations(), 1000);
+        }
+      } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        const msg = err instanceof Error ? err.message : "Request failed";
         finalizeMessage({
-          content: "Something went wrong. Check the console.",
+          content: "",
           doc_type: null,
           meta: null,
+          error: `Connection error: ${msg}`,
         });
+        setFailedMessage(userMsg);
       } finally {
         setLoading(false);
       }
@@ -206,7 +258,6 @@ export function ChatInterface({ slug }: { slug?: string }) {
       slug,
       createLocalConversation,
       refreshConversations,
-      router,
       pushUserAndPlaceholder,
       updateStreamingContent,
       finalizeMessage,
@@ -343,7 +394,27 @@ export function ChatInterface({ slug }: { slug?: string }) {
           className="max-w-170 mx-auto pointer-events-auto bg-background rounded-t-2xl"
           style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
         >
-          <div className="flex gap-2 sm:gap-3 items-end bg-surface border border-border rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 focus-within:ring-1 focus-within:ring-primary/40 focus-within:border-primary/30 transition-all">
+          {failedMessage && !loading && (
+            <div className="flex items-center gap-2 px-4 pb-2 text-xs font-mono">
+              <span className="text-destructive/70">Response failed.</span>
+              <button
+                onClick={() => {
+                  setFailedMessage(null);
+                  send(failedMessage);
+                }}
+                className="text-primary hover:underline"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          <div
+            className="flex gap-2 sm:gap-3 items-end bg-surface border border-border rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 focus-within:ring-1 focus-within:ring-primary/40 focus-within:border-primary/30 transition-all"
+            style={{
+              alignItems: "anchor-center",
+            }}
+          >
             <Textarea
               ref={textareaRef}
               value={input}
@@ -351,7 +422,8 @@ export function ChatInterface({ slug }: { slug?: string }) {
               onKeyDown={handleKey}
               placeholder="Ask anything about your portfolio…"
               rows={1}
-              className="flex-1 bg-transparent border-none shadow-none outline-none focus-visible:ring-0 text-foreground text-sm leading-relaxed font-sans resize-none min-h-6 max-h-40 caret-primary placeholder:text-muted-foreground p-0"
+              // className="flex-1 bg-transparent border-none shadow-none outline-none focus-visible:ring-0 text-foreground text-sm leading-relaxed font-sans resize-none min-h-6 max-h-40 caret-primary placeholder:text-muted-foreground p-0"
+              className="flex-1 bg-transparent border-none shadow-none outline-none focus-visible:ring-0 text-foreground text-sm leading-relaxed font-sans resize-none min-h-6 max-h-40 caret-primary placeholder:text-muted-foreground"
             />
             <Button
               size="icon"
@@ -363,7 +435,7 @@ export function ChatInterface({ slug }: { slug?: string }) {
             </Button>
           </div>
 
-          <div className="flex justify-between pt-1.5 px-4 text-[11px] text-muted-foreground/50 font-mono bg-background">
+          <div className="flex justify-between mt-1.5 px-4 text-[11px] text-muted-foreground/50 font-mono bg-background">
             {/* Keyboard hint — only meaningful on desktop */}
             <span className="hidden sm:block text-center">
               enter to send · shift+enter for newline

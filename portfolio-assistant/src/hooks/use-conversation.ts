@@ -23,6 +23,7 @@ export interface Message {
   meta?: MessageMeta | null;
   streaming?: boolean;
   created_at?: string;
+  error?: string | null;
 }
 
 function toMessage(m: MessageRead): Message {
@@ -192,6 +193,7 @@ export function useConversation(slug: string | undefined) {
     meta: MessageMeta | null;
     id?: string;
     created_at?: string;
+    error?: string | null;
   }) {
     setMessages((prev) => {
       const next = [...prev];
