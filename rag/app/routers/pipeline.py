@@ -12,13 +12,14 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
 from app.db import get_db_conn
 from app.dependencies import get_live_settings
+from app.limiter import limiter
 from app.schemas.pipeline import CostEstimate, PipelineRunList, PipelineRunSummary
 from app.services import pipeline as svc
 
@@ -53,7 +54,8 @@ async def cost_estimate(settings: Settings = Depends(get_live_settings)):
 
 
 @router.post("/run")
-async def run_pipeline(settings: Settings = Depends(get_live_settings)):
+@limiter.limit("3/5minutes")
+async def run_pipeline(request: Request, settings: Settings = Depends(get_live_settings)):
     """Start the full pipeline and stream SSE events."""
     return StreamingResponse(
         svc.pipeline_event_stream(settings),

@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
+
+from app.limiter import limiter
 
 router = APIRouter(prefix="/export", tags=["export"])
 
@@ -23,7 +25,8 @@ class ExportRequest(BaseModel):
 
 
 @router.post("/docx")
-async def export_docx(body: ExportRequest):
+@limiter.limit("10/minute")
+async def export_docx(request: Request, body: ExportRequest):
     try:
         from app.services.export import markdown_to_docx
         data = markdown_to_docx(body.content)
@@ -47,7 +50,8 @@ async def export_docx(body: ExportRequest):
 
 
 @router.post("/pdf")
-async def export_pdf(body: ExportRequest):
+@limiter.limit("10/minute")
+async def export_pdf(request: Request, body: ExportRequest):
     try:
         from app.services.export import markdown_to_pdf
         data = markdown_to_pdf(body.content)

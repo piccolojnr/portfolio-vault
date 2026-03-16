@@ -16,10 +16,14 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
-from app.routers import health, retrieve, query, vault, pipeline, settings, conversations, export
+from app.routers import health, retrieve, query, vault, pipeline, settings, conversations, export, chat
 from app.config import get_settings
 from app.db import open_db_engine
+from app.limiter import limiter
 
 
 def _print_startup_banner(db_connected: bool = False) -> None:
@@ -68,6 +72,9 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    app.add_middleware(SlowAPIMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -85,6 +92,7 @@ def create_app() -> FastAPI:
     v1.include_router(settings.router)
     v1.include_router(conversations.router)
     v1.include_router(export.router)
+    v1.include_router(chat.router)
     app.include_router(v1)
 
     @app.get("/")

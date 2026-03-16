@@ -35,6 +35,7 @@ from app.schemas.conversation import (
     MessageRead,
     MessageCreate,
 )
+from app.schemas.chat import ChatMessage, ChatStreamRequest
 
 __all__ = [
     "QueryRequest",
