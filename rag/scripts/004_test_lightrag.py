@@ -32,7 +32,7 @@ from pathlib import Path
 _RAG_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(_RAG_DIR))
 
-from app.config import get_settings  # noqa: E402
+from portfolio_rag.app.core.config import get_settings  # noqa: E402
 
 # ── constants ─────────────────────────────────────────────────────────────────
 WORKSPACE = "test_vault_001"
@@ -149,10 +149,10 @@ def _make_embedding_func(settings):
 
     async def _embed(texts: list[str]) -> "np.ndarray":
         if settings.use_demo:
-            from core.embedding import _embed_demo
+            from portfolio_rag.infrastructure.llm.embedding import _embed_demo
             # COMPAT: must be ndarray — EmbeddingFunc.__call__ calls result.size
             return np.array(_embed_demo(texts), dtype=np.float32)
-        from core.embedding import _embed_openai
+        from portfolio_rag.infrastructure.llm.embedding import _embed_openai
         vectors, _ = _embed_openai(texts, settings)
         # COMPAT: must be ndarray — EmbeddingFunc.__call__ calls result.size
         return np.array(vectors, dtype=np.float32)

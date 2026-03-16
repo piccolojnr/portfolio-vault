@@ -9,8 +9,8 @@ Run:
   .\.venv\Scripts\python.exe scripts/03_query.py
 """
 
-from app.config import get_settings
-from core import retrieve_and_answer
+from portfolio_rag.app.core.config import get_settings
+from portfolio_rag import retrieve_and_answer
 
 if __name__ == "__main__":
     settings = get_settings()
