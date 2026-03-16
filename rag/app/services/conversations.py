@@ -109,6 +109,7 @@ async def add_message(
     content: str,
     doc_type: str | None = None,
     meta: dict | None = None,
+    sources: list[dict] | None = None,
 ) -> Message:
     conv = await session.get(Conversation, conv_id)
     if not conv:
@@ -120,6 +121,7 @@ async def add_message(
         content=content,
         doc_type=doc_type,
         meta=meta,
+        sources=sources,
     )
     session.add(msg)
 

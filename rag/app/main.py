@@ -20,7 +20,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
-from app.routers import health, retrieve, query, vault, pipeline, settings, conversations, export, chat
+from app.routers import health, retrieve, query, vault, pipeline, settings, conversations, export, chat, graph
 from app.config import get_settings
 from app.db import open_db_engine
 from app.limiter import limiter
@@ -93,6 +93,7 @@ def create_app() -> FastAPI:
     v1.include_router(conversations.router)
     v1.include_router(export.router)
     v1.include_router(chat.router)
+    v1.include_router(graph.router)
     app.include_router(v1)
 
     @app.get("/")

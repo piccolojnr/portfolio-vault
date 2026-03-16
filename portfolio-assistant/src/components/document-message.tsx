@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Copy, FileText, FileDown, Check } from "lucide-react";
 import { MarkdownMessage } from "@/components/markdown-message";
-import { type MessageMeta } from "@/lib/conversations";
+import { type MessageMeta, type SourceRef } from "@/lib/conversations";
+import { SourceSlideOver } from "@/components/source-slide-over";
 
 const DOC_RE =
   /<document\s+type="([^"]+)"\s+title="([^"]+)">([\s\S]+?)<\/document>/;
@@ -134,6 +135,52 @@ function MessageMetaBadges({ meta }: { meta: MessageMeta }) {
   );
 }
 
+// ── Inline ref marker injection ────────────────────────────────────────────────
+
+function injectRefMarkers(content: string): string {
+  return content.replace(
+    /\[(\d+)\]/g,
+    (_, n) => `<span data-ref="${n}" class="inline-ref">[${n}]</span>`,
+  );
+}
+
+// ── Source chip ────────────────────────────────────────────────────────────────
+
+function SourceChip({
+  source,
+  active,
+  viewed,
+  onHover,
+  onLeave,
+  onClick,
+}: {
+  source: SourceRef;
+  active: boolean;
+  viewed: boolean;
+  onHover: () => void;
+  onLeave: () => void;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded border transition-all ${
+        active
+          ? "border-amber-400 bg-amber-400/10 ring-1 ring-amber-400"
+          : "border-border bg-muted/50 hover:border-amber-400/50"
+      } ${viewed ? "opacity-60" : ""}`}
+      onMouseEnter={onHover}
+      onMouseLeave={onLeave}
+      onClick={onClick}
+    >
+      <span className="text-amber-400 font-mono">[{source.ref}]</span>
+      <span className="max-w-[24ch] truncate">{source.title}</span>
+      <span className="text-muted-foreground font-mono text-[10px]">
+        {source.doc_type}
+      </span>
+    </button>
+  );
+}
+
 /**
  * DocumentMessage — renders assistant content.
  * If the content contains a <document> wrapper, shows a styled doc panel + action bar.
@@ -143,55 +190,108 @@ export function DocumentMessage({
   content,
   streaming,
   meta,
+  sources,
 }: {
   content: string;
   streaming?: boolean;
   meta?: MessageMeta | null;
+  sources?: SourceRef[];
 }) {
   const doc = !streaming ? parseDocument(content) : null;
 
+  const [activeRef, setActiveRef] = useState<number | null>(null);
+  const [viewedRefs, setViewedRefs] = useState<Set<number>>(new Set());
+  const [slideOverSource, setSlideOverSource] = useState<SourceRef | null>(null);
+
+  function addViewed(ref: number) {
+    setViewedRefs((prev) => new Set([...prev, ref]));
+  }
+
+  // Inject inline ref markers into content for rendering
+  const processedContent = !streaming && sources?.length
+    ? injectRefMarkers(content)
+    : content;
+
+  const processedBody = !streaming && sources?.length && doc
+    ? injectRefMarkers(doc.body)
+    : doc?.body ?? "";
+
+  // Source chips row (shown when not streaming and sources exist)
+  const sourceChips =
+    !streaming && sources && sources.length > 0 ? (
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {sources.map((s) => (
+          <SourceChip
+            key={s.ref}
+            source={s}
+            active={activeRef === s.ref}
+            viewed={viewedRefs.has(s.ref)}
+            onHover={() => setActiveRef(s.ref)}
+            onLeave={() => setActiveRef(null)}
+            onClick={() => {
+              addViewed(s.ref);
+              setSlideOverSource(s);
+            }}
+          />
+        ))}
+      </div>
+    ) : null;
+
   if (doc) {
     return (
-      <div className="rounded-xl border border-border/60 bg-surface/60 overflow-hidden">
-        {/* Doc header */}
-        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border/40 bg-muted/20">
-          <FileText className="h-3.5 w-3.5 text-primary/60 shrink-0" />
-          <span className="text-[11px] font-mono text-muted-foreground/70 uppercase tracking-wide">
-            {doc.docType.replace("_", " ")}
-          </span>
-          <span className="ml-auto text-[11px] font-mono text-foreground/60 truncate max-w-60">
-            {doc.title}
-          </span>
-        </div>
-
-        {/* Doc body */}
-        <div className="px-5 py-4 text-sm text-foreground/85">
-          <MarkdownMessage content={doc.body} />
-        </div>
-
-        {/* Action bar */}
-        <div className="px-4 py-2.5 border-t border-border/40 bg-muted/10">
-          <ActionBar doc={doc} />
-        </div>
-
-        {!streaming && meta && meta.intent !== "conversational" && (
-          <div className="px-4 pb-2.5">
-            <MessageMetaBadges meta={meta} />
+      <>
+        <div className="rounded-xl border border-border/60 bg-surface/60 overflow-hidden">
+          {/* Doc header */}
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border/40 bg-muted/20">
+            <FileText className="h-3.5 w-3.5 text-primary/60 shrink-0" />
+            <span className="text-[11px] font-mono text-muted-foreground/70 uppercase tracking-wide">
+              {doc.docType.replace("_", " ")}
+            </span>
+            <span className="ml-auto text-[11px] font-mono text-foreground/60 truncate max-w-60">
+              {doc.title}
+            </span>
           </div>
-        )}
-      </div>
+
+          {/* Doc body */}
+          <div className="px-5 py-4 text-sm text-foreground/85">
+            <MarkdownMessage content={processedBody} />
+          </div>
+
+          {/* Action bar */}
+          <div className="px-4 py-2.5 border-t border-border/40 bg-muted/10">
+            <ActionBar doc={doc} />
+          </div>
+
+          {!streaming && meta && meta.intent !== "conversational" && (
+            <div className="px-4 pb-2.5">
+              <MessageMetaBadges meta={meta} />
+            </div>
+          )}
+        </div>
+
+        {sourceChips}
+        <SourceSlideOver
+          source={slideOverSource}
+          onClose={() => setSlideOverSource(null)}
+        />
+      </>
     );
   }
 
   return (
     <>
-      <MarkdownMessage content={content} />
+      <MarkdownMessage content={processedContent} />
       {streaming && (
         <span className="inline-block w-0.5 h-[1em] bg-primary ml-0.5 align-text-bottom animate-blink" />
       )}
       {!streaming && meta && meta.intent !== "conversational" && (
         <MessageMetaBadges meta={meta} />
       )}
+      {sourceChips}
+      <SourceSlideOver
+        source={slideOverSource}
+        onClose={() => setSlideOverSource(null)}
+      />
     </>
   );
 }

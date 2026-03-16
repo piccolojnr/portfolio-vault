@@ -13,6 +13,7 @@ import {
   getMessagesBefore,
   type MessageMeta,
   type MessageRead,
+  type SourceRef,
 } from "@/lib/conversations";
 
 export interface Message {
@@ -21,6 +22,7 @@ export interface Message {
   content: string;
   doc_type?: string | null;
   meta?: MessageMeta | null;
+  sources?: SourceRef[] | null;
   streaming?: boolean;
   created_at?: string;
   error?: string | null;
@@ -33,6 +35,7 @@ function toMessage(m: MessageRead): Message {
     content: m.content,
     doc_type: m.doc_type,
     meta: m.meta,
+    sources: m.sources ?? null,
     created_at: m.created_at,
   };
 }
@@ -191,6 +194,7 @@ export function useConversation(slug: string | undefined) {
     content: string;
     doc_type: string | null;
     meta: MessageMeta | null;
+    sources?: SourceRef[] | null;
     id?: string;
     created_at?: string;
     error?: string | null;

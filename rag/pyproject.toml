@@ -12,6 +12,7 @@ version = "1.0.0"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
+    "typer>=0.12",
     "uvicorn[standard]>=0.34",
     "pydantic>=2.0",
     "pydantic-settings>=2.7",
@@ -29,3 +30,6 @@ dependencies = [
     "lightrag-hku>=1.4.10",
     "tiktoken>=0.7"
 ]
+
+[project.scripts]
+rag = "app.cli:main"

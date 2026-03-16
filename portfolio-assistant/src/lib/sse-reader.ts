@@ -1,4 +1,4 @@
-import type { MessageMeta } from "@/lib/conversations";
+import type { MessageMeta, SourceRef } from "@/lib/conversations";
 
 export interface SSESavedPayload {
   doc_type: string | null;
@@ -11,6 +11,7 @@ export interface SSECallbacks {
   onText: (text: string) => void;
   onSaved: (saved: SSESavedPayload) => void;
   onError: (error: { message: string; stage: string }) => void;
+  onSources?: (sources: SourceRef[]) => void;
 }
 
 /**
@@ -60,6 +61,9 @@ export async function readSSEStream(
             message: parsed.error as string,
             stage: (parsed.stage as string) ?? "unknown",
           });
+        }
+        if (parsed.sources !== undefined) {
+          callbacks.onSources?.(parsed.sources as SourceRef[]);
         }
       } catch {
         console.warn("[sse-reader] Unparseable event:", payload);

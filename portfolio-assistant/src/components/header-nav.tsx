@@ -10,6 +10,7 @@ export function HeaderNav() {
   const isVault = pathname.startsWith("/vault");
   const isPipeline = pathname.startsWith("/pipeline");
   const isSettings = pathname.startsWith("/settings");
+  const isGraph = pathname.startsWith("/graph");
 
   const navLink = (active: boolean) =>
     cn(
@@ -29,6 +30,9 @@ export function HeaderNav() {
       </Link>
       <Link href="/settings" className={navLink(isSettings)}>
         settings
+      </Link>
+      <Link href="/graph" className={navLink(isGraph)}>
+        graph
       </Link>
     </nav>
   );

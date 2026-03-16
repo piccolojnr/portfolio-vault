@@ -14,6 +14,7 @@ class MessageRead(BaseModel):
     content: str
     doc_type: str | None
     meta: dict | None = None
+    sources: list[dict] | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -54,3 +55,4 @@ class MessageCreate(BaseModel):
     content: str
     doc_type: str | None = None
     meta: dict | None = None
+    sources: list[dict] | None = None

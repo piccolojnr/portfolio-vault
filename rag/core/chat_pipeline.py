@@ -31,6 +31,47 @@ from core.intent import Classification
 
 logger = logging.getLogger(__name__)
 
+# ── Source resolution ──────────────────────────────────────────────────────────
+
+async def _resolve_sources(chunks: list[dict], db_session_factory) -> list[dict]:
+    """Resolve retrieved chunks to vault documents.
+
+    Iterates all chunks in order, looks up each by UUID (LightRAG file_path) or
+    slug (legacy), deduplicates by document id, and assigns sequential ref numbers.
+    Does not depend on [N] citation markers in the LLM answer.
+    """
+    if not chunks or not db_session_factory:
+        return []
+    from app.models.vault import VaultDocument
+    from sqlmodel import select
+    seen_ids: set[str] = set()
+    results: list[dict] = []
+    async with db_session_factory() as session:
+        for i, chunk in enumerate(chunks):
+            source = chunk.get("source", "")
+            if not source:
+                continue
+            doc = None
+            try:
+                from uuid import UUID as _UUID
+                doc = await session.get(VaultDocument, _UUID(source))
+            except (ValueError, AttributeError):
+                pass
+            if doc is None:
+                doc = (await session.execute(
+                    select(VaultDocument).where(VaultDocument.slug == source)
+                )).scalars().first()
+            if doc and str(doc.id) not in seen_ids:
+                seen_ids.add(str(doc.id))
+                results.append({
+                    "ref": i + 1,
+                    "source_id": str(doc.id),
+                    "title": doc.title or doc.slug,
+                    "slug": doc.slug,
+                    "doc_type": doc.type,
+                })
+    return results
+
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 DOC_RE = re.compile(r'<document\s+type="([^"]+)"\s+title="([^"]+)">([\s\S]+?)<\/document>')
@@ -78,15 +119,31 @@ async def _persist_messages(
     doc_type: str | None,
     meta: dict | None,
     db_session_factory,
+    sources: list[dict] | None = None,
+    settings=None,
 ) -> dict | None:
-    """Persists user + assistant messages. Returns saved assistant message metadata."""
+    """Persists user + assistant messages. Returns saved assistant message metadata.
+
+    If the conversation has no title yet, fires auto_title_bg as a background task.
+    """
     from app.services import conversations as svc
     try:
         async with db_session_factory() as session:
             await svc.add_message(session, UUID(conv_id), "user", user_message, None, None)
             msg = await svc.add_message(
-                session, UUID(conv_id), "assistant", assistant_content, doc_type, meta
+                session, UUID(conv_id), "assistant", assistant_content, doc_type, meta,
+                sources=sources,
             )
+            needs_title = await svc.needs_title(session, UUID(conv_id))
+
+        if needs_title and settings:
+            asyncio.create_task(
+                svc.auto_title_bg(
+                    db_session_factory, UUID(conv_id),
+                    user_message, assistant_content, settings,
+                )
+            )
+
         return {"id": str(msg.id), "created_at": msg.created_at.isoformat()}
     except Exception as err:
         logger.error("[chat_pipeline] persistMessages failed: %s", err)
@@ -102,6 +159,7 @@ async def _stream_llm(
     meta: dict | None,
     settings,
     db_session_factory,
+    chunks: list[dict] | None = None,
 ) -> AsyncGenerator[str, None]:
     """
     Stream from whichever LLM is configured, accumulate, persist, emit [DONE].
@@ -156,11 +214,13 @@ async def _stream_llm(
         yield "data: [DONE]\n\n"
         return
 
-    # Post-stream: persist messages and emit 'saved' event
+    # Post-stream: resolve sources, persist messages, emit 'saved' + 'sources' events
     doc_type = _extract_doc_type(accumulated)
+    sources = await _resolve_sources(chunks or [], db_session_factory)
     if conv_id and db_session_factory:
         saved = await _persist_messages(
-            conv_id, user_message, accumulated, doc_type, meta, db_session_factory
+            conv_id, user_message, accumulated, doc_type, meta, db_session_factory,
+            sources=sources, settings=settings,
         )
         yield _sse({
             "saved": {
@@ -170,6 +230,7 @@ async def _stream_llm(
                 "created_at": saved["created_at"] if saved else None,
             }
         })
+    yield _sse({"sources": sources})
     yield "data: [DONE]\n\n"
 
 
@@ -207,7 +268,7 @@ async def _handle_conversational(
     logger.info("[chat] conversational — skipping RAG")
     meta = {"intent": "conversational", "rag_retrieved": False, "chunks_count": 0}
     messages = [*history, {"role": "user", "content": message}]
-    async for event in _stream_llm(messages, message, conv_id, meta, settings, db_session_factory):
+    async for event in _stream_llm(messages, message, conv_id, meta, settings, db_session_factory, chunks=None):
         yield event
 
 
@@ -224,7 +285,7 @@ async def _handle_retrieval(
     augmented = f"Relevant context from my portfolio vault:\n\n{context}\n\n---\n\n{message}"
     messages = [*history, {"role": "user", "content": augmented}]
     meta = {"intent": "retrieval", "rag_retrieved": True, "chunks_count": len(chunks)}
-    async for event in _stream_llm(messages, message, conv_id, meta, settings, db_session_factory):
+    async for event in _stream_llm(messages, message, conv_id, meta, settings, db_session_factory, chunks=chunks):
         yield event
 
 
@@ -241,7 +302,7 @@ async def _handle_document(
     augmented = f"Relevant context from my portfolio vault:\n\n{context}\n\n---\n\n{message}"
     messages = [*history, {"role": "user", "content": augmented}]
     meta = {"intent": "document", "rag_retrieved": True, "chunks_count": len(chunks)}
-    async for event in _stream_llm(messages, message, conv_id, meta, settings, db_session_factory):
+    async for event in _stream_llm(messages, message, conv_id, meta, settings, db_session_factory, chunks=chunks):
         yield event
 
 
@@ -260,10 +321,11 @@ async def _handle_refinement(
     )
 
     chunks_count = 0
+    rag_chunks: list[dict] = []
     if needs_rag:
-        chunks = await _retrieve(message, settings)
-        chunks_count = len(chunks)
-        extra = format_context(chunks)
+        rag_chunks = await _retrieve(message, settings)
+        chunks_count = len(rag_chunks)
+        extra = format_context(rag_chunks)
         context_block += f"Additional context from my portfolio vault:\n\n{extra}\n\n"
         logger.info("[chat] refinement + RAG — %d chunks", chunks_count)
     else:
@@ -275,7 +337,7 @@ async def _handle_refinement(
     )
     messages = [*history, {"role": "user", "content": user_content}]
     meta = {"intent": "refinement", "rag_retrieved": needs_rag, "chunks_count": chunks_count}
-    async for event in _stream_llm(messages, message, conv_id, meta, settings, db_session_factory):
+    async for event in _stream_llm(messages, message, conv_id, meta, settings, db_session_factory, chunks=rag_chunks if needs_rag else None):
         yield event
 
 

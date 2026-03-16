@@ -10,12 +10,21 @@ export interface MessageMeta {
   chunks_count: number;
 }
 
+export interface SourceRef {
+  ref: number;
+  source_id: string;
+  title: string;
+  slug: string;
+  doc_type: string;
+}
+
 export interface MessageRead {
   id: string;
   role: "user" | "assistant";
   content: string;
   doc_type: string | null;
   meta: MessageMeta | null;
+  sources?: SourceRef[] | null;
   created_at: string;
 }
 

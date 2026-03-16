@@ -9,7 +9,7 @@ import Image from "next/image";
 import { useQueryClient } from "@tanstack/react-query";
 import { DocumentMessage } from "@/components/document-message";
 import { ConversationMemoryPanel } from "@/components/conversation-memory-panel";
-import { createConversation, CONV_QUERY_KEY, type MessageMeta } from "@/lib/conversations";
+import { createConversation, CONV_QUERY_KEY, type MessageMeta, type SourceRef } from "@/lib/conversations";
 import { useConversations } from "./conversation-context";
 import { readSSEStream } from "@/lib/sse-reader";
 import { type VirtualItem } from "@tanstack/react-virtual";
@@ -66,6 +66,7 @@ function MessageRow({
             content={message.content}
             streaming={message.streaming}
             meta={!message.streaming ? message.meta : null}
+            sources={!message.streaming ? (message.sources ?? undefined) : undefined}
           />
           {message.error && !message.streaming && (
             <p className="mt-1.5 text-xs font-mono text-destructive/70">
@@ -118,6 +119,8 @@ export function ChatInterface({ slug }: { slug?: string }) {
       setInput("");
       setLoading(true);
       setFailedMessage(null);
+
+      let messageSources: SourceRef[] = [];
 
       let currentId = slug;
       if (!currentId) {
@@ -180,6 +183,9 @@ export function ChatInterface({ slug }: { slug?: string }) {
             onError: (err) => {
               streamError = err;
             },
+            onSources: (s) => {
+              messageSources = s;
+            },
           },
           abortRef.current?.signal,
         );
@@ -189,6 +195,7 @@ export function ChatInterface({ slug }: { slug?: string }) {
             content: accumulated,
             doc_type: docType,
             meta: messageMeta,
+            sources: messageSources,
             id: savedId,
             created_at: savedCreatedAt,
             error: resolveErrorMessage(streamError.stage, streamError.message),
@@ -199,6 +206,7 @@ export function ChatInterface({ slug }: { slug?: string }) {
             content: accumulated,
             doc_type: docType,
             meta: messageMeta,
+            sources: messageSources,
             id: savedId,
             created_at: savedCreatedAt,
             error: "Response interrupted.",
@@ -209,6 +217,7 @@ export function ChatInterface({ slug }: { slug?: string }) {
             content: accumulated,
             doc_type: docType,
             meta: messageMeta,
+            sources: messageSources,
             id: savedId,
             created_at: savedCreatedAt,
           });
@@ -230,6 +239,7 @@ export function ChatInterface({ slug }: { slug?: string }) {
           content: "",
           doc_type: null,
           meta: null,
+          sources: null,
           error: `Connection error: ${msg}`,
         });
         setFailedMessage(userMsg);

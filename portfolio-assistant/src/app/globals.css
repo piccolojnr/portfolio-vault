@@ -114,6 +114,12 @@
   50%       { opacity: 0.4; }
 }
 
+.inline-ref {
+  @apply text-[10px] font-mono text-amber-400/70 cursor-pointer align-super
+         leading-none hover:text-amber-400 transition-colors px-0.5;
+}
+.inline-ref-active { @apply text-amber-400 underline; }
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
