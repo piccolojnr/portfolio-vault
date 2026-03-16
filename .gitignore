@@ -69,3 +69,4 @@ chroma_db/
 chroma.sqlite3
 
 generate.py
+rag/data/

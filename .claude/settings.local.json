@@ -9,7 +9,9 @@
       "Bash(python:*)",
       "Bash(source:*)",
       "Bash(npx tsc:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(.venv/Scripts/pip.exe freeze:*)",
+      "Bash(.venv/Scripts/python.exe -c \"import lightrag; print\\(lightrag.__version__\\); import lightrag.kg; print\\(dir\\(lightrag.kg\\)\\)\" 2>&1)"
     ]
   }
 }

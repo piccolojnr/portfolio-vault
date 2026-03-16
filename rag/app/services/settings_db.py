@@ -31,7 +31,12 @@ _ALL_KEYS = {
     "classifier_openai_model",
     "summarizer_anthropic_model",
     "summarizer_openai_model",
+    # Retrieval routing flag — set to "false" to switch queries to LightRAG
+    "use_legacy_retrieval",
 }
+
+# Settings whose DB value is a boolean stored as a string ("true"/"false"/"0"/"1")
+_BOOL_KEYS = {"use_legacy_retrieval"}
 
 
 async def load_overrides(session: AsyncSession, secret_key: str) -> dict:
@@ -58,6 +63,11 @@ async def load_overrides(session: AsyncSession, secret_key: str) -> dict:
                 overrides[row.key] = float(row.value)
             except ValueError:
                 pass
+        elif row.key in _BOOL_KEYS:
+            # Stored as a string; falsy strings → False, anything else → True.
+            # Must be an explicit bool so that Settings.model_copy() receives the
+            # correct type — a non-empty string like "false" would be truthy in Python.
+            overrides[row.key] = row.value.strip().lower() not in ("false", "0", "no", "off", "")
         else:
             overrides[row.key] = row.value
 

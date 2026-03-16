@@ -55,6 +55,9 @@ async def lifespan(app: FastAPI):
     yield
     if app.state.db_engine:
         await app.state.db_engine.dispose()
+    # Close asyncpg pools and Qdrant connections held by cached LightRAG instances.
+    from core.lightrag_service import finalize_all as _lr_finalize
+    await _lr_finalize()
 
 
 def create_app() -> FastAPI:

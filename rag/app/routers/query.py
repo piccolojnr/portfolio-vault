@@ -1,4 +1,14 @@
-"""POST /api/v1/query — retrieve chunks + generate LLM answer + log cost."""
+"""POST /api/v1/query — retrieve chunks + generate LLM answer + log cost.
+
+Routing:
+  settings.use_legacy_retrieval = True  (default during transition)
+      → Qdrant vector search + LLM generation
+  settings.use_legacy_retrieval = False
+      → LightRAG hybrid graph+vector query
+
+Switch via the settings table for a live, zero-downtime cutover.
+Business logic lives in app.services.query.
+"""
 
 from __future__ import annotations
 
@@ -10,9 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import Settings
 from app.db import get_db_conn
 from app.dependencies import get_live_settings
-from app.models import QueryLog
-from app.schemas.rag import QueryRequest, QueryResponse, RetrievedChunk
-from core import retrieve_and_answer
+from app.schemas.rag import QueryRequest, QueryResponse
+from app.services import query as svc
 
 router = APIRouter(tags=["rag"])
 
@@ -26,46 +35,18 @@ async def query_endpoint(
     settings: Settings = Depends(get_live_settings),
 ):
     try:
-        answer, chunks, usage = retrieve_and_answer(
-            request.question, settings=settings, n_results=request.n_results
-        )
-
-        if not chunks:
-            raise HTTPException(status_code=404, detail="No relevant chunks found")
-
-        # Log cost to query_logs (best-effort — never fail the response)
-        if usage:
-            try:
-                log = QueryLog(
-                    question=request.question,
-                    model=usage.get("model"),
-                    provider=usage.get("provider"),
-                    input_tokens=usage.get("input_tokens"),
-                    output_tokens=usage.get("output_tokens"),
-                    total_tokens=usage.get("total_tokens"),
-                    cost_usd=usage.get("cost_usd"),
-                )
-                session.add(log)
-                await session.commit()
-            except Exception:
-                pass
-
-        return QueryResponse(
-            question=request.question,
-            retrieved_chunks=[
-                RetrievedChunk(
-                    content=c["content"],
-                    source=c["source"],
-                    heading=c["heading"],
-                    similarity=c["similarity"],
-                )
-                for c in chunks
-            ],
-            answer=answer,
-            mode="demo" if settings.use_demo else "real",
-        )
-
-    except HTTPException:
-        raise
+        response, log = await svc.run_query(request.question, request.n_results, settings)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+    # Persist cost log best-effort — never fail the response over a logging error
+    if log is not None:
+        try:
+            session.add(log)
+            await session.commit()
+        except Exception:
+            pass
+
+    return response

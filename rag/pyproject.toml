@@ -25,5 +25,6 @@ dependencies = [
     "python-docx>=1.1",
     "markdown>=3.5",
     "weasyprint>=62",
-    slowapi>=0.1.9
+    "slowapi>=0.1.9",
+    "lightrag-hku>=1.4.10"
 ]

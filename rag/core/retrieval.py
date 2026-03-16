@@ -99,3 +99,8 @@ def retrieve(
             break
 
     return retrieved
+
+
+# Alias preserved for callers that reference the legacy Qdrant path by name
+# during the USE_LEGACY_RETRIEVAL transition (see app/routers/query.py).
+retrieve_legacy = retrieve

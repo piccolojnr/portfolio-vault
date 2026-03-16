@@ -58,6 +58,31 @@ def start_pipeline_run(
         return str(run.id)
 
 
+def get_doc_by_id(database_url: str, doc_id: str) -> VaultDocument | None:
+    """Fetch a single VaultDocument by its UUID primary key."""
+    engine = _get_engine(database_url)
+    with Session(engine) as session:
+        return session.get(VaultDocument, UUID(doc_id))
+
+
+def update_doc_lightrag_status(database_url: str, doc_id: str, status: str) -> None:
+    """Write lightrag_status into the document's doc_metadata JSONB column.
+
+    Important: reassigns the whole dict (not a sub-key mutation) so that
+    SQLAlchemy detects the column as dirty and persists the change.  A bare
+    doc.doc_metadata["key"] = value would be silently dropped because
+    SQLAlchemy tracks object identity, not deep dict mutations.
+    """
+    engine = _get_engine(database_url)
+    with Session(engine) as session:
+        doc = session.get(VaultDocument, UUID(doc_id))
+        if doc is None:
+            return
+        doc.doc_metadata = {**(doc.doc_metadata or {}), "lightrag_status": status}
+        session.add(doc)
+        session.commit()
+
+
 def finish_pipeline_run(
     database_url: str,
     *,

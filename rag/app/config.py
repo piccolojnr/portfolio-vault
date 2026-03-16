@@ -49,6 +49,12 @@ class Settings(BaseSettings):
     # Cost guard — pipeline run is blocked if estimated cost exceeds this (0 = no limit)
     cost_limit_usd: float = 0.0
 
+    # Feature flag: when True the query endpoint uses the legacy Qdrant retriever;
+    # when False it routes through LightRAG.  Defaults to True so the existing
+    # Qdrant index continues to serve queries while LightRAG ingestion catches up.
+    # Flip to False (via the settings table) for a live, zero-downtime switchover.
+    use_legacy_retrieval: bool = False
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def use_demo(self) -> bool:
