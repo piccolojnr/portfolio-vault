@@ -14,7 +14,7 @@ from pathlib import Path
 
 from sqlalchemy import create_engine, text
 
-from app.config import get_settings
+from portfolio_rag.app.core.config import get_settings
 
 settings = get_settings()
 

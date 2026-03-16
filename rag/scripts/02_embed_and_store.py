@@ -10,9 +10,9 @@ Run:
   .venv/Scripts/python.exe scripts/02_embed_and_store.py
 """
 
-from app.config import get_settings
-from core.indexer import index_all_docs
-from core.vault_db import get_docs, start_pipeline_run
+from portfolio_rag.app.core.config import get_settings
+from portfolio_rag.domain.services.indexer import index_all_docs
+from portfolio_rag.infrastructure.db.repository import get_docs, start_pipeline_run
 
 
 if __name__ == "__main__":

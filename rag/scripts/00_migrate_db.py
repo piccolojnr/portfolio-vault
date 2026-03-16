@@ -16,8 +16,8 @@ from sqlalchemy import create_engine, text
 from sqlmodel import SQLModel
 
 # Import models so SQLModel.metadata is populated
-import app.models  # noqa: F401
-from app.config import get_settings
+import portfolio_rag.infrastructure.db  # noqa: F401 — registers SQLModel metadata
+from portfolio_rag.app.core.config import get_settings
 
 MIGRATIONS_DIR = Path(__file__).parent.parent / "migrations"
 

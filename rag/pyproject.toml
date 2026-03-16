@@ -3,8 +3,8 @@ requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["app*", "core*"]
+where = ["src"]
+include = ["portfolio_rag*"]
 
 [project]
 name = "portfolio-vault-rag"
@@ -28,3 +28,6 @@ dependencies = [
     "slowapi>=0.1.9",
     "lightrag-hku>=1.4.10"
 ]
+
+[project.scripts]
+rag = "portfolio_rag.app.core.cli:main"

@@ -11,9 +11,9 @@ Run:
 
 import json
 
-from app.config import get_settings
-from core.chunking import chunk_document
-from core.vault_db import get_docs
+from portfolio_rag.app.core.config import get_settings
+from portfolio_rag.domain.services.chunking import chunk_document
+from portfolio_rag.infrastructure.db.repository import get_docs
 
 settings = get_settings()
 
