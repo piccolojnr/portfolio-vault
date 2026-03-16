@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useParams, useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import {
   Sidebar,
@@ -14,16 +15,28 @@ import { ConversationSidebarContent } from "@/components/conversation-sidebar";
 import { useConversations } from "@/components/conversation-context";
 
 export function AppContent({ children }: { children: React.ReactNode }) {
-  const { conversations, activeId, deleteConversation, renameConversation } =
+  const { conversations, isLoading, isFetching, deleteConversation, renameConversation } =
     useConversations();
+
+  // activeId and navigation live here, not in the data provider.
+  const params = useParams();
+  const router = useRouter();
+  const activeId = (params?.slug as string | null) ?? null;
+
+  async function handleDelete(id: string) {
+    await deleteConversation(id);
+    if (activeId === id) router.push("/");
+  }
 
   return (
     <SidebarProvider className="h-svh">
       <Sidebar collapsible="offcanvas">
         <ConversationSidebarContent
           conversations={conversations}
+          isLoading={isLoading}
+          isFetching={isFetching}
           activeId={activeId}
-          onDelete={deleteConversation}
+          onDelete={handleDelete}
           onRename={renameConversation}
         />
       </Sidebar>

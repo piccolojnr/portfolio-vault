@@ -5,11 +5,22 @@ import { Plus, Trash2, MessageSquare } from "lucide-react";
 import Link from "next/link";
 import type { ConversationSummary } from "@/lib/conversations";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   SidebarContent,
   SidebarGroup,
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
@@ -59,7 +70,7 @@ function ConvEntry({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(conv.title ?? "");
-  const [hovered, setHovered] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   function commitRename() {
     setEditing(false);
@@ -69,13 +80,10 @@ function ConvEntry({
   }
 
   return (
-    <SidebarMenuItem>
+    <SidebarMenuItem className="mb-1">
       <SidebarMenuButton
         isActive={active}
         render={editing ? <div /> : <Link href={`/${conv.id}`} />}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        className="pr-7"
       >
         <MessageSquare className="h-3.5 w-3.5 shrink-0 opacity-50" />
         {editing ? (
@@ -109,17 +117,41 @@ function ConvEntry({
         )}
       </SidebarMenuButton>
 
-      {hovered && !editing && (
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onDelete();
-          }}
-          className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-sidebar-foreground/30 hover:text-destructive transition-colors z-10"
-        >
-          <Trash2 className="h-3 w-3" />
-        </button>
+      {!editing && (
+        <>
+          <SidebarMenuAction
+            showOnHover
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setConfirming(true);
+            }}
+            className="text-sidebar-foreground/30 hover:text-destructive hover:bg-transparent"
+          >
+            <Trash2 className="h-3 w-3" />
+          </SidebarMenuAction>
+
+          <AlertDialog open={confirming} onOpenChange={setConfirming}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete conversation?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  &ldquo;{conv.title ?? "New conversation"}&rdquo; will be
+                  permanently deleted.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={onDelete}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
       )}
     </SidebarMenuItem>
   );
@@ -129,11 +161,16 @@ function ConvEntry({
 
 export function ConversationSidebarContent({
   conversations,
+  isLoading = false,
+  isFetching = false,
   activeId,
   onDelete,
   onRename,
 }: {
   conversations: ConversationSummary[];
+  isLoading?: boolean;
+  /** True during background refetches — dims list without hiding it. */
+  isFetching?: boolean;
   activeId: string | null;
   onDelete: (id: string) => void;
   onRename: (id: string, title: string) => void;
@@ -151,33 +188,65 @@ export function ConversationSidebarContent({
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
+
+        {/* Thin progress bar visible only during background refetches */}
+        <div className="h-px mx-1 overflow-hidden rounded-full">
+          <div
+            className={`h-full bg-primary/40 transition-all duration-500 ${
+              isFetching && !isLoading
+                ? "w-full animate-pulse"
+                : "w-0 opacity-0"
+            }`}
+          />
+        </div>
       </SidebarHeader>
 
       <SidebarContent>
-        {conversations.length === 0 && (
+        {isLoading ? (
+          <div className="px-2 py-2 space-y-1">
+            {[72, 88, 60, 80, 68].map((w, i) => (
+              <div
+                key={i}
+                className="h-8 rounded-md bg-sidebar-foreground/8 animate-pulse"
+                style={{ width: `${w}%` }}
+              />
+            ))}
+          </div>
+        ) : conversations.length === 0 ? (
           <p className="px-4 py-6 text-[11px] font-mono text-sidebar-foreground/30 text-center">
             No conversations yet
           </p>
-        )}
+        ) : null}
 
-        {GROUP_ORDER.filter((g) => groups.has(g)).map((group) => (
-          <SidebarGroup key={group}>
-            <SidebarGroupLabel className="font-mono text-[10px] tracking-wider uppercase text-sidebar-foreground/40">
-              {group}
-            </SidebarGroupLabel>
-            <SidebarMenu>
-              {groups.get(group)!.map((conv) => (
-                <ConvEntry
-                  key={conv.id}
-                  conv={conv}
-                  active={conv.id === activeId}
-                  onDelete={() => onDelete(conv.id)}
-                  onRename={(title) => onRename(conv.id, title)}
-                />
-              ))}
-            </SidebarMenu>
-          </SidebarGroup>
-        ))}
+        {/* Dim the list slightly during background refetches so it doesn't
+            feel stale without hiding content the user is interacting with. */}
+        <div
+          className={
+            isFetching && !isLoading
+              ? "opacity-60 transition-opacity"
+              : "transition-opacity"
+          }
+        >
+          {!isLoading &&
+            GROUP_ORDER.filter((g) => groups.has(g)).map((group) => (
+              <SidebarGroup key={group}>
+                <SidebarGroupLabel className="font-mono text-[10px] tracking-wider uppercase text-sidebar-foreground/40">
+                  {group}
+                </SidebarGroupLabel>
+                <SidebarMenu>
+                  {groups.get(group)!.map((conv) => (
+                    <ConvEntry
+                      key={conv.id}
+                      conv={conv}
+                      active={conv.id === activeId}
+                      onDelete={() => onDelete(conv.id)}
+                      onRename={(title) => onRename(conv.id, title)}
+                    />
+                  ))}
+                </SidebarMenu>
+              </SidebarGroup>
+            ))}
+        </div>
       </SidebarContent>
     </>
   );

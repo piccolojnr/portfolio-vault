@@ -1,25 +1,29 @@
 "use client";
 
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useCallback,
-} from "react";
+import React, { createContext, useContext, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
+  CONV_QUERY_KEY,
   listConversations,
   deleteConversation as apiDeleteConversation,
   patchConversation as apiPatchConversation,
   type ConversationSummary,
 } from "@/lib/conversations";
-import { useRouter, useParams } from "next/navigation";
+
+// Re-export so callers that were importing from here keep working.
+export { CONV_QUERY_KEY };
 
 interface ConversationContextType {
   conversations: ConversationSummary[];
-  activeId: string | null;
+  /** True only on the very first fetch (no data yet). */
+  isLoading: boolean;
+  /** True whenever a background refetch is in flight. */
+  isFetching: boolean;
   refreshConversations: () => Promise<void>;
   createLocalConversation: (conv: ConversationSummary) => void;
+  /** Deletes and updates the cache. Navigation on active-delete is the
+   *  caller's responsibility — see app-content.tsx. */
   deleteConversation: (id: string) => Promise<void>;
   renameConversation: (id: string, title: string) => Promise<void>;
 }
@@ -33,52 +37,76 @@ export function ConversationProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
-  const router = useRouter();
-  const params = useParams();
-  const activeId = params?.slug as string | null;
+  const qc = useQueryClient();
+
+  const {
+    data: conversations = [],
+    isPending: isLoading,
+    isFetching,
+  } = useQuery({
+    queryKey: CONV_QUERY_KEY,
+    queryFn: listConversations,
+  });
 
   const refreshConversations = useCallback(async () => {
-    try {
-      const list = await listConversations();
-      setConversations(list);
-    } catch (err) {
-      console.error("Failed to load conversations", err);
-    }
-  }, []);
+    await qc.invalidateQueries({ queryKey: CONV_QUERY_KEY });
+  }, [qc]);
 
-  const createLocalConversation = useCallback((conv: ConversationSummary) => {
-    setConversations((prev) => [conv, ...prev]);
-  }, []);
+  // Optimistic prepend — used immediately after creating a conversation so the
+  // sidebar shows it before the next background refetch.
+  const createLocalConversation = useCallback(
+    (conv: ConversationSummary) => {
+      qc.setQueryData<ConversationSummary[]>(CONV_QUERY_KEY, (old = []) => [
+        conv,
+        ...old,
+      ]);
+    },
+    [qc],
+  );
 
   const deleteConversation = useCallback(
     async (id: string) => {
-      await apiDeleteConversation(id);
-      setConversations((prev) => prev.filter((c) => c.id !== id));
-      if (activeId === id) {
-        router.push("/");
+      const snapshot = qc.getQueryData<ConversationSummary[]>(CONV_QUERY_KEY);
+      qc.setQueryData<ConversationSummary[]>(CONV_QUERY_KEY, (old = []) =>
+        old.filter((c) => c.id !== id),
+      );
+      try {
+        await apiDeleteConversation(id);
+      } catch {
+        if (snapshot) qc.setQueryData(CONV_QUERY_KEY, snapshot);
+        toast.error("Failed to delete conversation");
       }
     },
-    [activeId, router],
+    [qc],
   );
 
-  const renameConversation = useCallback(async (id: string, title: string) => {
-    const updated = await apiPatchConversation(id, title);
-    setConversations((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, title: updated.title } : c)),
-    );
-  }, []);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    refreshConversations();
-  }, [refreshConversations]);
+  const renameConversation = useCallback(
+    async (id: string, title: string) => {
+      const snapshot = qc.getQueryData<ConversationSummary[]>(CONV_QUERY_KEY);
+      // Optimistic update
+      qc.setQueryData<ConversationSummary[]>(CONV_QUERY_KEY, (old = []) =>
+        old.map((c) => (c.id === id ? { ...c, title } : c)),
+      );
+      try {
+        const updated = await apiPatchConversation(id, title);
+        // Settle with the server value
+        qc.setQueryData<ConversationSummary[]>(CONV_QUERY_KEY, (old = []) =>
+          old.map((c) => (c.id === id ? updated : c)),
+        );
+      } catch {
+        if (snapshot) qc.setQueryData(CONV_QUERY_KEY, snapshot);
+        toast.error("Failed to rename conversation");
+      }
+    },
+    [qc],
+  );
 
   return (
     <ConversationContext.Provider
       value={{
         conversations,
-        activeId,
+        isLoading,
+        isFetching,
         refreshConversations,
         createLocalConversation,
         deleteConversation,

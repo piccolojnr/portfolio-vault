@@ -38,6 +38,10 @@ export interface MessagesPage {
   has_more: boolean;
 }
 
+// Stable React Query key for the conversations list — import this wherever you
+// need to read or invalidate the cache rather than duplicating the literal.
+export const CONV_QUERY_KEY = ["conversations"] as const;
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
   if (!res.ok) {

@@ -6,10 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import Image from "next/image";
+import { useQueryClient } from "@tanstack/react-query";
 import { DocumentMessage } from "@/components/document-message";
 import { ConversationMemoryPanel } from "@/components/conversation-memory-panel";
-import { createConversation, type MessageMeta } from "@/lib/conversations";
+import { createConversation, CONV_QUERY_KEY, type MessageMeta } from "@/lib/conversations";
 import { useConversations } from "./conversation-context";
+import { readSSEStream } from "@/lib/sse-reader";
 import { type VirtualItem } from "@tanstack/react-virtual";
 import { useConversation, type Message } from "@/hooks/use-conversation";
 
@@ -77,7 +79,8 @@ function MessageRow({
 }
 
 export function ChatInterface({ slug }: { slug?: string }) {
-  const { createLocalConversation, refreshConversations } = useConversations();
+  const { createLocalConversation } = useConversations();
+  const qc = useQueryClient();
 
   const {
     messages,
@@ -152,56 +155,34 @@ export function ChatInterface({ slug }: { slug?: string }) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         if (!res.body) throw new Error("No response body");
 
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
         let accumulated = "";
         let docType: string | null = null;
         let messageMeta: MessageMeta | null = null;
         let savedId: string | undefined;
         let savedCreatedAt: string | undefined;
-        let buf = "";
-        let receivedDone = false;
         let streamError: { message: string; stage: string } | null = null;
 
-        outer: while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buf += decoder.decode(value, { stream: true });
-          const lines = buf.split("\n");
-          buf = lines.pop()!;
-
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            const payload = line.slice(6);
-            if (payload === "[DONE]") {
-              receivedDone = true;
-              break outer;
-            }
-
-            try {
-              const parsed = JSON.parse(payload);
-              if (parsed.text !== undefined) {
-                accumulated += parsed.text;
-                updateStreamingContent(accumulated);
-              }
-              if (parsed.saved !== undefined) {
-                docType = parsed.saved.doc_type ?? null;
-                messageMeta = parsed.saved.meta ?? null;
-                savedId = parsed.saved.id;
-                savedCreatedAt = parsed.saved.created_at;
-              }
-              if (parsed.error !== undefined) {
-                streamError = {
-                  message: parsed.error,
-                  stage: parsed.stage ?? "unknown",
-                };
-              }
-            } catch {
-              console.warn("[chat] Unparseable SSE event:", payload);
-            }
-          }
-        }
+        const { receivedDone } = await readSSEStream(
+          res.body,
+          {
+            onText: (text) => {
+              accumulated += text;
+              updateStreamingContent(accumulated);
+            },
+            onSaved: (saved) => {
+              docType = saved.doc_type ?? null;
+              messageMeta = saved.meta ?? null;
+              savedId = saved.id;
+              savedCreatedAt = saved.created_at;
+              // Immediately reflect the new conversation in the sidebar
+              void qc.invalidateQueries({ queryKey: CONV_QUERY_KEY });
+            },
+            onError: (err) => {
+              streamError = err;
+            },
+          },
+          abortRef.current?.signal,
+        );
 
         if (streamError) {
           finalizeMessage({
@@ -235,7 +216,12 @@ export function ChatInterface({ slug }: { slug?: string }) {
         }
 
         if (currentId) {
-          setTimeout(() => refreshConversations(), 1000);
+          // Second invalidation catches auto-generated titles which are produced
+          // asynchronously on the backend after the stream ends.
+          setTimeout(
+            () => void qc.invalidateQueries({ queryKey: CONV_QUERY_KEY }),
+            2500,
+          );
         }
       } catch (err: unknown) {
         if (err instanceof DOMException && err.name === "AbortError") return;
@@ -256,8 +242,8 @@ export function ChatInterface({ slug }: { slug?: string }) {
       loading,
       messages,
       slug,
+      qc,
       createLocalConversation,
-      refreshConversations,
       pushUserAndPlaceholder,
       updateStreamingContent,
       finalizeMessage,

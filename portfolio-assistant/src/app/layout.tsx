@@ -3,8 +3,10 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryProvider } from "@/components/query-provider";
 import { ConversationProvider } from "@/components/conversation-context";
 import { AppContent } from "@/components/app-content";
+import { Toaster } from "sonner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -45,11 +47,14 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased overflow-hidden`}
       >
-        <TooltipProvider>
-          <ConversationProvider>
-            <AppContent>{children}</AppContent>
-          </ConversationProvider>
-        </TooltipProvider>
+        <QueryProvider>
+          <TooltipProvider>
+            <ConversationProvider>
+              <AppContent>{children}</AppContent>
+            </ConversationProvider>
+          </TooltipProvider>
+          <Toaster position="bottom-right" />
+        </QueryProvider>
       </body>
     </html>
   );
