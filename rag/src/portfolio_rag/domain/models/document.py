@@ -1,13 +1,16 @@
-"""Vault document and reindex schemas."""
+"""Corpus document schemas."""
 
 from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel
 
+DEFAULT_CORPUS_ID = "portfolio_vault"
 
-class VaultDocSummary(BaseModel):
+
+class CorpusDocSummary(BaseModel):
     id: str
+    corpus_id: str
     slug: str
     type: str
     title: str
@@ -15,27 +18,29 @@ class VaultDocSummary(BaseModel):
 
 
 class PaginatedDocs(BaseModel):
-    items: list[VaultDocSummary]
+    items: list[CorpusDocSummary]
     total: int
     page: int
     page_size: int
     pages: int
 
 
-class VaultDocDetail(VaultDocSummary):
-    content: str
+class CorpusDocDetail(CorpusDocSummary):
+    extracted_text: str
 
 
-class VaultDocCreate(BaseModel):
+class CorpusDocCreate(BaseModel):
     slug: str
     title: str
     type: str
-    content: str = ""
+    extracted_text: str = ""
+    corpus_id: str = DEFAULT_CORPUS_ID
 
 
-class VaultDocUpdate(BaseModel):
+class CorpusDocUpdate(BaseModel):
     title: Optional[str] = None
-    content: Optional[str] = None
+    extracted_text: Optional[str] = None
+    corpus_id: Optional[str] = None
 
 
 class ReindexResponse(BaseModel):

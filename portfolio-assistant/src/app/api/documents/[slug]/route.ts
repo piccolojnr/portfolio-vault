@@ -6,7 +6,7 @@ export async function GET(
 ) {
   const { slug } = await params;
   const res = await fetch(
-    `${RAG_BACKEND_URL}/api/v1/vault/documents/${encodeURIComponent(slug)}`
+    `${RAG_BACKEND_URL}/api/v1/documents/${encodeURIComponent(slug)}`
   );
   const data = await res.json();
   return new Response(JSON.stringify(data), {
@@ -22,7 +22,7 @@ export async function PUT(
   const { slug } = await params;
   const body = await req.text();
   const res = await fetch(
-    `${RAG_BACKEND_URL}/api/v1/vault/documents/${encodeURIComponent(slug)}`,
+    `${RAG_BACKEND_URL}/api/v1/documents/${encodeURIComponent(slug)}`,
     { method: "PUT", headers: { "Content-Type": "application/json" }, body }
   );
   const data = await res.json();
@@ -38,7 +38,7 @@ export async function DELETE(
 ) {
   const { slug } = await params;
   const res = await fetch(
-    `${RAG_BACKEND_URL}/api/v1/vault/documents/${encodeURIComponent(slug)}`,
+    `${RAG_BACKEND_URL}/api/v1/documents/${encodeURIComponent(slug)}`,
     { method: "DELETE" }
   );
   return new Response(null, { status: res.status });

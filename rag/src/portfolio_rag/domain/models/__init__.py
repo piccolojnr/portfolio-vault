@@ -2,7 +2,7 @@
 Schemas package — re-exports everything for backward compatibility.
 
 Import from submodules for clarity in new code:
-  from portfolio_rag.domain.models.vault import VaultDocDetail
+  from portfolio_rag.domain.models.document import CorpusDocDetail
   from portfolio_rag.domain.models.pipeline import CostEstimate
   from portfolio_rag.domain.models.rag import QueryRequest
 """
@@ -13,14 +13,14 @@ from portfolio_rag.domain.models.rag import (
     RetrievedChunk,
     RetrieveResponse,
 )
-from portfolio_rag.domain.models.vault import (
+from portfolio_rag.domain.models.document import (
     PaginatedDocs,
     ReindexResponse,
     ReindexStatus,
-    VaultDocCreate,
-    VaultDocDetail,
-    VaultDocSummary,
-    VaultDocUpdate,
+    CorpusDocCreate,
+    CorpusDocDetail,
+    CorpusDocSummary,
+    CorpusDocUpdate,
 )
 from portfolio_rag.domain.models.pipeline import (
     CostEstimate,
@@ -45,10 +45,10 @@ __all__ = [
     "PaginatedDocs",
     "ReindexResponse",
     "ReindexStatus",
-    "VaultDocCreate",
-    "VaultDocDetail",
-    "VaultDocSummary",
-    "VaultDocUpdate",
+    "CorpusDocCreate",
+    "CorpusDocDetail",
+    "CorpusDocSummary",
+    "CorpusDocUpdate",
     "CostEstimate",
     "PipelineRunList",
     "PipelineRunSummary",

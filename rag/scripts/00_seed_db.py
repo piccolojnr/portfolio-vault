@@ -47,15 +47,18 @@ VAULT_FILES = {
     "project_csir":          settings.project_dir / "02_projects/csir-noise-dashboard/overview.md",
 }
 
+CORPUS_ID = "portfolio_vault"
+
 UPSERT_SQL = text("""
-    INSERT INTO vault_documents (id, type, slug, title, content, metadata, updated_at, created_at)
-    VALUES (gen_random_uuid(), :type, :slug, :title, :content, CAST(:metadata AS jsonb), now(), now())
+    INSERT INTO documents (id, corpus_id, type, slug, title, extracted_text, metadata, updated_at, created_at)
+    VALUES (gen_random_uuid(), :corpus_id, :type, :slug, :title, :extracted_text, CAST(:metadata AS jsonb), now(), now())
     ON CONFLICT (slug) DO UPDATE
-        SET type       = EXCLUDED.type,
-            title      = EXCLUDED.title,
-            content    = EXCLUDED.content,
-            metadata   = EXCLUDED.metadata,
-            updated_at = now()
+        SET corpus_id      = EXCLUDED.corpus_id,
+            type           = EXCLUDED.type,
+            title          = EXCLUDED.title,
+            extracted_text = EXCLUDED.extracted_text,
+            metadata       = EXCLUDED.metadata,
+            updated_at     = now()
     RETURNING (xmax = 0) AS inserted
 """)
 
@@ -77,7 +80,8 @@ if __name__ == "__main__":
                     "type":     meta["type"],
                     "slug":     meta["slug"],
                     "title":    meta["title"],
-                    "content":  content,
+                    "corpus_id": CORPUS_ID,
+                    "extracted_text": content,
                     "metadata": "{}",
                 },
             )

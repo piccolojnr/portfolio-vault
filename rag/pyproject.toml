@@ -28,7 +28,9 @@ dependencies = [
     "weasyprint>=62",
     "slowapi>=0.1.9",
     "lightrag-hku>=1.4.10",
-    "tiktoken>=0.7"
+    "tiktoken>=0.7",
+    "supabase>=2.0",
+    "python-multipart>=0.0.22"
 ]
 
 [project.scripts]

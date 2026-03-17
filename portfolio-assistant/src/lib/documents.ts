@@ -1,11 +1,11 @@
 /**
- * lib/vault.ts
- * ============
- * Typed API client for vault document management.
- * All calls go through Next.js proxy routes (/api/vault/...).
+ * lib/documents.ts
+ * ================
+ * Typed API client for corpus document management.
+ * All calls go through Next.js proxy routes (/api/documents/...).
  */
 
-export interface VaultDocSummary {
+export interface CorpusDocSummary {
   id: string;
   slug: string;
   type: string;
@@ -14,27 +14,27 @@ export interface VaultDocSummary {
 }
 
 export interface PaginatedDocs {
-  items: VaultDocSummary[];
+  items: CorpusDocSummary[];
   total: number;
   page: number;
   page_size: number;
   pages: number;
 }
 
-export interface VaultDocDetail extends VaultDocSummary {
-  content: string;
+export interface CorpusDocDetail extends CorpusDocSummary {
+  extracted_text: string;
 }
 
-export interface VaultDocCreate {
+export interface CorpusDocCreate {
   slug: string;
   title: string;
   type: string;
-  content?: string;
+  extracted_text?: string;
 }
 
-export interface VaultDocUpdate {
+export interface CorpusDocUpdate {
   title?: string;
-  content?: string;
+  extracted_text?: string;
 }
 
 export interface ReindexResponse {
@@ -63,15 +63,15 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export function listDocuments(page = 1, pageSize = 20): Promise<PaginatedDocs> {
-  return apiFetch(`/api/vault/documents?page=${page}&page_size=${pageSize}`);
+  return apiFetch(`/api/documents?page=${page}&page_size=${pageSize}`);
 }
 
-export function getDocument(slug: string): Promise<VaultDocDetail> {
-  return apiFetch(`/api/vault/documents/${encodeURIComponent(slug)}`);
+export function getDocument(slug: string): Promise<CorpusDocDetail> {
+  return apiFetch(`/api/documents/${encodeURIComponent(slug)}`);
 }
 
-export function createDocument(data: VaultDocCreate): Promise<VaultDocDetail> {
-  return apiFetch("/api/vault/documents", {
+export function createDocument(data: CorpusDocCreate): Promise<CorpusDocDetail> {
+  return apiFetch("/api/documents", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -80,9 +80,9 @@ export function createDocument(data: VaultDocCreate): Promise<VaultDocDetail> {
 
 export function updateDocument(
   slug: string,
-  patch: VaultDocUpdate
-): Promise<VaultDocDetail> {
-  return apiFetch(`/api/vault/documents/${encodeURIComponent(slug)}`, {
+  patch: CorpusDocUpdate
+): Promise<CorpusDocDetail> {
+  return apiFetch(`/api/documents/${encodeURIComponent(slug)}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
@@ -90,15 +90,15 @@ export function updateDocument(
 }
 
 export function deleteDocument(slug: string): Promise<void> {
-  return apiFetch(`/api/vault/documents/${encodeURIComponent(slug)}`, {
+  return apiFetch(`/api/documents/${encodeURIComponent(slug)}`, {
     method: "DELETE",
   });
 }
 
 export function triggerReindex(): Promise<ReindexResponse> {
-  return apiFetch("/api/vault/reindex", { method: "POST" });
+  return apiFetch("/api/documents/reindex", { method: "POST" });
 }
 
 export function getReindexStatus(runId: string): Promise<ReindexStatus> {
-  return apiFetch(`/api/vault/reindex/${encodeURIComponent(runId)}`);
+  return apiFetch(`/api/documents/reindex/${encodeURIComponent(runId)}`);
 }

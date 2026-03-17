@@ -3,7 +3,7 @@ import { RAG_BACKEND_URL } from "@/lib/config";
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const qs = searchParams.toString();
-  const url = `${RAG_BACKEND_URL}/api/v1/vault/documents${qs ? `?${qs}` : ""}`;
+  const url = `${RAG_BACKEND_URL}/api/v1/documents${qs ? `?${qs}` : ""}`;
   const res = await fetch(url);
   const data = await res.json();
   return new Response(JSON.stringify(data), {
@@ -14,7 +14,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const body = await req.text();
-  const res = await fetch(`${RAG_BACKEND_URL}/api/v1/vault/documents`, {
+  const res = await fetch(`${RAG_BACKEND_URL}/api/v1/documents`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body,

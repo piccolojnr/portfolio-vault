@@ -63,7 +63,7 @@ def index_all_docs(
         all_chunks = [
             c
             for doc in docs
-            for c in chunk_document(doc.slug, doc.content)
+            for c in chunk_document(doc.slug, doc.extracted_text)
             if c["word_count"] >= 10
         ]
 

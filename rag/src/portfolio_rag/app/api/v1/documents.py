@@ -1,11 +1,11 @@
 """
-Vault Management Router
-========================
+Documents Router
+================
 
-CRUD endpoints for vault documents + reindex trigger.
+CRUD endpoints for corpus documents + reindex trigger.
 Business logic lives in portfolio_rag.domain.services.vault.
 
-Prefix: /vault (mounted under /api/v1)
+Prefix: /documents (mounted under /api/v1)
 """
 
 from __future__ import annotations
@@ -17,24 +17,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from portfolio_rag.app.core.config import get_settings
 from portfolio_rag.app.core.db import get_db_conn
-from portfolio_rag.domain.models.vault import (
+from portfolio_rag.domain.models.document import (
+    CorpusDocCreate,
+    CorpusDocDetail,
+    CorpusDocUpdate,
     PaginatedDocs,
     ReindexResponse,
     ReindexStatus,
-    VaultDocCreate,
-    VaultDocDetail,
-    VaultDocUpdate,
 )
-from portfolio_rag.domain.services import vault as svc
+from portfolio_rag.domain.services import document as svc
 from portfolio_rag.domain.services.indexer import index_all_docs
 from portfolio_rag.infrastructure.db.repository import get_docs, start_pipeline_run
 
-router = APIRouter(prefix="/vault", tags=["vault"])
+router = APIRouter(prefix="/documents", tags=["documents"])
 
 DBSession = Annotated[AsyncSession, Depends(get_db_conn)]
 
 
-@router.get("/documents", response_model=PaginatedDocs)
+@router.get("", response_model=PaginatedDocs)
 async def list_documents(
     session: DBSession,
     page: int = Query(1, ge=1),
@@ -43,7 +43,7 @@ async def list_documents(
     return await svc.list_documents(session, page, page_size)
 
 
-@router.get("/documents/{slug}", response_model=VaultDocDetail)
+@router.get("/{slug}", response_model=CorpusDocDetail)
 async def get_document(slug: str, session: DBSession):
     try:
         doc = await svc.get_document(session, slug)
@@ -52,8 +52,8 @@ async def get_document(slug: str, session: DBSession):
     return _detail(doc)
 
 
-@router.put("/documents/{slug}", response_model=VaultDocDetail)
-async def update_document(slug: str, patch: VaultDocUpdate, session: DBSession):
+@router.put("/{slug}", response_model=CorpusDocDetail)
+async def update_document(slug: str, patch: CorpusDocUpdate, session: DBSession):
     try:
         doc = await svc.update_document(session, slug, patch)
     except LookupError as e:
@@ -61,8 +61,8 @@ async def update_document(slug: str, patch: VaultDocUpdate, session: DBSession):
     return _detail(doc)
 
 
-@router.post("/documents", response_model=VaultDocDetail, status_code=201)
-async def create_document(data: VaultDocCreate, session: DBSession):
+@router.post("", response_model=CorpusDocDetail, status_code=201)
+async def create_document(data: CorpusDocCreate, session: DBSession):
     try:
         doc = await svc.create_document(session, data)
     except ValueError as e:
@@ -70,7 +70,7 @@ async def create_document(data: VaultDocCreate, session: DBSession):
     return _detail(doc)
 
 
-@router.delete("/documents/{slug}", status_code=204)
+@router.delete("/{slug}", status_code=204)
 async def delete_document(slug: str, session: DBSession):
     try:
         await svc.delete_document(session, slug)
@@ -113,12 +113,13 @@ async def get_reindex_status(run_id: str, session: DBSession):
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 
-def _detail(doc) -> VaultDocDetail:
-    return VaultDocDetail(
+def _detail(doc) -> CorpusDocDetail:
+    return CorpusDocDetail(
         id=str(doc.id),
+        corpus_id=doc.corpus_id,
         slug=doc.slug,
         type=doc.type,
         title=doc.title,
         updated_at=doc.updated_at,
-        content=doc.content,
+        extracted_text=doc.extracted_text,
     )

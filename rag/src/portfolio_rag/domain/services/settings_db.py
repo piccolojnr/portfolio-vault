@@ -16,7 +16,7 @@ from portfolio_rag.shared.crypto import decrypt, encrypt
 from portfolio_rag.infrastructure.db import AppSetting
 
 # Settings keys that are stored encrypted
-_SECRET_KEYS = {"openai_api_key", "anthropic_api_key"}
+_SECRET_KEYS = {"openai_api_key", "anthropic_api_key", "supabase_storage_key"}
 
 # All setting keys managed via the DB
 _ALL_KEYS = {
@@ -33,6 +33,11 @@ _ALL_KEYS = {
     "summarizer_openai_model",
     # Retrieval routing flag — set to "false" to switch queries to LightRAG
     "use_legacy_retrieval",
+    # Storage backend configuration
+    "storage_provider",
+    "supabase_storage_url",
+    "supabase_storage_key",
+    "storage_bucket",
 }
 
 # Settings whose DB value is a boolean stored as a string ("true"/"false"/"0"/"1")

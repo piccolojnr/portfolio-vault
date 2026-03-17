@@ -74,7 +74,7 @@ def compute_cost_estimate(settings) -> CostEstimate:
     all_chunks = [
         c
         for doc in docs
-        for c in chunk_document(doc.slug, doc.content)
+        for c in chunk_document(doc.slug, doc.extracted_text)
         if c["word_count"] >= 10
     ]
     token_count = sum(int(c["word_count"] * 1.3) for c in all_chunks)

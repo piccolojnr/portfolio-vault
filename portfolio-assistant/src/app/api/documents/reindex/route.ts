@@ -1,7 +1,7 @@
 import { RAG_BACKEND_URL } from "@/lib/config";
 
 export async function POST() {
-  const res = await fetch(`${RAG_BACKEND_URL}/api/v1/vault/reindex`, {
+  const res = await fetch(`${RAG_BACKEND_URL}/api/v1/documents/reindex`, {
     method: "POST",
   });
   const data = await res.json();

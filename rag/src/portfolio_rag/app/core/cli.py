@@ -5,15 +5,17 @@ Portfolio Vault RAG — management CLI
 Registered as `rag` in pyproject.toml [project.scripts].
 After `pip install -e .` (or the venv is already set up) run:
 
-  rag migrate        # apply all pending SQL migrations
-  rag seed           # upsert vault markdown files into the DB
-  rag migrate seed   # run both in sequence (just run both commands)
+  rag create-migration <name>   # scaffold a new SQL migration file
+  rag migrate                   # apply all pending SQL migrations
+  rag migrate-fresh             # DROP all tables, re-apply migrations (wipes data)
+  rag seed                      # upsert vault markdown files into the DB
 
 All commands resolve settings from rag/.env regardless of cwd.
 """
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 import typer
@@ -35,26 +37,21 @@ def _get_engine():
     return create_engine(settings.database_url), settings
 
 
-# ---------------------------------------------------------------------------
-# migrate
-# ---------------------------------------------------------------------------
+def _migrations_dir() -> Path:
+    # cli.py is at src/portfolio_rag/app/core/cli.py — 4 parents up reaches rag/
+    return Path(__file__).parents[4] / "migrations"
 
-@app.command()
-def migrate():
-    """Apply all SQL migration files in rag/migrations/ then sync SQLModel metadata."""
+
+def _run_migrations(engine) -> None:
+    """Apply every *.sql file in rag/migrations/ in alphabetical order."""
     from sqlalchemy import text
     from sqlmodel import SQLModel
     import portfolio_rag.infrastructure.db  # noqa: F401 — populate SQLModel.metadata
 
-    engine, _ = _get_engine()
-
-    # cli.py is at src/portfolio_rag/app/core/cli.py — 4 parents reaches rag/
-    migrations_dir = Path(__file__).parents[4] / "migrations"
-    sql_files = sorted(migrations_dir.glob("*.sql"))
-
+    sql_files = sorted(_migrations_dir().glob("*.sql"))
     if not sql_files:
         typer.echo("No migration files found.")
-        raise typer.Exit(0)
+        return
 
     with engine.connect() as conn:
         for sql_file in sql_files:
@@ -65,7 +62,69 @@ def migrate():
 
     SQLModel.metadata.create_all(engine)
     typer.echo("  synced   SQLModel.metadata")
+
+
+# ---------------------------------------------------------------------------
+# create-migration
+# ---------------------------------------------------------------------------
+
+@app.command()
+def create_migration(name: str):
+    """Scaffold a new empty SQL migration file in rag/migrations/."""
+    migrations_dir = _migrations_dir()
+    migrations_dir.mkdir(exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    filename = f"{timestamp}_{name}.sql"
+    filepath = migrations_dir / filename
+    filepath.write_text(f"-- Migration: {name}\n\nBEGIN;\n\n-- TODO\n\nCOMMIT;\n", encoding="utf-8")
+    typer.echo(f"  created  {filepath}")
+
+
+# ---------------------------------------------------------------------------
+# migrate
+# ---------------------------------------------------------------------------
+
+@app.command()
+def migrate():
+    """Apply all SQL migration files in rag/migrations/ then sync SQLModel metadata."""
+    engine, _ = _get_engine()
+    _run_migrations(engine)
     typer.echo(typer.style("\nMigration complete.", fg=typer.colors.GREEN, bold=True))
+
+
+# ---------------------------------------------------------------------------
+# migrate-fresh
+# ---------------------------------------------------------------------------
+# drop everything
+_DROP_SQL = """
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+GRANT ALL ON SCHEMA public TO postgres;
+GRANT ALL ON SCHEMA public TO public;
+"""
+
+@app.command()
+def migrate_fresh():
+    """DROP all tables and re-apply migrations from scratch. ⚠️  DESTROYS ALL DATA."""
+    from sqlalchemy import text
+
+    confirmed = typer.confirm(
+        "⚠️  This will DROP ALL TABLES and destroy all data. Continue?",
+        default=False,
+    )
+    if not confirmed:
+        typer.echo("Aborted.")
+        raise typer.Exit(0)
+
+    engine, _ = _get_engine()
+
+    with engine.connect() as conn:
+        conn.execute(text(_DROP_SQL))
+        conn.commit()
+    typer.echo("  dropped  all tables")
+
+    _run_migrations(engine)
+    typer.echo(typer.style("\nFresh migration complete.", fg=typer.colors.GREEN, bold=True))
 
 
 # ---------------------------------------------------------------------------
@@ -87,16 +146,19 @@ _DOC_META = {
 }
 
 _UPSERT_SQL = """
-    INSERT INTO vault_documents (id, type, slug, title, content, metadata, updated_at, created_at)
-    VALUES (gen_random_uuid(), :type, :slug, :title, :content, CAST(:metadata AS jsonb), now(), now())
+    INSERT INTO documents (id, corpus_id, type, slug, title, extracted_text, metadata, updated_at, created_at)
+    VALUES (gen_random_uuid(), :corpus_id, :type, :slug, :title, :extracted_text, CAST(:metadata AS jsonb), now(), now())
     ON CONFLICT (slug) DO UPDATE
-        SET type       = EXCLUDED.type,
-            title      = EXCLUDED.title,
-            content    = EXCLUDED.content,
-            metadata   = EXCLUDED.metadata,
-            updated_at = now()
+        SET corpus_id      = EXCLUDED.corpus_id,
+            type           = EXCLUDED.type,
+            title          = EXCLUDED.title,
+            extracted_text = EXCLUDED.extracted_text,
+            metadata       = EXCLUDED.metadata,
+            updated_at     = now()
     RETURNING (xmax = 0) AS inserted
 """
+
+_CORPUS_ID = "portfolio_vault"
 
 
 @app.command()
@@ -129,8 +191,8 @@ def seed():
             content = Path(filepath).read_text(encoding="utf-8")
             row = conn.execute(
                 text(_UPSERT_SQL),
-                {"type": meta["type"], "slug": meta["slug"], "title": meta["title"],
-                 "content": content, "metadata": "{}"},
+                {"corpus_id": _CORPUS_ID, "type": meta["type"], "slug": meta["slug"],
+                 "title": meta["title"], "extracted_text": content, "metadata": "{}"},
             ).fetchone()
             action = "inserted" if row[0] else "updated"
             typer.echo(f"  {action:8s} {meta['slug']:30s}  ({meta['type']})")

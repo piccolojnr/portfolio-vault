@@ -42,7 +42,7 @@ async def _resolve_sources(chunks: list[dict], db_session_factory) -> list[dict]
     """
     if not chunks or not db_session_factory:
         return []
-    from portfolio_rag.infrastructure.db.models.vault import VaultDocument
+    from portfolio_rag.infrastructure.db.models.document import Document
     from sqlmodel import select
     seen_ids: set[str] = set()
     results: list[dict] = []
@@ -54,12 +54,12 @@ async def _resolve_sources(chunks: list[dict], db_session_factory) -> list[dict]
             doc = None
             try:
                 from uuid import UUID as _UUID
-                doc = await session.get(VaultDocument, _UUID(source))
+                doc = await session.get(Document, _UUID(source))
             except (ValueError, AttributeError):
                 pass
             if doc is None:
                 doc = (await session.execute(
-                    select(VaultDocument).where(VaultDocument.slug == source)
+                    select(Document).where(Document.slug == source)
                 )).scalars().first()
             if doc and str(doc.id) not in seen_ids:
                 seen_ids.add(str(doc.id))

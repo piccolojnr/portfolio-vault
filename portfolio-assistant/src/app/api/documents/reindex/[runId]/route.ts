@@ -6,7 +6,7 @@ export async function GET(
 ) {
   const { runId } = await params;
   const res = await fetch(
-    `${RAG_BACKEND_URL}/api/v1/vault/reindex/${encodeURIComponent(runId)}`
+    `${RAG_BACKEND_URL}/api/v1/documents/reindex/${encodeURIComponent(runId)}`
   );
   const data = await res.json();
   return new Response(JSON.stringify(data), {

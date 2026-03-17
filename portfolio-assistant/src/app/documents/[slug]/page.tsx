@@ -3,7 +3,8 @@
 import dynamic from "next/dynamic";
 import { use, useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { getDocument, updateDocument, deleteDocument, triggerReindex, type VaultDocDetail } from "@/lib/vault";
+import { getDocument, updateDocument, deleteDocument, triggerReindex } from "@/lib/documents";
+import type { CorpusDocDetail as VaultDocDetail } from "@/lib/documents";
 import { Button } from "@/components/ui/button";
 
 const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
@@ -49,7 +50,7 @@ export default function VaultEditorPage({
 
   useEffect(() => {
     getDocument(slug)
-      .then((d) => { setDoc(d); setTitle(d.title); setContent(d.content); })
+      .then((d) => { setDoc(d); setTitle(d.title); setContent(d.extracted_text); })
       .catch((e: Error) => setLoadError(e.message));
   }, [slug]);
 
@@ -58,7 +59,7 @@ export default function VaultEditorPage({
     setSaving(true);
     setSaveMsg(null);
     try {
-      const updated = await updateDocument(slug, { title, content });
+      const updated = await updateDocument(slug, { title, extracted_text: content });
       setDoc(updated);
       setDirty(false);
       if (autoReindex) {
@@ -92,7 +93,7 @@ export default function VaultEditorPage({
     setDeleting(true);
     try {
       await deleteDocument(slug);
-      router.push("/vault");
+      router.push("/documents");
     } catch {
       setDeleting(false);
       setDeleteConfirm(false);
@@ -104,7 +105,7 @@ export default function VaultEditorPage({
       <div className="h-full flex items-center justify-center">
         <div className="text-center space-y-3">
           <p className="text-destructive text-sm">{loadError}</p>
-          <Button variant="ghost" size="sm" onClick={() => router.push("/vault")}>
+          <Button variant="ghost" size="sm" onClick={() => router.push("/documents")}>
             ← Back to vault
           </Button>
         </div>
@@ -117,7 +118,7 @@ export default function VaultEditorPage({
       {/* Toolbar */}
       <div className="shrink-0 border-b border-border px-4 sm:px-5 py-2 sm:py-2.5 flex items-center gap-2 sm:gap-3">
         <button
-          onClick={() => router.push("/vault")}
+          onClick={() => router.push("/documents")}
           className="text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors shrink-0 flex items-center gap-1"
         >
           <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">

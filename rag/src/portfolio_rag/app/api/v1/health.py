@@ -1,6 +1,6 @@
 """GET /api/v1/health"""
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from portfolio_rag.app.core.config import Settings, get_settings
 from portfolio_rag.app.core.dependencies import get_client
 
@@ -27,19 +27,38 @@ async def health(
     if request.app.state.db_session_factory is not None:
         try:
             from sqlmodel import select, func
-            from portfolio_rag.infrastructure.db import VaultDocument
+            from portfolio_rag.infrastructure.db import Document
             async with request.app.state.db_session_factory() as session:
-                result = await session.execute(select(func.count()).select_from(VaultDocument))
+                result = await session.execute(select(func.count()).select_from(Document))
                 doc_count = result.scalar_one()
             db_status = "ok"
         except Exception as e:
             db_status = str(e)
 
-    overall = "ok" if qdrant_status == "ok" and db_status in ("ok", "not_configured") else "degraded"
+    # Storage
+    try:
+        from portfolio_rag.infrastructure.storage import get_storage_backend
+        backend = get_storage_backend()
+        storage_provider = settings.storage_provider
+        # Probe: attempt to get a URL for a non-existent path — should return
+        # None (local) or a URL (supabase) without raising.
+        await backend.get_public_url("__health_probe__")
+        storage_status = "ok"
+    except Exception as e:
+        storage_status = str(e)
+
+    overall = (
+        "ok"
+        if qdrant_status == "ok"
+        and db_status in ("ok", "not_configured")
+        and storage_status == "ok"
+        else "degraded"
+    )
 
     return {
         "status": overall,
         "demo_mode": settings.use_demo,
         "qdrant": {"status": qdrant_status, "chunks_loaded": chunk_count},
         "database": {"status": db_status, "doc_count": doc_count},
+        "storage": {"status": storage_status, "provider": storage_provider},
     }

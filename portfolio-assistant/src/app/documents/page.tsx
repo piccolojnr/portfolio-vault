@@ -8,10 +8,10 @@ import {
   deleteDocument,
   triggerReindex,
   getReindexStatus,
-  type VaultDocSummary,
+  type CorpusDocSummary as VaultDocSummary,
   type PaginatedDocs,
   type ReindexStatus,
-} from "@/lib/vault";
+} from "@/lib/documents";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -376,7 +376,7 @@ export default function VaultPage() {
           <NewDocForm
             onCreated={(slug) => {
               setShowNew(false);
-              router.push(`/vault/${slug}`);
+              router.push(`/documents/${slug}`);
             }}
             onCancel={() => setShowNew(false)}
           />
@@ -415,7 +415,7 @@ export default function VaultPage() {
               {groups[type].map((doc, i) => (
                 <div
                   key={doc.slug}
-                  onClick={() => router.push(`/vault/${doc.slug}`)}
+                  onClick={() => router.push(`/documents/${doc.slug}`)}
                   className={`group flex items-center gap-4 px-4 py-3 cursor-pointer hover:bg-surface/80 transition-colors ${
                     i < groups[type].length - 1 ? "border-b border-border/40" : ""
                   }`}

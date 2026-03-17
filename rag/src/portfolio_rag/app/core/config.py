@@ -49,6 +49,12 @@ class Settings(BaseSettings):
     # Cost guard — pipeline run is blocked if estimated cost exceeds this (0 = no limit)
     cost_limit_usd: float = 0.0
 
+    # Storage backend for file uploads ("local" or "supabase")
+    storage_provider: str = "local"
+    supabase_storage_url: str = ""
+    supabase_storage_key: str = ""
+    storage_bucket: str = "documents"
+
     # Feature flag: when True the query endpoint uses the legacy Qdrant retriever;
     # when False it routes through LightRAG.  Defaults to True so the existing
     # Qdrant index continues to serve queries while LightRAG ingestion catches up.

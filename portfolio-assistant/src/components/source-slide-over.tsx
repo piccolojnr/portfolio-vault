@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { type SourceRef } from "@/lib/conversations";
-import { getDocument } from "@/lib/vault";
+import { getDocument } from "@/lib/documents";
 import { MarkdownMessage } from "@/components/markdown-message";
 import {
   Sheet,
@@ -33,7 +33,7 @@ export function SourceSlideOver({ source, onClose }: Props) {
     }
     setLoading(true);
     getDocument(source.slug)
-      .then((doc) => setContent(doc.content))
+      .then((doc) => setContent(doc.extracted_text))
       .catch(() => setContent("Failed to load document."))
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -3,9 +3,12 @@ Sync SQLModel Helpers for Scripts
 ===================================
 
 Provides:
-  - get_docs()             — fetch VaultDocument rows
-  - start_pipeline_run()   — insert a PipelineRun(status="running")
-  - finish_pipeline_run()  — update a PipelineRun to final status
+  - get_docs()               — fetch Document rows
+  - start_pipeline_run()     — insert a PipelineRun(status="running")
+  - finish_pipeline_run()    — update a PipelineRun to final status
+  - get_doc_by_id()          — fetch single Document by UUID
+  - update_doc_lightrag_status() — write lightrag_status to doc_metadata JSONB
+  - update_doc_file_meta()   — write file_path/file_size/file_hash to columns
 
 Creates a new engine per call (acceptable for short-lived scripts).
 """
@@ -18,21 +21,21 @@ from uuid import UUID
 from sqlalchemy import create_engine
 from sqlmodel import Session, select
 
-from portfolio_rag.infrastructure.db import PipelineRun, VaultDocument
+from portfolio_rag.infrastructure.db import Document, PipelineRun
 
 
 def _get_engine(database_url: str):
     return create_engine(database_url)
 
 
-def get_docs(database_url: str, doc_type: str | None = None) -> list[VaultDocument]:
-    """Return all vault documents, optionally filtered by type."""
+def get_docs(database_url: str, doc_type: str | None = None) -> list[Document]:
+    """Return all documents, optionally filtered by type."""
     engine = _get_engine(database_url)
     with Session(engine) as session:
-        stmt = select(VaultDocument)
+        stmt = select(Document)
         if doc_type:
-            stmt = stmt.where(VaultDocument.type == doc_type)
-        stmt = stmt.order_by(VaultDocument.created_at)
+            stmt = stmt.where(Document.type == doc_type)
+        stmt = stmt.order_by(Document.created_at)
         return session.exec(stmt).all()
 
 
@@ -58,11 +61,11 @@ def start_pipeline_run(
         return str(run.id)
 
 
-def get_doc_by_id(database_url: str, doc_id: str) -> VaultDocument | None:
-    """Fetch a single VaultDocument by its UUID primary key."""
+def get_doc_by_id(database_url: str, doc_id: str) -> Document | None:
+    """Fetch a single Document by its UUID primary key."""
     engine = _get_engine(database_url)
     with Session(engine) as session:
-        return session.get(VaultDocument, UUID(doc_id))
+        return session.get(Document, UUID(doc_id))
 
 
 def update_doc_lightrag_status(database_url: str, doc_id: str, status: str) -> None:
@@ -75,10 +78,31 @@ def update_doc_lightrag_status(database_url: str, doc_id: str, status: str) -> N
     """
     engine = _get_engine(database_url)
     with Session(engine) as session:
-        doc = session.get(VaultDocument, UUID(doc_id))
+        doc = session.get(Document, UUID(doc_id))
         if doc is None:
             return
         doc.doc_metadata = {**(doc.doc_metadata or {}), "lightrag_status": status}
+        session.add(doc)
+        session.commit()
+
+
+def update_doc_file_meta(
+    database_url: str,
+    doc_id: str,
+    *,
+    file_path: str,
+    file_size: int,
+    file_hash: str,
+) -> None:
+    """Write file_path, file_size, and file_hash to the document's columns."""
+    engine = _get_engine(database_url)
+    with Session(engine) as session:
+        doc = session.get(Document, UUID(doc_id))
+        if doc is None:
+            return
+        doc.file_path = file_path
+        doc.file_size = file_size
+        doc.file_hash = file_hash
         session.add(doc)
         session.commit()
 

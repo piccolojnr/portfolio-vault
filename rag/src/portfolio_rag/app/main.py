@@ -20,7 +20,11 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
-from portfolio_rag.app.api.v1 import health, retrieve, query, vault, pipeline, settings, conversations, export, chat, graph
+from portfolio_rag.app.api.v1 import (
+    health, retrieve, query,
+    documents, storage,
+    pipeline, settings, conversations, export, chat, graph,
+)
 from portfolio_rag.app.core.config import get_settings
 from portfolio_rag.app.core.db import open_db_engine
 from portfolio_rag.app.core.limiter import limiter
@@ -36,6 +40,7 @@ def _print_startup_banner(db_connected: bool = False) -> None:
     print(f"  Anthropic key:  {'yes' if settings.anthropic_api_key else 'no'}")
     print(f"  Qdrant URL:     {'yes' if settings.qdrant_url else 'no'}")
     print(f"  Database:       {'connected' if db_connected else 'not configured'}")
+    print(f"  Storage:        {settings.storage_provider}")
     print("=" * 60)
     print("  Docs:     http://localhost:8000/docs")
     print("  Health:   GET  http://localhost:8000/api/v1/health")
@@ -87,7 +92,8 @@ def create_app() -> FastAPI:
     v1.include_router(health.router)
     v1.include_router(retrieve.router)
     v1.include_router(query.router)
-    v1.include_router(vault.router)
+    v1.include_router(documents.router)
+    v1.include_router(storage.router)
     v1.include_router(pipeline.router)
     v1.include_router(settings.router)
     v1.include_router(conversations.router)
