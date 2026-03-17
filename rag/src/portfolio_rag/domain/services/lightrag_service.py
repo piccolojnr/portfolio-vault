@@ -43,6 +43,41 @@ CORPUS_ID = "portfolio_vault"
 _registry: dict[str, "LightRAG"] = {}
 _init_locks: dict[str, asyncio.Lock] = {}  # created lazily, one per corpus_id
 
+# ── session factory (for cost logging) ────────────────────────────────────────
+# Set once at process startup by main.py lifespan and by the worker.
+# None until set — embed logging is silently skipped when unset.
+_session_factory = None
+
+
+def set_session_factory(factory) -> None:
+    """Register the async session factory for embed cost logging.
+
+    Call once from app lifespan and from the worker startup, after
+    open_db_engine() returns.  Not thread-safe — call before any concurrent
+    embedding occurs.
+    """
+    global _session_factory
+    _session_factory = factory
+
+
+async def _log_embed_bg(token_count: int, model: str) -> None:
+    """Best-effort background task: log an embed call to ai_calls."""
+    if _session_factory is None:
+        return
+    try:
+        from portfolio_rag.domain.services.ai_calls import log_call
+        async with _session_factory() as _session:
+            await log_call(
+                _session, "embed",
+                model=model,
+                provider="openai",
+                input_tokens=token_count,
+                output_tokens=0,
+            )
+            await _session.commit()
+    except Exception:
+        pass
+
 
 # ── storage environment ───────────────────────────────────────────────────────
 
@@ -168,7 +203,9 @@ def _make_embedding_func(settings):
             # COMPAT: must be ndarray — EmbeddingFunc.__call__ calls result.size
             return np.array(_embed_demo(texts), dtype=np.float32)
         from portfolio_rag.infrastructure.llm.embedding import _embed_openai
-        vectors, _ = _embed_openai(texts, settings)
+        vectors, token_count = _embed_openai(texts, settings)
+        if token_count:
+            asyncio.ensure_future(_log_embed_bg(token_count, settings.embedding_model))
         # COMPAT: must be ndarray — EmbeddingFunc.__call__ calls result.size
         return np.array(vectors, dtype=np.float32)
 

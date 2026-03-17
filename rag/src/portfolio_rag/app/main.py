@@ -56,6 +56,8 @@ async def lifespan(app: FastAPI):
         engine, factory = await open_db_engine(settings.database_url)
         app.state.db_engine = engine
         app.state.db_session_factory = factory
+        from portfolio_rag.domain.services.lightrag_service import set_session_factory as _lr_set_sf
+        _lr_set_sf(factory)
         _print_startup_banner(db_connected=True)
     else:
         app.state.db_engine = None

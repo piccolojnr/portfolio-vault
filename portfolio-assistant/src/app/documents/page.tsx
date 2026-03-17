@@ -289,7 +289,7 @@ function ConfirmDialog({
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-const FETCH_SIZE = 200;
+const PAGE_SIZE = 50;
 const NON_TERMINAL = new Set(["pending", "processing"]);
 
 export default function DocumentsPage() {
@@ -298,13 +298,14 @@ export default function DocumentsPage() {
   const [tab, setTab] = useState<Tab>("all");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkReingestConfirm, setBulkReingestConfirm] = useState(false);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
 
   const { data, isLoading: loading, error: fetchError } = useQuery({
-    queryKey: ["documents"],
-    queryFn: () => listDocuments(1, FETCH_SIZE),
+    queryKey: ["documents", page],
+    queryFn: () => listDocuments(page, PAGE_SIZE),
     refetchInterval: (query) => {
       const items = (query.state.data as { items: CorpusDocSummary[] } | undefined)?.items ?? [];
       return items.some((d) => d.lightrag_status && NON_TERMINAL.has(d.lightrag_status)) ? 5000 : false;
@@ -314,6 +315,7 @@ export default function DocumentsPage() {
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
+  const totalPages = data?.pages ?? 1;
   const error = fetchError ? (fetchError instanceof Error ? fetchError.message : String(fetchError)) : null;
 
   const bulkReingestMut = useMutation({
@@ -321,7 +323,7 @@ export default function DocumentsPage() {
     onSuccess: () => {
       setSelected(new Set());
       setBulkReingestConfirm(false);
-      qc.invalidateQueries({ queryKey: ["documents"] });
+      qc.invalidateQueries({ queryKey: ["documents", page] });
     },
   });
 
@@ -330,7 +332,7 @@ export default function DocumentsPage() {
     onSuccess: () => {
       setSelected(new Set());
       setBulkDeleteConfirm(false);
-      qc.invalidateQueries({ queryKey: ["documents"] });
+      qc.invalidateQueries({ queryKey: ["documents", page] });
     },
   });
 
@@ -408,7 +410,7 @@ export default function DocumentsPage() {
         </div>
 
         {/* Tabs */}
-        <TabStrip tabs={tabs} active={tab} onChange={(t) => { setTab(t); setSelected(new Set()); }} />
+        <TabStrip tabs={tabs} active={tab} onChange={(t) => { setTab(t); setPage(1); setSelected(new Set()); }} />
       </div>
 
       {/* Filter bar */}
@@ -419,14 +421,14 @@ export default function DocumentsPage() {
           </svg>
           <input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             placeholder="Search…"
             className="w-full bg-surface/40 border border-border/60 rounded-lg pl-8 pr-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/40 transition-colors placeholder:text-muted-foreground/30"
           />
         </div>
         <select
           value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
+          onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
           className="bg-surface/40 border border-border/60 rounded-lg px-3 py-1.5 text-sm text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/40 transition-colors"
         >
           <option value="all">All types</option>
@@ -434,7 +436,7 @@ export default function DocumentsPage() {
         </select>
         {search || typeFilter !== "all" ? (
           <button
-            onClick={() => { setSearch(""); setTypeFilter("all"); }}
+            onClick={() => { setSearch(""); setTypeFilter("all"); setPage(1); }}
             className="text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             Clear filters
@@ -513,17 +515,35 @@ export default function DocumentsPage() {
                       return n;
                     })
                   }
-                  onRefresh={() => qc.invalidateQueries({ queryKey: ["documents"] })}
+                  onRefresh={() => qc.invalidateQueries({ queryKey: ["documents", page] })}
                 />
               ))}
             </tbody>
           </table>
         )}
 
-        {total > FETCH_SIZE && (
-          <p className="text-center text-xs text-muted-foreground/50 py-4">
-            Showing first {FETCH_SIZE} of {total} documents
-          </p>
+        {totalPages > 1 && (
+          <div className="flex items-center gap-2 justify-center py-4">
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => { setPage((p) => p - 1); setSelected(new Set()); }}
+              className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
+            >
+              ← Prev
+            </button>
+            <span className="text-[11px] font-mono text-muted-foreground/50">
+              {page} / {totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={page >= totalPages}
+              onClick={() => { setPage((p) => p + 1); setSelected(new Set()); }}
+              className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
+            >
+              Next →
+            </button>
+          </div>
         )}
       </div>
 

@@ -47,6 +47,8 @@ async def _run_worker() -> None:
 
     settings = get_settings()
     engine, factory = await open_db_engine(settings.database_url)
+    from portfolio_rag.domain.services.lightrag_service import set_session_factory as _lr_set_sf
+    _lr_set_sf(factory)
     logging.info("worker started worker_id=%s", WORKER_ID)
 
     try:

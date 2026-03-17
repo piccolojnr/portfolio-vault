@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getAiCalls, getAiCallStats, type AiCall } from "@/lib/ai-calls";
+import { getAiCalls, getAiCallStats } from "@/lib/ai-calls";
 import Link from "next/link";
 
 const CALL_TYPES = [
@@ -110,8 +110,10 @@ export default function AiCallsPage() {
   });
 
   const totalTokens =
-    stats?.by_type.reduce((s, r) => s + Number(r.input_tokens) + Number(r.output_tokens), 0) ??
-    0;
+    stats?.by_type.reduce(
+      (s, r) => s + Number(r.input_tokens) + Number(r.output_tokens),
+      0,
+    ) ?? 0;
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
