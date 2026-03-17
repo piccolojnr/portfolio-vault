@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -239,11 +240,6 @@ export default function IngestPage() {
     unsupported: false,
   });
 
-  const filesRef = useRef<IngestFile[]>([]);
-  useEffect(() => {
-    filesRef.current = files;
-  }, [files]);
-
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dirInputRef = useRef<HTMLInputElement>(null);
 
@@ -381,36 +377,36 @@ export default function IngestPage() {
 
   // ── Polling ────────────────────────────────────────────────────────────────
 
+  const pendingDocIds = useMemo(
+    () => files.filter((e) => e.docId && !isTerminal(e.processingStatus)).map((e) => e.docId!),
+    [files],
+  );
+
+  const { data: statusUpdates } = useQuery({
+    queryKey: ["processing-status", pendingDocIds],
+    queryFn: async () => {
+      const results = await Promise.allSettled(pendingDocIds.map((id) => getDocumentStatus(id)));
+      return results.map((r, i) => ({
+        docId: pendingDocIds[i],
+        status: r.status === "fulfilled" ? r.value.status : undefined,
+        error: r.status === "fulfilled" ? r.value.error : undefined,
+      }));
+    },
+    enabled: phase === "processing" && pendingDocIds.length > 0,
+    refetchInterval: POLL_MS,
+    refetchIntervalInBackground: false,
+  });
+
   useEffect(() => {
-    if (phase !== "processing") return;
-
-    const iv = setInterval(async () => {
-      // Read latest files from ref so we always see updated processingStatus
-      const pending = filesRef.current.filter(
-        (e) => e.docId && !isTerminal(e.processingStatus),
-      );
-      // Don't clear the interval here — let the useEffect cleanup handle it so
-      // that a "Retry" on a failed file resumes polling without restarting the phase.
-      if (!pending.length) return;
-
-      for (const entry of pending) {
-        try {
-          const { status, error } = await getDocumentStatus(entry.docId!);
-          setFiles((p) =>
-            p.map((e) =>
-              e.docId === entry.docId
-                ? { ...e, processingStatus: status, processingError: error }
-                : e,
-            ),
-          );
-        } catch {
-          /* keep polling */
-        }
-      }
-    }, POLL_MS);
-
-    return () => clearInterval(iv);
-  }, [phase]);
+    if (!statusUpdates) return;
+    setFiles((p) =>
+      p.map((e) => {
+        const r = statusUpdates.find((u) => u.docId === e.docId);
+        if (!r || !r.status) return e;
+        return { ...e, processingStatus: r.status, processingError: r.error ?? undefined };
+      }),
+    );
+  }, [statusUpdates]);
 
   // ── Derived ────────────────────────────────────────────────────────────────
 

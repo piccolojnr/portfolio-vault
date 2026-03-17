@@ -2,9 +2,9 @@
 
 Routing:
   settings.use_legacy_retrieval = True  (default during transition)
-      → Qdrant vector search + LLM generation
+      -> Qdrant vector search + LLM generation
   settings.use_legacy_retrieval = False
-      → LightRAG hybrid graph+vector query
+      -> LightRAG hybrid graph+vector query
 
 Switch via the settings table for a live, zero-downtime cutover.
 Business logic lives in portfolio_rag.domain.services.query.
@@ -22,6 +22,7 @@ from portfolio_rag.app.core.db import get_db_conn
 from portfolio_rag.app.core.dependencies import get_live_settings
 from portfolio_rag.domain.models.rag import QueryRequest, QueryResponse
 from portfolio_rag.domain.services import query as svc
+from portfolio_rag.domain.services.ai_calls import log_call
 
 router = APIRouter(tags=["rag"])
 
@@ -35,16 +36,23 @@ async def query_endpoint(
     settings: Settings = Depends(get_live_settings),
 ):
     try:
-        response, log = await svc.run_query(request.question, request.n_results, settings)
+        response, usage = await svc.run_query(request.question, request.n_results, settings)
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    # Persist cost log best-effort — never fail the response over a logging error
-    if log is not None:
+    # Log AI call best-effort — never fail the response over a logging error
+    if usage:
         try:
-            session.add(log)
+            await log_call(
+                session, "query",
+                model=usage.get("model", ""),
+                provider=usage.get("provider", ""),
+                input_tokens=usage.get("input_tokens"),
+                output_tokens=usage.get("output_tokens"),
+                cost_usd=usage.get("cost_usd"),
+            )
             await session.commit()
         except Exception:
             pass

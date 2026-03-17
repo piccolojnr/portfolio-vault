@@ -178,6 +178,7 @@ async def _stream_llm(
 
     system_prompt = getattr(settings, "system_prompt", "You are a helpful career assistant.")
     accumulated = ""
+    usage_dict: dict | None = None
 
     try:
         if settings.anthropic_api_key:
@@ -192,6 +193,13 @@ async def _stream_llm(
                 async for text in stream.text_stream:
                     accumulated += text
                     yield _sse({"text": text})
+                final = await stream.get_final_message()
+                usage_dict = {
+                    "provider": "anthropic",
+                    "model": settings.anthropic_model,
+                    "input_tokens": final.usage.input_tokens,
+                    "output_tokens": final.usage.output_tokens,
+                }
         else:
             from openai import AsyncOpenAI
             client = AsyncOpenAI(api_key=settings.openai_api_key)
@@ -201,12 +209,21 @@ async def _stream_llm(
                 max_tokens=MAX_TOKENS,
                 messages=full_messages,
                 stream=True,
+                stream_options={"include_usage": True},
             )
             async for chunk in stream:
-                text = chunk.choices[0].delta.content or ""
-                if text:
-                    accumulated += text
-                    yield _sse({"text": text})
+                if chunk.choices:
+                    text = chunk.choices[0].delta.content or ""
+                    if text:
+                        accumulated += text
+                        yield _sse({"text": text})
+                if getattr(chunk, "usage", None):
+                    usage_dict = {
+                        "provider": "openai",
+                        "model": settings.openai_model,
+                        "input_tokens": chunk.usage.prompt_tokens,
+                        "output_tokens": chunk.usage.completion_tokens,
+                    }
 
     except Exception as err:
         stage = "llm_stream" if accumulated else "llm_start"
@@ -231,6 +248,24 @@ async def _stream_llm(
             }
         })
     yield _sse({"sources": sources})
+
+    # Log AI call best-effort
+    if usage_dict and db_session_factory:
+        try:
+            from portfolio_rag.domain.services.ai_calls import log_call
+            async with db_session_factory() as _session:
+                await log_call(
+                    _session, "chat",
+                    model=usage_dict["model"],
+                    provider=usage_dict["provider"],
+                    input_tokens=usage_dict["input_tokens"],
+                    output_tokens=usage_dict["output_tokens"],
+                    conversation_id=conv_id,
+                )
+                await _session.commit()
+        except Exception:
+            pass
+
     yield "data: [DONE]\n\n"
 
 

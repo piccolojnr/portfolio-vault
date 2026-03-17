@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from portfolio_rag.app.core.db import get_db_conn
 from portfolio_rag.domain.services import job_queue
+from portfolio_rag.domain.services.ai_calls import log_call
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -70,6 +71,71 @@ async def retry_job(job_id: str, session: DBSession):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"status": "queued"}
+
+
+# ── AI calls ──────────────────────────────────────────────────────────────────
+
+@router.get("/ai-calls")
+async def list_ai_calls(
+    session: DBSession,
+    call_type: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+):
+    filters = "WHERE call_type = :call_type" if call_type else ""
+    params: dict = {"limit": limit, "offset": offset}
+    if call_type:
+        params["call_type"] = call_type
+    result = await session.execute(
+        text(f"""
+            SELECT * FROM ai_calls
+            {filters}
+            ORDER BY created_at DESC
+            LIMIT :limit OFFSET :offset
+        """),
+        params,
+    )
+    return [_serialise_job(dict(r)) for r in result.mappings().all()]
+
+
+@router.get("/ai-calls/stats")
+async def ai_call_stats(session: DBSession):
+    # Counts + cost grouped by call_type
+    by_type = await session.execute(
+        text("""
+            SELECT call_type,
+                   COUNT(*)          AS calls,
+                   SUM(cost_usd)     AS cost_usd,
+                   SUM(input_tokens) AS input_tokens,
+                   SUM(output_tokens)AS output_tokens
+            FROM ai_calls
+            GROUP BY call_type
+            ORDER BY cost_usd DESC NULLS LAST
+        """)
+    )
+    # Overall totals
+    totals = await session.execute(
+        text("""
+            SELECT COUNT(*) AS total_calls,
+                   COALESCE(SUM(cost_usd), 0) AS total_cost_usd
+            FROM ai_calls
+        """)
+    )
+    t = totals.mappings().first()
+    return {
+        "total_calls": t["total_calls"],
+        "total_cost_usd": float(t["total_cost_usd"]),
+        "by_type": [
+            {
+                "call_type": r["call_type"],
+                "calls": r["calls"],
+                "cost_usd": float(r["cost_usd"]) if r["cost_usd"] else 0.0,
+                "input_tokens": r["input_tokens"] or 0,
+                "output_tokens": r["output_tokens"] or 0,
+            }
+            for r in by_type.mappings().all()
+        ],
+    }
 
 
 # ── Serialisation helper ───────────────────────────────────────────────────────

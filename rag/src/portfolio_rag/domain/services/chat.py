@@ -90,7 +90,11 @@ async def build_event_stream(
             )
 
     # ── Step 3: Classify intent ───────────────────────────────────────────────
-    classification = await classify_intent(message, history, chat_settings)
+    classification = await classify_intent(
+        message, history, chat_settings,
+        db_session_factory=db_session_factory,
+        conversation_id=conversation_id,
+    )
 
     # ── Steps 4-5: Stream + background summarisation ──────────────────────────
     async def _generate() -> AsyncGenerator[str, None]:

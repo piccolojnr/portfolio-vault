@@ -75,11 +75,11 @@ async def _run_summarization(
     prompt = _build_prompt(dropped_messages, existing_summary)
 
     if settings.anthropic_api_key:
-        new_summary = await _summarise_with_anthropic(
+        new_summary, _ = await _summarise_with_anthropic(
             prompt, settings.anthropic_api_key, settings.summarizer_anthropic_model
         )
     else:
-        new_summary = await _summarise_with_openai(
+        new_summary, _ = await _summarise_with_openai(
             prompt, settings.openai_api_key, settings.summarizer_openai_model
         )
 
@@ -115,7 +115,9 @@ def _build_prompt(dropped: list, existing_summary: str | None) -> str:
     )
 
 
-async def _summarise_with_anthropic(prompt: str, api_key: str, model: str) -> str:
+async def _summarise_with_anthropic(
+    prompt: str, api_key: str, model: str
+) -> tuple[str, dict]:
     import anthropic
     client = anthropic.AsyncAnthropic(api_key=api_key)
     response = await client.messages.create(
@@ -123,10 +125,19 @@ async def _summarise_with_anthropic(prompt: str, api_key: str, model: str) -> st
         max_tokens=256,
         messages=[{"role": "user", "content": prompt}],
     )
-    return "".join(b.text for b in response.content if b.type == "text").strip()
+    text = "".join(b.text for b in response.content if b.type == "text").strip()
+    usage = {
+        "provider": "anthropic",
+        "model": model,
+        "input_tokens": response.usage.input_tokens,
+        "output_tokens": response.usage.output_tokens,
+    }
+    return text, usage
 
 
-async def _summarise_with_openai(prompt: str, api_key: str, model: str) -> str:
+async def _summarise_with_openai(
+    prompt: str, api_key: str, model: str
+) -> tuple[str, dict]:
     from openai import AsyncOpenAI
     client = AsyncOpenAI(api_key=api_key)
     response = await client.chat.completions.create(
@@ -134,4 +145,11 @@ async def _summarise_with_openai(prompt: str, api_key: str, model: str) -> str:
         max_tokens=256,
         messages=[{"role": "user", "content": prompt}],
     )
-    return (response.choices[0].message.content or "").strip()
+    text = (response.choices[0].message.content or "").strip()
+    usage = {
+        "provider": "openai",
+        "model": model,
+        "input_tokens": response.usage.prompt_tokens if response.usage else None,
+        "output_tokens": response.usage.completion_tokens if response.usage else None,
+    }
+    return text, usage

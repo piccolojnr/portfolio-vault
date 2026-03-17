@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   listDocuments,
   deleteDocument,
@@ -86,11 +87,10 @@ interface RowProps {
   doc: CorpusDocSummary;
   selected: boolean;
   onSelect: (v: boolean) => void;
-  onDeleted: () => void;
-  onReingested: () => void;
+  onRefresh: () => void;
 }
 
-function DocRow({ doc, selected, onSelect, onDeleted, onReingested }: RowProps) {
+function DocRow({ doc, selected, onSelect, onRefresh }: RowProps) {
   const router = useRouter();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmReingest, setConfirmReingest] = useState(false);
@@ -100,7 +100,7 @@ function DocRow({ doc, selected, onSelect, onDeleted, onReingested }: RowProps) 
   async function handleDelete(e: React.MouseEvent) {
     e.stopPropagation();
     setDeleting(true);
-    try { await deleteDocument(doc.slug); onDeleted(); }
+    try { await deleteDocument(doc.slug); onRefresh(); }
     catch { setDeleting(false); setConfirmDelete(false); }
   }
 
@@ -108,7 +108,7 @@ function DocRow({ doc, selected, onSelect, onDeleted, onReingested }: RowProps) 
     e.stopPropagation();
     setReingesting(true);
     setConfirmReingest(false);
-    try { await reIngestDocument(doc.id); onReingested(); }
+    try { await reIngestDocument(doc.id); onRefresh(); }
     catch { /* swallow — status will reflect failure */ }
     finally { setReingesting(false); }
   }
@@ -294,10 +294,7 @@ const NON_TERMINAL = new Set(["pending", "processing"]);
 
 export default function DocumentsPage() {
   const router = useRouter();
-  const [items, setItems] = useState<CorpusDocSummary[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>("all");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -305,28 +302,37 @@ export default function DocumentsPage() {
   const [bulkReingestConfirm, setBulkReingestConfirm] = useState(false);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
 
-  const load = useCallback(async () => {
-    try {
-      const data = await listDocuments(1, FETCH_SIZE);
-      setItems(data.items);
-      setTotal(data.total);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const { data, isLoading: loading, error: fetchError } = useQuery({
+    queryKey: ["documents"],
+    queryFn: () => listDocuments(1, FETCH_SIZE),
+    refetchInterval: (query) => {
+      const items = (query.state.data as { items: CorpusDocSummary[] } | undefined)?.items ?? [];
+      return items.some((d) => d.lightrag_status && NON_TERMINAL.has(d.lightrag_status)) ? 5000 : false;
+    },
+    staleTime: 10_000,
+  });
 
-  useEffect(() => { load(); }, [load]);
+  const items = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const error = fetchError ? (fetchError instanceof Error ? fetchError.message : String(fetchError)) : null;
 
-  // Auto-poll while any doc is non-terminal
-  useEffect(() => {
-    const hasLive = items.some((d) => d.lightrag_status && NON_TERMINAL.has(d.lightrag_status));
-    if (!hasLive) return;
-    const t = setTimeout(load, 5000);
-    return () => clearTimeout(t);
-  }, [items, load]);
+  const bulkReingestMut = useMutation({
+    mutationFn: (ids: string[]) => Promise.allSettled(ids.map(reIngestDocument)),
+    onSuccess: () => {
+      setSelected(new Set());
+      setBulkReingestConfirm(false);
+      qc.invalidateQueries({ queryKey: ["documents"] });
+    },
+  });
+
+  const bulkDeleteMut = useMutation({
+    mutationFn: (slugs: string[]) => Promise.allSettled(slugs.map(deleteDocument)),
+    onSuccess: () => {
+      setSelected(new Set());
+      setBulkDeleteConfirm(false);
+      qc.invalidateQueries({ queryKey: ["documents"] });
+    },
+  });
 
   // ── Filtering ──────────────────────────────────────────────────────────────
 
@@ -368,20 +374,6 @@ export default function DocumentsPage() {
   }
 
   const selectedItems = items.filter((d) => selected.has(d.id));
-
-  async function handleBulkReingest() {
-    setBulkReingestConfirm(false);
-    await Promise.allSettled(selectedItems.map((d) => reIngestDocument(d.id)));
-    setSelected(new Set());
-    await load();
-  }
-
-  async function handleBulkDelete() {
-    setBulkDeleteConfirm(false);
-    await Promise.allSettled(selectedItems.map((d) => deleteDocument(d.slug)));
-    setSelected(new Set());
-    await load();
-  }
 
   return (
     <div className="h-full flex flex-col bg-bg text-foreground overflow-hidden">
@@ -521,12 +513,7 @@ export default function DocumentsPage() {
                       return n;
                     })
                   }
-                  onDeleted={() => {
-                    setItems((prev) => prev.filter((d) => d.id !== doc.id));
-                    setTotal((t) => t - 1);
-                    setSelected((s) => { const n = new Set(s); n.delete(doc.id); return n; });
-                  }}
-                  onReingested={load}
+                  onRefresh={() => qc.invalidateQueries({ queryKey: ["documents"] })}
                 />
               ))}
             </tbody>
@@ -556,7 +543,7 @@ export default function DocumentsPage() {
           title={`Re-ingest ${selected.size} document${selected.size !== 1 ? "s" : ""}?`}
           body="This will rebuild the chunks, embeddings, and knowledge graph for each selected document. Previous index entries will be replaced."
           confirm="Re-ingest"
-          onConfirm={handleBulkReingest}
+          onConfirm={() => bulkReingestMut.mutate(selectedItems.map((d) => d.id))}
           onCancel={() => setBulkReingestConfirm(false)}
         />
       )}
@@ -565,7 +552,7 @@ export default function DocumentsPage() {
           title={`Delete ${selected.size} document${selected.size !== 1 ? "s" : ""}?`}
           body="This will permanently remove the selected documents and their text content. This cannot be undone."
           confirm="Delete"
-          onConfirm={handleBulkDelete}
+          onConfirm={() => bulkDeleteMut.mutate(selectedItems.map((d) => d.slug))}
           onCancel={() => setBulkDeleteConfirm(false)}
         />
       )}

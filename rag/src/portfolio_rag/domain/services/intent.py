@@ -58,7 +58,14 @@ def recent_history(history: list[dict], n: int = 4) -> list[dict]:
     return history[-n:]
 
 
-async def classify_intent(message: str, history: list[dict], settings) -> Classification:
+async def classify_intent(
+    message: str,
+    history: list[dict],
+    settings,
+    *,
+    db_session_factory=None,
+    conversation_id: str | None = None,
+) -> Classification:
     """
     Classifies a user message into an intent + retrieval metadata.
 
@@ -84,11 +91,11 @@ async def classify_intent(message: str, history: list[dict], settings) -> Classi
 
     try:
         if settings.anthropic_api_key:
-            text = await _classify_with_anthropic(
+            text, usage = await _classify_with_anthropic(
                 user_content, settings.anthropic_api_key, settings.classifier_anthropic_model
             )
         else:
-            text = await _classify_with_openai(
+            text, usage = await _classify_with_openai(
                 user_content, settings.openai_api_key, settings.classifier_openai_model
             )
 
@@ -104,13 +111,31 @@ async def classify_intent(message: str, history: list[dict], settings) -> Classi
             "[intent] %s | needs_rag=%s | prior_doc=%s",
             result.intent, result.needs_rag, result.has_prior_document,
         )
+
+        # Log best-effort
+        if db_session_factory and usage:
+            try:
+                from portfolio_rag.domain.services.ai_calls import log_call
+                async with db_session_factory() as _session:
+                    await log_call(
+                        _session, "intent",
+                        model=usage["model"],
+                        provider=usage["provider"],
+                        input_tokens=usage["input_tokens"],
+                        output_tokens=usage["output_tokens"],
+                        conversation_id=conversation_id,
+                    )
+                    await _session.commit()
+            except Exception:
+                pass
+
         return result
     except Exception as err:
         logger.warning("[intent] Classification failed, using fallback: %s", err)
         return fallback
 
 
-async def _classify_with_anthropic(user_content: str, api_key: str, model: str) -> str:
+async def _classify_with_anthropic(user_content: str, api_key: str, model: str) -> tuple[str, dict]:
     import anthropic
     client = anthropic.AsyncAnthropic(api_key=api_key)
     response = await client.messages.create(
@@ -119,10 +144,17 @@ async def _classify_with_anthropic(user_content: str, api_key: str, model: str) 
         system=CLASSIFIER_SYSTEM,
         messages=[{"role": "user", "content": user_content}],
     )
-    return "".join(b.text for b in response.content if b.type == "text")
+    text = "".join(b.text for b in response.content if b.type == "text")
+    usage = {
+        "model": model,
+        "provider": "anthropic",
+        "input_tokens": response.usage.input_tokens,
+        "output_tokens": response.usage.output_tokens,
+    }
+    return text, usage
 
 
-async def _classify_with_openai(user_content: str, api_key: str, model: str) -> str:
+async def _classify_with_openai(user_content: str, api_key: str, model: str) -> tuple[str, dict]:
     from openai import AsyncOpenAI
     client = AsyncOpenAI(api_key=api_key)
     response = await client.chat.completions.create(
@@ -133,4 +165,11 @@ async def _classify_with_openai(user_content: str, api_key: str, model: str) -> 
             {"role": "user", "content": user_content},
         ],
     )
-    return response.choices[0].message.content or ""
+    text = response.choices[0].message.content or ""
+    usage = {
+        "model": model,
+        "provider": "openai",
+        "input_tokens": response.usage.prompt_tokens if response.usage else None,
+        "output_tokens": response.usage.completion_tokens if response.usage else None,
+    }
+    return text, usage

@@ -103,11 +103,11 @@ async def handle_summarise_conversation(payload: dict) -> None:
     prompt = _build_prompt(messages, existing_summary)
 
     if settings.anthropic_api_key:
-        new_summary = await _summarise_with_anthropic(
+        new_summary, usage = await _summarise_with_anthropic(
             prompt, settings.anthropic_api_key, settings.summarizer_anthropic_model
         )
     else:
-        new_summary = await _summarise_with_openai(
+        new_summary, usage = await _summarise_with_openai(
             prompt, settings.openai_api_key, settings.summarizer_openai_model
         )
 
@@ -120,6 +120,17 @@ async def handle_summarise_conversation(payload: dict) -> None:
                 new_summary,
                 UUID(newest_trimmed_id),
             )
+            # Log AI call in the same transaction
+            from portfolio_rag.domain.services.ai_calls import log_call
+            await log_call(
+                session, "summarise",
+                model=usage["model"],
+                provider=usage["provider"],
+                input_tokens=usage.get("input_tokens"),
+                output_tokens=usage.get("output_tokens"),
+                conversation_id=conv_id,
+            )
+            await session.commit()
     finally:
         await engine.dispose()
 
