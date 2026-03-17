@@ -15,10 +15,9 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from portfolio_rag.app.core.config import get_settings
 from portfolio_rag.app.core.db import get_db_conn
 from portfolio_rag.domain.models.document import (
     CorpusDocCreate,
@@ -31,6 +30,7 @@ from portfolio_rag.domain.models.document import (
     PaginatedDocs,
 )
 from portfolio_rag.domain.services import document as svc
+from portfolio_rag.domain.services import job_queue
 from portfolio_rag.infrastructure.storage import get_storage_backend
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -68,7 +68,6 @@ async def check_duplicates_endpoint(body: DuplicateCheckRequest, session: DBSess
 @router.post("/upload", status_code=201)
 async def upload_document(
     session: DBSession,
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     corpus_id: str = Form(DEFAULT_CORPUS_ID),
     file_hash: str = Form(...),
@@ -126,7 +125,11 @@ async def upload_document(
             slug = f"{base_slug}-{counter}"
             counter += 1
 
-    background_tasks.add_task(_run_ingest, str(doc.id), get_settings())
+    await job_queue.enqueue(
+        session, "ingest_document",
+        {"document_id": str(doc.id), "corpus_id": corpus_id},
+    )
+    await session.commit()
     return {"id": str(doc.id), "slug": doc.slug, "title": doc.title}
 
 
@@ -177,9 +180,7 @@ async def get_document_status(doc_id: str, session: DBSession):
 
 
 @router.post("/{doc_id}/reingest", status_code=202)
-async def reingest_document(
-    doc_id: str, background_tasks: BackgroundTasks, session: DBSession
-):
+async def reingest_document(doc_id: str, session: DBSession):
     try:
         doc = await svc.get_document_by_id(session, doc_id)
     except LookupError as e:
@@ -190,22 +191,12 @@ async def reingest_document(
     session.add(doc)
     await session.commit()
 
-    background_tasks.add_task(_run_ingest, doc_id, get_settings())
+    await job_queue.enqueue(
+        session, "reingest_document",
+        {"document_id": doc_id, "corpus_id": doc.corpus_id or "portfolio_vault"},
+    )
+    await session.commit()
     return {"status": "queued"}
-
-
-# ── Background helper ──────────────────────────────────────────────────────────
-
-async def _run_ingest(doc_id: str, settings) -> None:
-    import logging
-    logger = logging.getLogger(__name__)
-    from portfolio_rag.domain.services.ingestion_service import ingest_document
-    logger.info("[ingest] starting doc_id=%s", doc_id)
-    try:
-        await ingest_document(doc_id, settings)
-        logger.info("[ingest] completed doc_id=%s", doc_id)
-    except Exception:
-        logger.exception("[ingest] failed doc_id=%s", doc_id)
 
 
 # ── Response helpers ───────────────────────────────────────────────────────────

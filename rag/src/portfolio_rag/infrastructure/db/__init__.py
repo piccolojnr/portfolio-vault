@@ -12,8 +12,9 @@ from portfolio_rag.infrastructure.db.models.pipeline import PipelineRun
 from portfolio_rag.infrastructure.db.models.settings import AppSetting
 from portfolio_rag.infrastructure.db.models.query import QueryLog
 from portfolio_rag.infrastructure.db.models.conversation import Conversation, Message
+from portfolio_rag.infrastructure.db.models.job import Job
 
 __all__ = [
     "Document", "PipelineRun", "AppSetting", "QueryLog", "utcnow",
-    "Conversation", "Message",
+    "Conversation", "Message", "Job",
 ]

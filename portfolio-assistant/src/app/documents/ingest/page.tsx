@@ -16,6 +16,7 @@ const CORPUS_ID = "portfolio_vault";
 const POLL_MS = 3000;
 const TERMINAL = new Set(["ready", "failed"]);
 const SUPPORTED = new Set(["md", "txt"]);
+const DIR_FILE_LIMIT = 500;
 
 function isTerminal(s?: string) {
   return s != null && TERMINAL.has(s);
@@ -213,11 +214,25 @@ const TD = ({
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+interface DirOverflow {
+  total: number;
+  supported: number;
+  pendingFiles: File[];
+}
+
+// Split an array into chunks of size n
+function chunk<T>(arr: T[], n: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+  return out;
+}
+
 export default function IngestPage() {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("idle");
   const [files, setFiles] = useState<IngestFile[]>([]);
   const [hashProgress, setHashProgress] = useState({ done: 0, total: 0 });
+  const [dirOverflow, setDirOverflow] = useState<DirOverflow | null>(null);
   const [openSections, setOpenSections] = useState({
     ready: true,
     duplicate: false,
@@ -236,59 +251,90 @@ export default function IngestPage() {
     setOpenSections((s) => ({ ...s, [k]: !s[k] }));
   }
 
-  // ── Hashing + duplicate check ──────────────────────────────────────────────
+  // ── Core processing: batched hash + duplicate check ────────────────────────
 
-  const handleFiles = useCallback(async (rawFiles: FileList) => {
-    const all = Array.from(rawFiles);
-    if (!all.length) return;
-
-    setPhase("hashing");
-    setHashProgress({ done: 0, total: all.length });
+  const processFiles = useCallback(async (inputFiles: File[]) => {
+    const capped = inputFiles.slice(0, DIR_FILE_LIMIT);
+    setPhase("checking");
+    setHashProgress({ done: 0, total: capped.length });
+    setDirOverflow(null);
     setOpenSections({ ready: true, duplicate: false, unsupported: false });
 
-    const entries: IngestFile[] = [];
-    for (let i = 0; i < all.length; i++) {
-      const f = all[i];
-      const hash = await hashFile(f);
-      const rp =
-        (f as File & { webkitRelativePath?: string }).webkitRelativePath ||
-        f.name;
-      entries.push({
-        file: f,
-        relativePath: rp,
-        directory: getDir(rp),
-        hash,
-        checked: SUPPORTED.has(getExt(f.name)),
-        uploadStatus: "waiting",
-      });
-      setHashProgress({ done: i + 1, total: all.length });
-    }
+    const allEntries: IngestFile[] = [];
 
-    setPhase("checking");
-    const results = await checkDuplicates(
-      CORPUS_ID,
-      entries.map((e) => ({
-        filename: e.file.name,
-        hash: e.hash!,
-        size: e.file.size,
-        mimetype: guessMimetype(e.file),
-      })),
-    );
+    for (const batch of chunk(capped, 50)) {
+      const batchEntries: IngestFile[] = [];
+      for (const f of batch) {
+        const hash = await hashFile(f);
+        const rp =
+          (f as File & { webkitRelativePath?: string }).webkitRelativePath ||
+          f.name;
+        batchEntries.push({
+          file: f,
+          relativePath: rp,
+          directory: getDir(rp),
+          hash,
+          checked: true,
+          uploadStatus: "waiting",
+        });
+      }
 
-    const map = new Map(results.map((r) => [r.hash, r]));
-    setFiles(
-      entries.map((e) => {
+      const results = await checkDuplicates(
+        CORPUS_ID,
+        batchEntries.map((e) => ({
+          filename: e.file.name,
+          hash: e.hash!,
+          size: e.file.size,
+          mimetype: guessMimetype(e.file),
+        })),
+      );
+
+      const map = new Map(results.map((r) => [r.hash, r]));
+      for (const e of batchEntries) {
         const r = map.get(e.hash!);
-        return {
+        allEntries.push({
           ...e,
           checkStatus: r?.status,
           existingTitle: r?.existing_title,
           checked: r?.status === "new",
-        };
-      }),
-    );
+        });
+      }
+
+      setHashProgress({ done: allEntries.length, total: capped.length });
+    }
+
+    setFiles(allEntries);
     setPhase("reviewing");
   }, []);
+
+  // ── Hashing + duplicate check ──────────────────────────────────────────────
+
+  const handleFiles = useCallback(
+    async (rawFiles: FileList, fromDir = false) => {
+      const all = Array.from(rawFiles);
+      if (!all.length) return;
+
+      if (fromDir) {
+        const supportedFiles = all
+          .filter((f) => SUPPORTED.has(getExt(f.name)))
+          .sort((a, b) => a.name.localeCompare(b.name));
+
+        if (supportedFiles.length > DIR_FILE_LIMIT) {
+          setDirOverflow({
+            total: all.length,
+            supported: supportedFiles.length,
+            pendingFiles: supportedFiles,
+          });
+          return;
+        }
+
+        await processFiles(supportedFiles);
+      } else {
+        await processFiles(all);
+      }
+    },
+    [processFiles],
+  );
 
   // ── Upload ─────────────────────────────────────────────────────────────────
 
@@ -424,7 +470,7 @@ export default function IngestPage() {
         {...({
           webkitdirectory: "",
         } as React.InputHTMLAttributes<HTMLInputElement>)}
-        onChange={(e) => e.target.files && handleFiles(e.target.files)}
+        onChange={(e) => e.target.files && handleFiles(e.target.files, true)}
       />
 
       <div className="h-full flex flex-col bg-bg text-foreground overflow-hidden">
@@ -467,8 +513,56 @@ export default function IngestPage() {
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-6 py-6">
+          {/* ── Directory overflow warning ── */}
+          {phase === "idle" && dirOverflow && (
+            <div className="max-w-md mx-auto space-y-4">
+              <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 px-5 py-4 space-y-3">
+                <p className="text-sm font-medium text-yellow-300">
+                  Directory too large for browser ingestion
+                </p>
+                <p className="text-[12px] text-yellow-300/70">
+                  This directory contains{" "}
+                  <span className="font-mono">
+                    {dirOverflow.total.toLocaleString()}
+                  </span>{" "}
+                  files (
+                  <span className="font-mono">
+                    {dirOverflow.supported.toLocaleString()}
+                  </span>{" "}
+                  supported types found). Browser ingestion is limited to{" "}
+                  <span className="font-mono">{DIR_FILE_LIMIT}</span> files at a
+                  time.
+                </p>
+                <p className="text-[12px] text-yellow-300/70">
+                  For large directories, use the CLI tool:
+                </p>
+                <pre className="text-[11px] font-mono bg-black/30 rounded px-3 py-2 text-yellow-200/80 overflow-x-auto">
+                  {`python ingest_cli.py --corpus-id <id> --path ./your-directory --limit 500`}
+                </pre>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setDirOverflow(null)}
+                    className="px-3 py-1.5 text-[12px] rounded-lg border border-border/40 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      processFiles(dirOverflow.pendingFiles)
+                    }
+                    className="px-3 py-1.5 text-[12px] rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors"
+                  >
+                    Ingest first {DIR_FILE_LIMIT.toLocaleString()} files
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ── Step 1: Select ── */}
-          {phase === "idle" && (
+          {phase === "idle" && !dirOverflow && (
             <div className="max-w-md mx-auto space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <button
@@ -534,19 +628,17 @@ export default function IngestPage() {
                 <span className="text-sm text-muted-foreground">
                   {phase === "hashing"
                     ? `Hashing ${hashProgress.done} / ${hashProgress.total} files…`
-                    : "Checking for duplicates…"}
+                    : `Checking for duplicates… ${hashProgress.done} / ${hashProgress.total} files scanned`}
                 </span>
               </div>
-              {phase === "hashing" && (
-                <div className="h-1.5 rounded-full bg-muted/30 overflow-hidden">
-                  <div
-                    className="h-full bg-primary/70 rounded-full transition-all"
-                    style={{
-                      width: `${hashProgress.total ? (hashProgress.done / hashProgress.total) * 100 : 0}%`,
-                    }}
-                  />
-                </div>
-              )}
+              <div className="h-1.5 rounded-full bg-muted/30 overflow-hidden">
+                <div
+                  className="h-full bg-primary/70 rounded-full transition-all"
+                  style={{
+                    width: `${hashProgress.total ? (hashProgress.done / hashProgress.total) * 100 : 0}%`,
+                  }}
+                />
+              </div>
             </div>
           )}
 
@@ -930,6 +1022,7 @@ export default function IngestPage() {
                 onClick={() => {
                   setPhase("idle");
                   setFiles([]);
+                  setDirOverflow(null);
                 }}
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors"
               >

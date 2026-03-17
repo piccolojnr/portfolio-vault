@@ -28,9 +28,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from portfolio_rag.app.core.config import Settings
 from portfolio_rag.domain.services import conversations as conv_svc
 from portfolio_rag.domain.services import settings as settings_svc
+from portfolio_rag.domain.services import job_queue
 from portfolio_rag.shared.context import inject_summary, trim_to_token_budget
 from portfolio_rag.domain.services.intent import classify_intent
-from portfolio_rag.domain.services.summarizer import maybe_trigger_summarization
+from portfolio_rag.domain.services.summarizer import MIN_DROPPED_TO_SUMMARISE
 from portfolio_rag.domain.services import chat_pipeline
 
 
@@ -103,15 +104,23 @@ async def build_event_stream(
         ):
             yield event
 
-        if summary_trigger:
-            maybe_trigger_summarization(
-                conv_id=summary_trigger["conv_id"],
-                dropped_messages=summary_trigger["dropped_messages"],
-                newest_trimmed_id=summary_trigger["newest_trimmed_id"],
-                existing_summary=summary_trigger["existing_summary"],
-                summarised_up_to_id=summary_trigger["summarised_up_to_id"],
-                settings=chat_settings,
-                db_session_factory=db_session_factory,
-            )
+        if (
+            summary_trigger
+            and summary_trigger["newest_trimmed_id"]
+            and summary_trigger["newest_trimmed_id"] != summary_trigger["summarised_up_to_id"]
+            and len(summary_trigger["dropped_messages"]) > MIN_DROPPED_TO_SUMMARISE
+        ):
+            payload = {
+                "conversation_id": summary_trigger["conv_id"],
+                "messages_to_summarise": [
+                    {"role": m.role, "content": m.content}
+                    for m in summary_trigger["dropped_messages"]
+                ],
+                "existing_summary": summary_trigger["existing_summary"] or "",
+                "newest_trimmed_id": str(summary_trigger["newest_trimmed_id"]),
+            }
+            async with db_session_factory() as _session:
+                await job_queue.enqueue(_session, "summarise_conversation", payload)
+                await _session.commit()
 
     return _generate()

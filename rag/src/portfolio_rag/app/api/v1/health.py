@@ -1,10 +1,15 @@
 """GET /api/v1/health"""
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, Request
+from sqlalchemy import text
 from portfolio_rag.app.core.config import Settings, get_settings
 from portfolio_rag.app.core.dependencies import get_client
 
 router = APIRouter(tags=["health"])
+
+_WORKER_STALE_SECONDS = 60
 
 
 @router.get("/health")
@@ -47,6 +52,24 @@ async def health(
     except Exception as e:
         storage_status = str(e)
 
+    # Worker connectivity — inferred from MAX(started_at) in jobs table
+    worker_connected: bool | None = None
+    if request.app.state.db_session_factory is not None:
+        try:
+            async with request.app.state.db_session_factory() as _session:
+                result = await _session.execute(
+                    text("SELECT MAX(started_at) AS last_started FROM jobs")
+                )
+                row = result.mappings().first()
+                last_started = row["last_started"] if row else None
+            if last_started is not None:
+                if last_started.tzinfo is None:
+                    last_started = last_started.replace(tzinfo=timezone.utc)
+                age = (datetime.now(timezone.utc) - last_started).total_seconds()
+                worker_connected = age <= _WORKER_STALE_SECONDS
+        except Exception:
+            pass  # jobs table may not exist yet
+
     overall = (
         "ok"
         if qdrant_status == "ok"
@@ -61,4 +84,5 @@ async def health(
         "qdrant": {"status": qdrant_status, "chunks_loaded": chunk_count},
         "database": {"status": db_status, "doc_count": doc_count},
         "storage": {"status": storage_status, "provider": storage_provider},
+        "worker_connected": worker_connected,
     }
