@@ -39,8 +39,8 @@ async def open_db_engine(
     """
     engine = create_async_engine(
         _make_async_url(database_url),
-        pool_size=2,
-        max_overflow=0,
+        pool_size=5,
+        max_overflow=10,
         pool_pre_ping=True,
     )
     factory = async_sessionmaker(engine, expire_on_commit=False)

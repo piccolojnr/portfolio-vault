@@ -10,7 +10,12 @@ export interface CorpusDocSummary {
   slug: string;
   type: string;
   title: string;
+  created_at: string;
   updated_at: string;
+  lightrag_status?: string;
+  source_type: string;
+  file_size?: number;
+  mimetype?: string;
 }
 
 export interface PaginatedDocs {
@@ -35,20 +40,7 @@ export interface CorpusDocCreate {
 export interface CorpusDocUpdate {
   title?: string;
   extracted_text?: string;
-}
-
-export interface ReindexResponse {
-  run_id: string;
-  status: string;
-}
-
-export interface ReindexStatus {
-  run_id: string;
-  status: string;
-  chunk_count: number | null;
-  started_at: string;
-  finished_at: string | null;
-  error: string | null;
+  type?: string;
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -95,10 +87,3 @@ export function deleteDocument(slug: string): Promise<void> {
   });
 }
 
-export function triggerReindex(): Promise<ReindexResponse> {
-  return apiFetch("/api/documents/reindex", { method: "POST" });
-}
-
-export function getReindexStatus(runId: string): Promise<ReindexStatus> {
-  return apiFetch(`/api/documents/reindex/${encodeURIComponent(runId)}`);
-}

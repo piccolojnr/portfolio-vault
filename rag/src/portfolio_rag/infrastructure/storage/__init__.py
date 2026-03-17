@@ -32,7 +32,7 @@ def get_storage_backend() -> StorageBackend:
 
     from portfolio_rag.infrastructure.storage.local_backend import LocalStorageBackend
 
-    return LocalStorageBackend(base_dir=settings.data_dir.parent / "local_storage")
+    return LocalStorageBackend(base_dir=settings.data_dir / "uploads")
 
 
 __all__ = ["StorageBackend", "get_storage_backend"]

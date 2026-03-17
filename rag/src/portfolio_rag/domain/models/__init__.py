@@ -3,7 +3,6 @@ Schemas package — re-exports everything for backward compatibility.
 
 Import from submodules for clarity in new code:
   from portfolio_rag.domain.models.document import CorpusDocDetail
-  from portfolio_rag.domain.models.pipeline import CostEstimate
   from portfolio_rag.domain.models.rag import QueryRequest
 """
 
@@ -21,11 +20,6 @@ from portfolio_rag.domain.models.document import (
     CorpusDocDetail,
     CorpusDocSummary,
     CorpusDocUpdate,
-)
-from portfolio_rag.domain.models.pipeline import (
-    CostEstimate,
-    PipelineRunList,
-    PipelineRunSummary,
 )
 from portfolio_rag.domain.models.settings import SettingsRead, SettingsUpdate
 from portfolio_rag.domain.models.conversation import (
@@ -49,7 +43,4 @@ __all__ = [
     "CorpusDocDetail",
     "CorpusDocSummary",
     "CorpusDocUpdate",
-    "CostEstimate",
-    "PipelineRunList",
-    "PipelineRunSummary",
 ]

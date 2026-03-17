@@ -1,7 +1,7 @@
 """Corpus document schemas."""
 
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel
 
@@ -14,7 +14,12 @@ class CorpusDocSummary(BaseModel):
     slug: str
     type: str
     title: str
+    created_at: datetime
     updated_at: datetime
+    lightrag_status: Optional[str] = None  # "pending"|"processing"|"ready"|"failed"
+    source_type: str = "text"              # "text" | "file"
+    file_size: Optional[int] = None
+    mimetype: Optional[str] = None
 
 
 class PaginatedDocs(BaseModel):
@@ -41,6 +46,37 @@ class CorpusDocUpdate(BaseModel):
     title: Optional[str] = None
     extracted_text: Optional[str] = None
     corpus_id: Optional[str] = None
+    type: Optional[str] = None
+
+
+class DuplicateCheckFile(BaseModel):
+    filename: str
+    hash: str
+    size: int
+    mimetype: str
+
+
+class DuplicateCheckRequest(BaseModel):
+    corpus_id: str = DEFAULT_CORPUS_ID
+    files: list[DuplicateCheckFile]
+
+
+class DuplicateCheckResult(BaseModel):
+    filename: str
+    hash: str
+    status: Literal["new", "duplicate", "unsupported"]
+    existing_title: Optional[str] = None
+
+
+class DuplicateCheckResponse(BaseModel):
+    results: list[DuplicateCheckResult]
+
+
+class DocumentStatusResponse(BaseModel):
+    id: str
+    slug: str
+    status: str
+    error: Optional[str] = None
 
 
 class ReindexResponse(BaseModel):

@@ -23,7 +23,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from portfolio_rag.app.api.v1 import (
     health, retrieve, query,
     documents, storage,
-    pipeline, settings, conversations, export, chat, graph,
+    settings, conversations, export, chat, graph,
 )
 from portfolio_rag.app.core.config import get_settings
 from portfolio_rag.app.core.db import open_db_engine
@@ -94,7 +94,6 @@ def create_app() -> FastAPI:
     v1.include_router(query.router)
     v1.include_router(documents.router)
     v1.include_router(storage.router)
-    v1.include_router(pipeline.router)
     v1.include_router(settings.router)
     v1.include_router(conversations.router)
     v1.include_router(export.router)

@@ -1,18 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   listDocuments,
-  createDocument,
   deleteDocument,
-  triggerReindex,
-  getReindexStatus,
-  type CorpusDocSummary as VaultDocSummary,
-  type PaginatedDocs,
-  type ReindexStatus,
+  type CorpusDocSummary,
 } from "@/lib/documents";
-import { Badge } from "@/components/ui/badge";
+import { reIngestDocument } from "@/lib/ingest";
+import { StatusBadge } from "@/components/ingest/IngestModal";
 import { Button } from "@/components/ui/button";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -27,471 +24,551 @@ function formatRelative(iso: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function toSlug(title: string): string {
-  return title
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1_048_576) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / 1_048_576).toFixed(1)} MB`;
 }
 
-const TYPE_COLORS: Record<string, string> = {
-  project: "bg-primary/15 text-primary border-primary/20",
-  bio: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  skills: "bg-teal-500/10 text-teal-400 border-teal-500/20",
-  experience: "bg-violet-500/10 text-violet-400 border-violet-500/20",
-  brag: "bg-green-500/10 text-green-400 border-green-500/20",
-};
 
-const PRESET_TYPES = ["bio", "skills", "experience", "brag", "project"];
+const TYPE_COLORS: Record<string, string> = {
+  project:    "bg-primary/15 text-primary border-primary/20",
+  bio:        "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  skills:     "bg-teal-500/10 text-teal-400 border-teal-500/20",
+  experience: "bg-violet-500/10 text-violet-400 border-violet-500/20",
+  brag:       "bg-green-500/10 text-green-400 border-green-500/20",
+  file:       "bg-muted/40 text-muted-foreground/60 border-border/40",
+};
 
 function TypePill({ type }: { type: string }) {
   const cls = TYPE_COLORS[type] ?? "bg-muted/40 text-muted-foreground border-border";
   return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-mono font-medium ${cls}`}>
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-mono font-medium whitespace-nowrap ${cls}`}>
       {type}
     </span>
   );
 }
 
-// ── New Document form ─────────────────────────────────────────────────────────
+// ── Tab strip ─────────────────────────────────────────────────────────────────
 
-interface NewDocFormProps {
-  onCreated: (slug: string) => void;
-  onCancel: () => void;
-}
+type Tab = "all" | "text" | "file" | "failed";
 
-function NewDocForm({ onCreated, onCancel }: NewDocFormProps) {
-  const [title, setTitle] = useState("");
-  const [slug, setSlug] = useState("");
-  const [slugEdited, setSlugEdited] = useState(false);
-  const [type, setType] = useState("project");
-  const [customType, setCustomType] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const titleRef = useRef<HTMLInputElement>(null);
+interface TabDef { key: Tab; label: string; count: number }
 
-  useEffect(() => { titleRef.current?.focus(); }, []);
-
-  function handleTitleChange(v: string) {
-    setTitle(v);
-    if (!slugEdited) setSlug(toSlug(v));
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const finalType = type === "_custom" ? customType.trim() : type;
-    if (!slug || !title || !finalType) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      const doc = await createDocument({ slug, title, type: finalType });
-      onCreated(doc.slug);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
-      setSubmitting(false);
-    }
-  }
-
+function TabStrip({ tabs, active, onChange }: { tabs: TabDef[]; active: Tab; onChange: (t: Tab) => void }) {
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="border border-border/60 rounded-xl bg-surface/60 p-5 mb-6 space-y-4"
-    >
-      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-        New Document
-      </p>
-
-      <div className="grid grid-cols-2 gap-3">
-        {/* Title */}
-        <div className="col-span-2 space-y-1">
-          <label className="text-xs text-muted-foreground">Title</label>
-          <input
-            ref={titleRef}
-            value={title}
-            onChange={(e) => handleTitleChange(e.target.value)}
-            placeholder="e.g. Side Project: Payments"
-            className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/40 transition-colors placeholder:text-muted-foreground/40"
-            required
-          />
-        </div>
-
-        {/* Slug */}
-        <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">Slug</label>
-          <input
-            value={slug}
-            onChange={(e) => { setSlug(e.target.value); setSlugEdited(true); }}
-            placeholder="auto-generated"
-            className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/40 transition-colors placeholder:text-muted-foreground/40"
-            required
-          />
-        </div>
-
-        {/* Type */}
-        <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">Type</label>
-          <div className="flex gap-2">
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value)}
-              className="flex-1 bg-bg border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/40 transition-colors"
-            >
-              {PRESET_TYPES.map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-              <option value="_custom">custom…</option>
-            </select>
-            {type === "_custom" && (
-              <input
-                value={customType}
-                onChange={(e) => setCustomType(e.target.value)}
-                placeholder="type name"
-                className="w-28 bg-bg border border-border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/40 transition-colors placeholder:text-muted-foreground/40"
-                required
-                autoFocus
-              />
-            )}
-          </div>
-        </div>
-      </div>
-
-      {error && <p className="text-destructive text-xs">{error}</p>}
-
-      <div className="flex gap-2">
-        <Button type="submit" size="sm" disabled={submitting}>
-          {submitting ? "Creating…" : "Create"}
-        </Button>
-        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
-    </form>
+    <div className="flex gap-0 border-b border-border/60">
+      {tabs.map(({ key, label, count }) => (
+        <button
+          key={key}
+          onClick={() => onChange(key)}
+          className={`px-4 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
+            active === key
+              ? "border-primary text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {label}
+          <span className={`ml-1.5 text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
+            active === key ? "bg-primary/15 text-primary" : "bg-muted/30 text-muted-foreground/60"
+          }`}>
+            {count}
+          </span>
+        </button>
+      ))}
+    </div>
   );
 }
 
-// ── Delete confirm ────────────────────────────────────────────────────────────
+// ── Table row ─────────────────────────────────────────────────────────────────
 
-interface DeleteCellProps {
-  slug: string;
+interface RowProps {
+  doc: CorpusDocSummary;
+  selected: boolean;
+  onSelect: (v: boolean) => void;
   onDeleted: () => void;
+  onReingested: () => void;
 }
 
-function DeleteCell({ slug, onDeleted }: DeleteCellProps) {
-  const [confirming, setConfirming] = useState(false);
+function DocRow({ doc, selected, onSelect, onDeleted, onReingested }: RowProps) {
+  const router = useRouter();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmReingest, setConfirmReingest] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [reingesting, setReingesting] = useState(false);
 
-  async function handleConfirm(e: React.MouseEvent) {
+  async function handleDelete(e: React.MouseEvent) {
     e.stopPropagation();
     setDeleting(true);
-    try {
-      await deleteDocument(slug);
-      onDeleted();
-    } catch {
-      setDeleting(false);
-      setConfirming(false);
-    }
+    try { await deleteDocument(doc.slug); onDeleted(); }
+    catch { setDeleting(false); setConfirmDelete(false); }
   }
 
-  if (confirming) {
-    return (
-      <span className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-        <span className="text-[11px] text-muted-foreground">Delete?</span>
-        <button
-          onClick={handleConfirm}
-          disabled={deleting}
-          className="text-[11px] text-destructive hover:underline disabled:opacity-50"
-        >
-          {deleting ? "…" : "Yes"}
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); setConfirming(false); }}
-          className="text-[11px] text-muted-foreground hover:text-foreground"
-        >
-          No
-        </button>
-      </span>
-    );
+  async function handleReingest(e: React.MouseEvent) {
+    e.stopPropagation();
+    setReingesting(true);
+    setConfirmReingest(false);
+    try { await reIngestDocument(doc.id); onReingested(); }
+    catch { /* swallow — status will reflect failure */ }
+    finally { setReingesting(false); }
   }
+
+  const isFileDoc = doc.source_type === "file";
 
   return (
-    <button
-      onClick={(e) => { e.stopPropagation(); setConfirming(true); }}
-      className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-1.5 sm:p-1 rounded text-muted-foreground hover:text-destructive transition-all"
-      title="Delete"
+    <tr
+      onClick={() => router.push(`/documents/${doc.slug}`)}
+      className={`group border-b border-border/30 last:border-0 cursor-pointer transition-colors hover:bg-surface/60 ${selected ? "bg-primary/5" : ""}`}
     >
-      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-        <path d="M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 10h8l1-10" strokeLinecap="round" strokeLinejoin="round"/>
-      </svg>
-    </button>
+      {/* Checkbox */}
+      <td className="w-10 pl-4 py-3" onClick={(e) => e.stopPropagation()}>
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={(e) => onSelect(e.target.checked)}
+          className="accent-primary"
+        />
+      </td>
+
+      {/* Title + slug */}
+      <td className="px-3 py-3 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-muted-foreground/40 shrink-0 text-sm">
+            {isFileDoc ? "📎" : "✎"}
+          </span>
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-foreground truncate leading-snug">
+              {doc.title || doc.slug}
+            </div>
+            <div className="text-[11px] font-mono text-muted-foreground/50 truncate mt-0.5">
+              {doc.slug}
+              {isFileDoc && doc.file_size != null && (
+                <span className="ml-2 text-muted-foreground/40">{formatBytes(doc.file_size)}</span>
+              )}
+            </div>
+          </div>
+        </div>
+      </td>
+
+      {/* Type */}
+      <td className="px-3 py-3 w-28">
+        <TypePill type={doc.type} />
+      </td>
+
+      {/* Status */}
+      <td className="px-3 py-3 w-28">
+        {reingesting ? (
+          <span className="text-[10px] font-mono text-muted-foreground flex items-center gap-1">
+            <span className="inline-block h-2.5 w-2.5 animate-spin rounded-full border border-current border-t-transparent" />
+            queuing…
+          </span>
+        ) : (
+          <StatusBadge status={doc.lightrag_status} showReady />
+        )}
+      </td>
+
+      {/* Updated */}
+      <td className="px-3 py-3 w-24 text-[11px] font-mono text-muted-foreground/50 whitespace-nowrap">
+        {formatRelative(doc.updated_at)}
+      </td>
+
+      {/* Actions */}
+      <td className="pr-4 py-3 w-28" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          {/* Re-ingest */}
+          {confirmReingest ? (
+            <span className="flex items-center gap-1 text-[11px]">
+              <button onClick={handleReingest} className="text-primary hover:underline">Yes</button>
+              <span className="text-muted-foreground/40">/</span>
+              <button onClick={(e) => { e.stopPropagation(); setConfirmReingest(false); }} className="text-muted-foreground hover:text-foreground">No</button>
+            </span>
+          ) : (
+            <button
+              onClick={(e) => { e.stopPropagation(); setConfirmReingest(true); }}
+              title="Re-ingest into knowledge graph"
+              className="p-1.5 rounded text-muted-foreground hover:text-primary transition-colors"
+            >
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5" strokeLinecap="round"/>
+                <path d="M8 1v4l2-2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+          )}
+
+          {/* Delete */}
+          {confirmDelete ? (
+            <span className="flex items-center gap-1 text-[11px]">
+              <button onClick={handleDelete} disabled={deleting} className="text-destructive hover:underline disabled:opacity-50">
+                {deleting ? "…" : "Yes"}
+              </button>
+              <span className="text-muted-foreground/40">/</span>
+              <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(false); }} className="text-muted-foreground hover:text-foreground">No</button>
+            </span>
+          ) : (
+            <button
+              onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}
+              title="Delete"
+              className="p-1.5 rounded text-muted-foreground hover:text-destructive transition-colors"
+            >
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 10h8l1-10" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+          )}
+        </div>
+      </td>
+    </tr>
   );
 }
 
-// ── Reindex button ────────────────────────────────────────────────────────────
+// ── Bulk action bar ───────────────────────────────────────────────────────────
 
-function ReindexButton() {
-  const [runId, setRunId] = useState<string | null>(null);
-  const [status, setStatus] = useState<ReindexStatus | null>(null);
-  const [running, setRunning] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    if (!runId || status?.status === "success" || status?.status === "failed") {
-      if (pollRef.current) clearInterval(pollRef.current);
-      return;
-    }
-    pollRef.current = setInterval(async () => {
-      try {
-        const s = await getReindexStatus(runId);
-        setStatus(s);
-        if (s.status === "success" || s.status === "failed") {
-          setRunning(false);
-          if (pollRef.current) clearInterval(pollRef.current);
-        }
-      } catch { /* keep polling */ }
-    }, 2000);
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [runId, status?.status]);
-
-  async function handleClick() {
-    setRunning(true);
-    setStatus(null);
-    try {
-      const { run_id } = await triggerReindex();
-      setRunId(run_id);
-    } catch (e: unknown) {
-      setRunning(false);
-      setStatus({ run_id: "", status: "failed", chunk_count: null, started_at: "", finished_at: null, error: e instanceof Error ? e.message : "error" });
-    }
-  }
-
-  const isDone = status?.status === "success";
-  const isFailed = status?.status === "failed";
-
+function BulkBar({
+  count,
+  onReingest,
+  onDelete,
+  onClear,
+}: {
+  count: number;
+  onReingest: () => void;
+  onDelete: () => void;
+  onClear: () => void;
+}) {
   return (
-    <Button
-      onClick={handleClick}
-      disabled={running}
-      variant={isFailed ? "destructive" : "outline"}
-      size="sm"
-      className={isDone ? "border-green-600/40 text-green-400 hover:bg-green-500/10" : ""}
-    >
-      {running ? (
-        <span className="mr-1.5 inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-      ) : isDone ? (
-        <span className="mr-1.5">✓</span>
-      ) : (
-        <svg className="mr-1.5" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-4 py-2.5 bg-bg border border-border/80 rounded-xl shadow-xl">
+      <span className="text-sm font-medium text-foreground">{count} selected</span>
+      <div className="w-px h-4 bg-border/60" />
+      <Button size="sm" variant="outline" onClick={onReingest}>
+        <svg className="mr-1.5" width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
           <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5" strokeLinecap="round"/>
           <path d="M8 1v4l2-2" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
-      )}
-      {running
-        ? "Indexing…"
-        : isDone
-        ? `Done · ${status!.chunk_count} chunks`
-        : isFailed
-        ? "Failed"
-        : "Re-index"}
-    </Button>
+        Re-ingest {count}
+      </Button>
+      <Button size="sm" variant="destructive" onClick={onDelete}>
+        Delete {count}
+      </Button>
+      <button onClick={onClear} className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-1">
+        Clear
+      </button>
+    </div>
+  );
+}
+
+// ── Confirmation dialog ───────────────────────────────────────────────────────
+
+function ConfirmDialog({
+  title,
+  body,
+  confirm,
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  body: string;
+  confirm: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" onClick={onCancel} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-sm bg-bg border border-border/60 rounded-2xl shadow-2xl p-6 space-y-4">
+          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+          <p className="text-sm text-muted-foreground leading-relaxed">{body}</p>
+          <div className="flex gap-2 justify-end">
+            <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
+            <Button size="sm" onClick={onConfirm}>{confirm}</Button>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-const PAGE_SIZE = 10;
+const FETCH_SIZE = 200;
+const NON_TERMINAL = new Set(["pending", "processing"]);
 
-export default function VaultPage() {
+export default function DocumentsPage() {
   const router = useRouter();
-  const [page, setPage] = useState(1);
-  const [data, setData] = useState<PaginatedDocs | null>(null);
+  const [items, setItems] = useState<CorpusDocSummary[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("all");
   const [search, setSearch] = useState("");
-  const [showNew, setShowNew] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkReingestConfirm, setBulkReingestConfirm] = useState(false);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
 
-  function load(p = page) {
-    setData(null);
-    listDocuments(p, PAGE_SIZE)
-      .then(setData)
-      .catch((e: Error) => setError(e.message));
-  }
+  const load = useCallback(async () => {
+    try {
+      const data = await listDocuments(1, FETCH_SIZE);
+      setItems(data.items);
+      setTotal(data.total);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  useEffect(() => { load(page); }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [load]);
 
-  const items = data?.items ?? [];
+  // Auto-poll while any doc is non-terminal
+  useEffect(() => {
+    const hasLive = items.some((d) => d.lightrag_status && NON_TERMINAL.has(d.lightrag_status));
+    if (!hasLive) return;
+    const t = setTimeout(load, 5000);
+    return () => clearTimeout(t);
+  }, [items, load]);
 
-  const filtered = items.filter((d) => {
-    const q = search.toLowerCase();
-    return !q || d.title.toLowerCase().includes(q) || d.slug.toLowerCase().includes(q) || d.type.toLowerCase().includes(q);
+  // ── Filtering ──────────────────────────────────────────────────────────────
+
+  const tabFiltered = items.filter((d) => {
+    if (tab === "text")   return d.source_type === "text";
+    if (tab === "file")   return d.source_type === "file";
+    if (tab === "failed") return d.lightrag_status === "failed";
+    return true;
   });
 
-  // Group by type
-  const groups: Record<string, VaultDocSummary[]> = {};
-  for (const doc of filtered) {
-    (groups[doc.type] ??= []).push(doc);
+  const typeOptions = Array.from(new Set(items.map((d) => d.type))).sort();
+
+  const filtered = tabFiltered.filter((d) => {
+    if (typeFilter !== "all" && d.type !== typeFilter) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return d.title.toLowerCase().includes(q) || d.slug.toLowerCase().includes(q) || d.type.toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  const tabs: TabDef[] = [
+    { key: "all",    label: "All",    count: items.length },
+    { key: "text",   label: "Text",   count: items.filter((d) => d.source_type === "text").length },
+    { key: "file",   label: "Files",  count: items.filter((d) => d.source_type === "file").length },
+    { key: "failed", label: "Failed", count: items.filter((d) => d.lightrag_status === "failed").length },
+  ];
+
+  // ── Selection helpers ──────────────────────────────────────────────────────
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every((d) => selected.has(d.id));
+
+  function toggleAll() {
+    if (allFilteredSelected) {
+      setSelected((s) => { const n = new Set(s); filtered.forEach((d) => n.delete(d.id)); return n; });
+    } else {
+      setSelected((s) => { const n = new Set(s); filtered.forEach((d) => n.add(d.id)); return n; });
+    }
   }
-  const sortedTypes = Object.keys(groups).sort();
+
+  const selectedItems = items.filter((d) => selected.has(d.id));
+
+  async function handleBulkReingest() {
+    setBulkReingestConfirm(false);
+    await Promise.allSettled(selectedItems.map((d) => reIngestDocument(d.id)));
+    setSelected(new Set());
+    await load();
+  }
+
+  async function handleBulkDelete() {
+    setBulkDeleteConfirm(false);
+    await Promise.allSettled(selectedItems.map((d) => deleteDocument(d.slug)));
+    setSelected(new Set());
+    await load();
+  }
 
   return (
     <div className="h-full flex flex-col bg-bg text-foreground overflow-hidden">
-      {/* Toolbar */}
-      <div className="shrink-0 px-4 sm:px-6 pt-4 sm:pt-6 pb-4">
-        <div className="flex items-center gap-2 sm:gap-3">
+      {/* Header */}
+      <div className="shrink-0 px-6 pt-6">
+        <div className="flex items-center justify-between mb-5">
           <div>
-            <h1 className="text-base font-semibold text-foreground">Vault Documents</h1>
-            {data !== null && (
-              <p className="text-[11px] text-muted-foreground mt-0.5">
-                {data.total} doc{data.total !== 1 ? "s" : ""}
-                {search && ` · ${filtered.length} on this page match`}
-              </p>
-            )}
+            <h1 className="text-base font-semibold text-foreground">Documents</h1>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {loading ? "Loading…" : `${total} document${total !== 1 ? "s" : ""} · corpus: portfolio_vault`}
+            </p>
           </div>
-
-          <div className="ml-auto flex items-center gap-2">
-            <ReindexButton />
-            <Button size="sm" onClick={() => setShowNew((v) => !v)}>
-              {showNew ? "✕ Cancel" : "+ New"}
-            </Button>
+          <div className="flex items-center gap-2">
+            <Link href="/documents/ingest">
+              <Button variant="outline" size="sm">
+                <svg className="mr-1.5" width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M8 12V4M4 8l4-4 4 4" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M2 14h12" strokeLinecap="round"/>
+                </svg>
+                Ingest
+              </Button>
+            </Link>
+            <Link href="/documents/new">
+              <Button size="sm">
+                <svg className="mr-1.5" width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" strokeLinejoin="round"/>
+                </svg>
+                Write
+              </Button>
+            </Link>
           </div>
         </div>
 
-        {/* Search */}
-        <div className="relative mt-3">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/50" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+        {/* Tabs */}
+        <TabStrip tabs={tabs} active={tab} onChange={(t) => { setTab(t); setSelected(new Set()); }} />
+      </div>
+
+      {/* Filter bar */}
+      <div className="shrink-0 px-6 py-3 border-b border-border/40 flex items-center gap-2">
+        <div className="relative flex-1 max-w-xs">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/40" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
             <circle cx="6.5" cy="6.5" r="4.5"/><path d="M10.5 10.5L14 14" strokeLinecap="round"/>
           </svg>
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by title, slug, or type…"
-            className="w-full bg-surface/60 border border-border rounded-lg pl-8 pr-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/40 transition-colors placeholder:text-muted-foreground/40"
+            placeholder="Search…"
+            className="w-full bg-surface/40 border border-border/60 rounded-lg pl-8 pr-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/40 transition-colors placeholder:text-muted-foreground/30"
           />
         </div>
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          className="bg-surface/40 border border-border/60 rounded-lg px-3 py-1.5 text-sm text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/40 transition-colors"
+        >
+          <option value="all">All types</option>
+          {typeOptions.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        {search || typeFilter !== "all" ? (
+          <button
+            onClick={() => { setSearch(""); setTypeFilter("all"); }}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Clear filters
+          </button>
+        ) : null}
+        <span className="ml-auto text-[11px] text-muted-foreground/50 font-mono">
+          {filtered.length !== items.length ? `${filtered.length} of ${items.length}` : `${items.length}`}
+        </span>
       </div>
 
-      {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 pb-6">
-        {/* New doc form */}
-        {showNew && (
-          <NewDocForm
-            onCreated={(slug) => {
-              setShowNew(false);
-              router.push(`/documents/${slug}`);
-            }}
-            onCancel={() => setShowNew(false)}
-          />
-        )}
 
-        {error && <p className="text-destructive text-sm mb-4">{error}</p>}
 
-        {/* Skeleton */}
-        {data === null && !error && (
-          <div className="space-y-2 mt-2">
-            {Array.from({ length: PAGE_SIZE }).map((_, i) => (
-              <div key={i} className="h-11 rounded-lg bg-surface animate-pulse" />
+      {/* Error */}
+      {error && (
+        <div className="mx-6 mt-4 px-4 py-3 bg-destructive/10 border border-destructive/20 rounded-xl text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
+      {/* Table */}
+      <div className="flex-1 overflow-y-auto pb-20">
+        {loading ? (
+          <div className="space-y-1 px-6 pt-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="h-12 rounded-lg bg-surface/60 animate-pulse" />
             ))}
           </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+            <p className="text-sm">
+              {search || typeFilter !== "all" ? "No documents match your filters." : tab === "failed" ? "No failed documents." : "No documents yet."}
+            </p>
+            {tab === "all" && !search && (
+              <Link href="/documents/ingest" className="text-xs text-primary hover:underline mt-2">
+                Ingest your first files →
+              </Link>
+            )}
+          </div>
+        ) : (
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="border-b border-border/40">
+                <th className="w-10 pl-4 py-2.5 text-left">
+                  <input
+                    type="checkbox"
+                    checked={allFilteredSelected}
+                    onChange={toggleAll}
+                    className="accent-primary"
+                  />
+                </th>
+                <th className="px-3 py-2.5 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                  Title
+                </th>
+                <th className="px-3 py-2.5 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider w-28">
+                  Type
+                </th>
+                <th className="px-3 py-2.5 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider w-28">
+                  Status
+                </th>
+                <th className="px-3 py-2.5 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider w-24">
+                  Updated
+                </th>
+                <th className="pr-4 py-2.5 w-28" />
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((doc) => (
+                <DocRow
+                  key={doc.id}
+                  doc={doc}
+                  selected={selected.has(doc.id)}
+                  onSelect={(v) =>
+                    setSelected((s) => {
+                      const n = new Set(s);
+                      v ? n.add(doc.id) : n.delete(doc.id);
+                      return n;
+                    })
+                  }
+                  onDeleted={() => {
+                    setItems((prev) => prev.filter((d) => d.id !== doc.id));
+                    setTotal((t) => t - 1);
+                    setSelected((s) => { const n = new Set(s); n.delete(doc.id); return n; });
+                  }}
+                  onReingested={load}
+                />
+              ))}
+            </tbody>
+          </table>
         )}
 
-        {/* Grouped table */}
-        {data !== null && sortedTypes.length === 0 && (
-          <p className="text-muted-foreground text-sm text-center py-12">
-            {search ? "No documents on this page match your search." : "No documents yet."}
+        {total > FETCH_SIZE && (
+          <p className="text-center text-xs text-muted-foreground/50 py-4">
+            Showing first {FETCH_SIZE} of {total} documents
           </p>
         )}
-
-        {sortedTypes.map((type) => (
-          <div key={type} className="mb-6">
-            {/* Type header */}
-            <div className="flex items-center gap-2 mb-1.5">
-              <TypePill type={type} />
-              <span className="text-[10px] text-muted-foreground/50 font-mono">
-                {groups[type].length}
-              </span>
-            </div>
-
-            {/* Rows */}
-            <div className="rounded-xl border border-border/60 overflow-hidden">
-              {groups[type].map((doc, i) => (
-                <div
-                  key={doc.slug}
-                  onClick={() => router.push(`/documents/${doc.slug}`)}
-                  className={`group flex items-center gap-4 px-4 py-3 cursor-pointer hover:bg-surface/80 transition-colors ${
-                    i < groups[type].length - 1 ? "border-b border-border/40" : ""
-                  }`}
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-foreground truncate">
-                      {doc.title || doc.slug}
-                    </div>
-                    <div className="text-[11px] font-mono text-muted-foreground/60 mt-0.5 truncate">
-                      {doc.slug}
-                    </div>
-                  </div>
-
-                  <div className="shrink-0 flex items-center gap-2">
-                    <span className="hidden sm:inline text-[11px] text-muted-foreground/50 font-mono">
-                      {formatRelative(doc.updated_at)}
-                    </span>
-                    <DeleteCell
-                      slug={doc.slug}
-                      onDeleted={() => {
-                        // Remove from current page; if page becomes empty go back one
-                        const remaining = items.length - 1;
-                        if (remaining === 0 && page > 1) {
-                          setPage((p) => p - 1);
-                        } else {
-                          setData((prev) =>
-                            prev
-                              ? { ...prev, items: prev.items.filter((d) => d.slug !== doc.slug), total: prev.total - 1 }
-                              : null
-                          );
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-        {/* Pagination */}
-        {data !== null && data.pages > 1 && (
-          <div className="flex items-center justify-center gap-2 pt-2 pb-4">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="px-3 py-1.5 rounded-lg border border-border text-[12px] font-mono text-muted-foreground hover:text-foreground hover:bg-surface disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              ← prev
-            </button>
-
-            <div className="flex items-center gap-1">
-              {Array.from({ length: data.pages }, (_, i) => i + 1).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setPage(p)}
-                  className={`w-8 h-8 rounded-lg text-[12px] font-mono transition-colors ${
-                    p === page
-                      ? "bg-primary/15 text-primary border border-primary/30"
-                      : "text-muted-foreground hover:text-foreground hover:bg-surface border border-transparent"
-                  }`}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-
-            <button
-              onClick={() => setPage((p) => Math.min(data.pages, p + 1))}
-              disabled={page === data.pages}
-              className="px-3 py-1.5 rounded-lg border border-border text-[12px] font-mono text-muted-foreground hover:text-foreground hover:bg-surface disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              next →
-            </button>
-          </div>
-        )}
       </div>
+
+      {/* Bulk action bar */}
+      {selected.size > 0 && (
+        <BulkBar
+          count={selected.size}
+          onReingest={() => setBulkReingestConfirm(true)}
+          onDelete={() => setBulkDeleteConfirm(true)}
+          onClear={() => setSelected(new Set())}
+        />
+      )}
+
+      {/* Bulk confirm dialogs */}
+      {bulkReingestConfirm && (
+        <ConfirmDialog
+          title={`Re-ingest ${selected.size} document${selected.size !== 1 ? "s" : ""}?`}
+          body="This will rebuild the chunks, embeddings, and knowledge graph for each selected document. Previous index entries will be replaced."
+          confirm="Re-ingest"
+          onConfirm={handleBulkReingest}
+          onCancel={() => setBulkReingestConfirm(false)}
+        />
+      )}
+      {bulkDeleteConfirm && (
+        <ConfirmDialog
+          title={`Delete ${selected.size} document${selected.size !== 1 ? "s" : ""}?`}
+          body="This will permanently remove the selected documents and their text content. This cannot be undone."
+          confirm="Delete"
+          onConfirm={handleBulkDelete}
+          onCancel={() => setBulkDeleteConfirm(false)}
+        />
+      )}
     </div>
   );
 }

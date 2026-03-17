@@ -68,6 +68,33 @@ def get_doc_by_id(database_url: str, doc_id: str) -> Document | None:
         return session.get(Document, UUID(doc_id))
 
 
+def save_extracted_text(database_url: str, doc_id: str, text: str) -> None:
+    """Persist extracted plain text to the document's extracted_text column."""
+    engine = _get_engine(database_url)
+    with Session(engine) as session:
+        doc = session.get(Document, UUID(doc_id))
+        if doc is None:
+            return
+        doc.extracted_text = text
+        session.add(doc)
+        session.commit()
+
+
+def update_doc_metadata(database_url: str, doc_id: str, updates: dict) -> None:
+    """Merge *updates* into the document's doc_metadata JSONB column.
+
+    Uses full dict reassignment so SQLAlchemy detects the column as dirty.
+    """
+    engine = _get_engine(database_url)
+    with Session(engine) as session:
+        doc = session.get(Document, UUID(doc_id))
+        if doc is None:
+            return
+        doc.doc_metadata = {**(doc.doc_metadata or {}), **updates}
+        session.add(doc)
+        session.commit()
+
+
 def update_doc_lightrag_status(database_url: str, doc_id: str, status: str) -> None:
     """Write lightrag_status into the document's doc_metadata JSONB column.
 

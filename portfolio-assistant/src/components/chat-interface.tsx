@@ -191,6 +191,7 @@ export function ChatInterface({ slug }: { slug?: string }) {
         );
 
         if (streamError) {
+          const _se = streamError as { stage: string; message: string };
           finalizeMessage({
             content: accumulated,
             doc_type: docType,
@@ -198,7 +199,7 @@ export function ChatInterface({ slug }: { slug?: string }) {
             sources: messageSources,
             id: savedId,
             created_at: savedCreatedAt,
-            error: resolveErrorMessage(streamError.stage, streamError.message),
+            error: resolveErrorMessage(_se.stage, _se.message),
           });
           setFailedMessage(userMsg);
         } else if (!receivedDone) {

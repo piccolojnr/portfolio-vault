@@ -8,7 +8,6 @@ export function HeaderNav() {
   const pathname = usePathname();
 
   const isVault = pathname.startsWith("/documents");
-  const isPipeline = pathname.startsWith("/pipeline");
   const isSettings = pathname.startsWith("/settings");
   const isGraph = pathname.startsWith("/graph");
 
@@ -24,9 +23,6 @@ export function HeaderNav() {
     <nav className="flex items-center gap-1">
       <Link href="/documents" className={navLink(isVault)}>
         documents
-      </Link>
-      <Link href="/pipeline" className={navLink(isPipeline)}>
-        pipeline
       </Link>
       <Link href="/settings" className={navLink(isSettings)}>
         settings
