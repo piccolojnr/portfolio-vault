@@ -14,7 +14,9 @@
       "Bash(.venv/Scripts/python.exe -c \"import lightrag; print\\(lightrag.__version__\\); import lightrag.kg; print\\(dir\\(lightrag.kg\\)\\)\" 2>&1)",
       "Bash(BASE=/c/Users/USER/portfolio-vault/.claude/worktrees/agent-a93a4482/rag/scripts)",
       "Read(//c/Users/USER/portfolio-vault/.claude/worktrees/agent-a93a4482/$BASE/**)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(python3 -c \"import json,sys; data=json.load\\(sys.stdin\\); print\\(data[0][''''text'''']\\)\")",
+      "Bash(.venv/Scripts/pip install:*)"
     ]
   }
 }

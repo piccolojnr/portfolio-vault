@@ -36,6 +36,11 @@ async def _run_worker() -> None:
     from portfolio_rag.domain.services.job_handlers import (
         handle_ingest_document,
         handle_reingest_document,
+        handle_send_magic_link_email,
+        handle_send_org_invite_email,
+        handle_send_password_reset_email,
+        handle_send_verify_email,
+        handle_send_welcome_email,
         handle_summarise_conversation,
     )
 
@@ -43,6 +48,11 @@ async def _run_worker() -> None:
         "ingest_document": handle_ingest_document,
         "reingest_document": handle_reingest_document,
         "summarise_conversation": handle_summarise_conversation,
+        "send_magic_link_email": handle_send_magic_link_email,
+        "send_verify_email": handle_send_verify_email,
+        "send_welcome_email": handle_send_welcome_email,
+        "send_org_invite_email": handle_send_org_invite_email,
+        "send_password_reset_email": handle_send_password_reset_email,
     }
 
     settings = get_settings()

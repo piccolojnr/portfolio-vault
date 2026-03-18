@@ -5,12 +5,12 @@ FastAPI Dependency Providers
 Centralises all Depends() helpers so routers stay lean.
 """
 
-from fastapi import Depends, Request
+from fastapi import Depends, HTTPException, Request
 from portfolio_rag.app.core.config import Settings, get_settings
 from portfolio_rag.app.core.db import get_db_conn
 from portfolio_rag.infrastructure.vector.qdrant import get_qdrant_client
 
-__all__ = ["get_client", "get_db_conn", "get_live_settings"]
+__all__ = ["get_client", "get_db_conn", "get_live_settings", "get_current_user", "require_role"]
 
 
 def get_client(settings: Settings = Depends(get_settings)):
@@ -40,3 +40,42 @@ async def get_live_settings(request: Request) -> Settings:
     except Exception:
         pass  # DB read failed — fall through to env settings
     return base
+
+
+async def get_current_user(
+    request: Request,
+    settings: Settings = Depends(get_live_settings),
+) -> dict:
+    """
+    Extract and validate Bearer JWT from the Authorization header.
+
+    Returns the decoded payload dict: {sub, org_id, role, email}.
+    Raises HTTP 401 if missing, malformed, or expired.
+    """
+    from portfolio_rag.app.core.security import InvalidTokenError, verify_access_token
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or malformed Authorization header")
+
+    token = auth_header[len("Bearer "):]
+    try:
+        payload = verify_access_token(token, settings)
+    except InvalidTokenError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+    return payload
+
+
+def require_role(*roles: str):
+    """
+    Return a FastAPI dependency that enforces one of the given roles.
+
+    Usage: Depends(require_role("owner", "admin"))
+    """
+    async def _inner(payload: dict = Depends(get_current_user)) -> dict:
+        if payload.get("role") not in roles:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        return payload
+
+    return _inner

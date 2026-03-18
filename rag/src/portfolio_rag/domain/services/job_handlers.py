@@ -135,3 +135,123 @@ async def handle_summarise_conversation(payload: dict) -> None:
         await engine.dispose()
 
     logger.info("[handler] summarise_conversation conv_id=%s", conv_id)
+
+
+# ── Email job handlers ─────────────────────────────────────────────────────────
+
+async def handle_send_magic_link_email(payload: dict) -> None:
+    """payload: {email, magic_link_url, expiry_minutes}"""
+    from portfolio_rag.infrastructure.email.backends import get_email_backend
+    from portfolio_rag.infrastructure.email.renderer import get_renderer
+
+    try:
+        renderer = get_renderer()
+        backend = get_email_backend()
+        msg = renderer.render(
+            "magic_link.html",
+            {
+                "to": payload["email"],
+                "magic_link_url": payload["magic_link_url"],
+                "expiry_minutes": payload.get("expiry_minutes", 15),
+            },
+        )
+        await backend.send(msg)
+        logger.info("[handler] send_magic_link_email → %s", payload["email"])
+    except Exception:
+        logger.exception("[handler] send_magic_link_email failed for %s", payload.get("email"))
+
+
+async def handle_send_verify_email(payload: dict) -> None:
+    """payload: {email, verify_url, expiry_hours}"""
+    from portfolio_rag.infrastructure.email.backends import get_email_backend
+    from portfolio_rag.infrastructure.email.renderer import get_renderer
+
+    try:
+        renderer = get_renderer()
+        backend = get_email_backend()
+        msg = renderer.render(
+            "verify_email.html",
+            {
+                "to": payload["email"],
+                "verify_url": payload["verify_url"],
+                "expiry_hours": payload.get("expiry_hours", 24),
+            },
+        )
+        await backend.send(msg)
+        logger.info("[handler] send_verify_email → %s", payload["email"])
+    except Exception:
+        logger.exception("[handler] send_verify_email failed for %s", payload.get("email"))
+
+
+async def handle_send_welcome_email(payload: dict) -> None:
+    """payload: {email, user_email, app_url, app_name}"""
+    from portfolio_rag.app.core.config import get_settings
+    from portfolio_rag.infrastructure.email.backends import get_email_backend
+    from portfolio_rag.infrastructure.email.renderer import get_renderer
+
+    try:
+        settings = get_settings()
+        renderer = get_renderer()
+        backend = get_email_backend()
+        msg = renderer.render(
+            "welcome.html",
+            {
+                "to": payload["email"],
+                "user_email": payload.get("user_email", payload["email"]),
+                "app_url": payload.get("app_url", settings.app_url),
+                "app_name": payload.get("app_name", settings.app_name),
+            },
+        )
+        await backend.send(msg)
+        logger.info("[handler] send_welcome_email → %s", payload["email"])
+    except Exception:
+        logger.exception("[handler] send_welcome_email failed for %s", payload.get("email"))
+
+
+async def handle_send_org_invite_email(payload: dict) -> None:
+    """payload: {email, org_name, invite_url, invited_by_email, expiry_days, app_name}"""
+    from portfolio_rag.app.core.config import get_settings
+    from portfolio_rag.infrastructure.email.backends import get_email_backend
+    from portfolio_rag.infrastructure.email.renderer import get_renderer
+
+    try:
+        settings = get_settings()
+        renderer = get_renderer()
+        backend = get_email_backend()
+        msg = renderer.render(
+            "org_invite.html",
+            {
+                "to": payload["email"],
+                "org_name": payload.get("org_name", ""),
+                "invite_url": payload.get("invite_url", ""),
+                "invited_by_email": payload.get("invited_by_email", ""),
+                "expiry_days": payload.get("expiry_days", 7),
+                "app_name": payload.get("app_name", settings.app_name),
+            },
+        )
+        await backend.send(msg)
+        logger.info("[handler] send_org_invite_email → %s", payload["email"])
+    except Exception:
+        logger.exception("[handler] send_org_invite_email failed for %s", payload.get("email"))
+
+
+async def handle_send_password_reset_email(payload: dict) -> None:
+    """payload: {email, reset_url, expiry_minutes}"""
+    from portfolio_rag.infrastructure.email.backends import get_email_backend
+    from portfolio_rag.infrastructure.email.renderer import get_renderer
+
+    try:
+        renderer = get_renderer()
+        backend = get_email_backend()
+        msg = renderer.render(
+            "password_reset.html",
+            {
+                "to": payload["email"],
+                "reset_url": payload["reset_url"],
+                "expiry_minutes": payload.get("expiry_minutes", 30),
+            },
+        )
+        await backend.send(msg)
+        logger.info("[handler] send_password_reset_email → %s", payload["email"])
+    except Exception:
+        logger.exception("[handler] send_password_reset_email failed for %s", payload.get("email"))
