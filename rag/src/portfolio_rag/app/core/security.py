@@ -39,7 +39,8 @@ def create_access_token(
         "email": email,
         "email_verified": email_verified,
         "onboarding_completed_at": (
-            onboarding_completed_at.isoformat()
+            onboarding_completed_at if isinstance(onboarding_completed_at, str)
+            else onboarding_completed_at.isoformat()
             if onboarding_completed_at is not None else None
         ),
         "type": "access",

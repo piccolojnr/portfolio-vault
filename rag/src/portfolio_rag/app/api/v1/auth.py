@@ -286,7 +286,7 @@ async def switch_org(
     import uuid as _uuid
     from sqlmodel import select
     from portfolio_rag.app.core.security import create_access_token
-    from portfolio_rag.infrastructure.db.models.org import OrganisationMember
+    from portfolio_rag.infrastructure.db.models.org import Organisation, OrganisationMember
 
     try:
         org_uuid = _uuid.UUID(body.org_id)
@@ -306,12 +306,19 @@ async def switch_org(
     if member is None:
         raise HTTPException(status_code=403, detail="Not a member of that organisation")
 
+    org = (
+        await session.execute(select(Organisation).where(Organisation.id == org_uuid))
+    ).scalars().first()
+
     access_token = create_access_token(
         current_user["sub"],
         str(org_uuid),
         member.role,
         current_user["email"],
         settings,
+        org_name=org.name if org else "",
+        email_verified=current_user.get("email_verified", True),
+        onboarding_completed_at=current_user.get("onboarding_completed_at"),
     )
     return TokenResponse(access_token=access_token)
 

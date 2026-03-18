@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "./auth-provider";
-import { setAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 interface OrgOption {
@@ -15,8 +13,7 @@ interface OrgOption {
 }
 
 export function OrgSwitcher() {
-  const { org, refresh } = useAuth();
-  const router = useRouter();
+  const { org } = useAuth();
   const [open, setOpen] = useState(false);
   const [orgs, setOrgs] = useState<OrgOption[]>([]);
   const [loading, setLoading] = useState(false);
@@ -59,10 +56,7 @@ export function OrgSwitcher() {
         body: JSON.stringify({ org_id: orgId }),
       });
       if (res.ok) {
-        const { access_token } = await res.json();
-        setAccessToken(access_token);
-        await refresh();
-        router.refresh();
+        window.location.href = "/";
       }
     } catch {
       // ignore
