@@ -49,5 +49,7 @@ async def chat_stream(
         session=session,
         db_session_factory=request.app.state.db_session_factory,
         live_settings=live_settings,
+        lightrag_mode=body.lightrag_mode,
+        intent_override=body.intent_override,
     )
     return StreamingResponse(stream, headers=SSE_HEADERS)

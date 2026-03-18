@@ -31,7 +31,7 @@ from portfolio_rag.domain.services import conversations as conv_svc
 from portfolio_rag.domain.services import settings as settings_svc
 from portfolio_rag.domain.services import job_queue
 from portfolio_rag.shared.context import inject_summary, trim_to_token_budget
-from portfolio_rag.domain.services.intent import classify_intent
+from portfolio_rag.domain.services.intent import Classification, classify_intent
 from portfolio_rag.domain.services.summarizer import MIN_DROPPED_TO_SUMMARISE
 from portfolio_rag.domain.services import chat_pipeline
 
@@ -43,6 +43,8 @@ async def build_event_stream(
     session: AsyncSession,
     db_session_factory,
     live_settings: Settings,
+    lightrag_mode: str | None = None,
+    intent_override: str | None = None,
 ) -> AsyncGenerator[str, None]:
     """
     Prepare and return the SSE generator for a single chat turn.
@@ -91,30 +93,38 @@ async def build_event_stream(
             )
 
     # ── Step 3: Classify intent + speculative retrieval (parallel) ───────────
-    # Fire both tasks concurrently.  Retrieval is cancelled if the classified
-    # intent turns out to be conversational (no RAG needed).
-    intent_task = asyncio.create_task(
-        classify_intent(
-            message, history, chat_settings,
-            db_session_factory=db_session_factory,
-            conversation_id=conversation_id,
-        )
-    )
-    retrieval_task = asyncio.create_task(
-        chat_pipeline._retrieve(message, chat_settings)
-    )
-
-    classification = await intent_task
-
     prefetched_chunks: list[dict] | None = None
-    if classification.needs_rag:
-        prefetched_chunks = await retrieval_task
+
+    if intent_override:
+        # Caller-supplied intent: skip classifier entirely.
+        needs_rag = intent_override != "conversational"
+        classification = Classification(intent=intent_override, needs_rag=needs_rag)
+        if needs_rag:
+            prefetched_chunks = await chat_pipeline._retrieve(message, chat_settings, mode=lightrag_mode or "local")
     else:
-        retrieval_task.cancel()
-        try:
-            await retrieval_task
-        except (asyncio.CancelledError, Exception):
-            pass
+        # Fire both tasks concurrently.  Retrieval is cancelled if the classified
+        # intent turns out to be conversational (no RAG needed).
+        intent_task = asyncio.create_task(
+            classify_intent(
+                message, history, chat_settings,
+                db_session_factory=db_session_factory,
+                conversation_id=conversation_id,
+            )
+        )
+        retrieval_task = asyncio.create_task(
+            chat_pipeline._retrieve(message, chat_settings, mode=lightrag_mode or "local")
+        )
+
+        classification = await intent_task
+
+        if classification.needs_rag:
+            prefetched_chunks = await retrieval_task
+        else:
+            retrieval_task.cancel()
+            try:
+                await retrieval_task
+            except (asyncio.CancelledError, Exception):
+                pass
 
     # ── Steps 4-5: Stream + background summarisation ──────────────────────────
     async def _generate() -> AsyncGenerator[str, None]:

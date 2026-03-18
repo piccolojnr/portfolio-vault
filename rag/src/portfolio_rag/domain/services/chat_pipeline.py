@@ -271,19 +271,22 @@ async def _stream_llm(
 
 # ── Retrieval dispatch ─────────────────────────────────────────────────────────
 
-async def _retrieve(message: str, settings) -> list[dict]:
+async def _retrieve(message: str, settings, mode: str = "local") -> list[dict]:
     """Dispatch retrieval to legacy Qdrant or LightRAG based on settings flag.
 
-    Use mode="local" for chat queries: entity-focused retrieval without global
-    graph traversal — meaningfully faster than "hybrid" for career-assistant
-    lookups with no accuracy loss on point-lookup questions.
+    mode is passed through to LightRAG's QueryParam.  Valid values:
+      "local"  — entity-focused retrieval, no global graph traversal (default, fastest)
+      "hybrid" — local + global community summaries
+      "global" — community summaries only
+      "naive"  — vector search only, no graph
+    Ignored when use_legacy_retrieval=True (legacy path has no mode concept).
     """
     if settings.use_legacy_retrieval:
         from portfolio_rag.domain.services.retrieval import retrieve_legacy
         return await asyncio.to_thread(retrieve_legacy, message, settings, 5)
     else:
         from portfolio_rag.domain.services.lightrag_service import CORPUS_ID as _CID, query as lr_query
-        result = await lr_query(_CID, message, settings, mode="local")
+        result = await lr_query(_CID, message, settings, mode=mode)
         # Normalise LightRAG chunk keys to match legacy format
         return [
             {
