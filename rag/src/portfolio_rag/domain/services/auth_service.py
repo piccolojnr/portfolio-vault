@@ -161,6 +161,7 @@ async def register(
         org_name=org.name,
         onboarding_completed_at=user.onboarding_completed_at,
         email_verified=user.email_verified,
+        display_name=user.display_name,
     )
     return user, access_token, raw_refresh
 
@@ -257,6 +258,7 @@ async def verify_email(
         org_name=org_name,
         onboarding_completed_at=user.onboarding_completed_at,
         email_verified=True,
+        display_name=user.display_name,
     )
     return user, access_token, raw_refresh
 
@@ -318,6 +320,7 @@ async def login(
         org_name=org_name,
         onboarding_completed_at=user.onboarding_completed_at,
         email_verified=user.email_verified,
+        display_name=user.display_name,
     )
     return access_token, raw_refresh
 
@@ -448,6 +451,7 @@ async def verify_magic_link(
         org_name=org_name,
         onboarding_completed_at=user.onboarding_completed_at,
         email_verified=user.email_verified,
+        display_name=user.display_name,
     )
     return user, access_token, raw_refresh
 
@@ -517,6 +521,7 @@ async def refresh(
         org_name=org_name,
         onboarding_completed_at=user.onboarding_completed_at,
         email_verified=user.email_verified,
+        display_name=user.display_name,
     )
     return access_token, raw_new
 

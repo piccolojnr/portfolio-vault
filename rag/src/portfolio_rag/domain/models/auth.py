@@ -48,9 +48,16 @@ class TokenResponse(BaseModel):
 class UserRead(BaseModel):
     id: str
     email: str
+    display_name: Optional[str] = None
     email_verified: bool
+    use_case: Optional[str] = None
     onboarding_completed_at: Optional[datetime] = None
     created_at: datetime
+
+
+class UpdateMeRequest(BaseModel):
+    display_name: Optional[str] = None
+    use_case: Optional[str] = None
 
 
 class OrgRead(BaseModel):

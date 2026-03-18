@@ -26,6 +26,7 @@ def create_access_token(
     org_name: str = "",
     onboarding_completed_at=None,
     email_verified: bool = True,
+    display_name: str | None = None,
 ) -> str:
     """Create a signed HS256 access JWT."""
     import jwt
@@ -38,6 +39,7 @@ def create_access_token(
         "role": role,
         "email": email,
         "email_verified": email_verified,
+        "display_name": display_name,
         "onboarding_completed_at": (
             onboarding_completed_at if isinstance(onboarding_completed_at, str)
             else onboarding_completed_at.isoformat()

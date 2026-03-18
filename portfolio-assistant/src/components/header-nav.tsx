@@ -12,10 +12,11 @@ export function HeaderNav() {
   const canManage = org?.role === "admin" || org?.role === "owner";
 
   const isVault = pathname.startsWith("/documents");
-  const isSettings = pathname.startsWith("/settings");
+  const isSettings = pathname.startsWith("/settings") && !pathname.startsWith("/settings/profile") && !pathname.startsWith("/settings/organisation");
   const isGraph = pathname.startsWith("/graph");
   const isAdmin = pathname.startsWith("/admin");
   const isOrgSettings = pathname.startsWith("/settings/organisation");
+  const isProfile = pathname.startsWith("/settings/profile");
 
   const navLink = (active: boolean) =>
     cn(
@@ -34,7 +35,7 @@ export function HeaderNav() {
         graph
       </Link>
       {canManage && (
-        <Link href="/settings" className={navLink(isSettings && !isOrgSettings)}>
+        <Link href="/settings" className={navLink(isSettings)}>
           settings
         </Link>
       )}
@@ -52,6 +53,9 @@ export function HeaderNav() {
       {isAuthenticated && (
         <>
           <div className="w-px h-4 bg-border mx-1" />
+          <Link href="/settings/profile" className={navLink(isProfile)}>
+            profile
+          </Link>
           <OrgSwitcher />
           <button
             onClick={logout}

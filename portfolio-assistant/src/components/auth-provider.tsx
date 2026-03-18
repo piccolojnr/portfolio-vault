@@ -14,6 +14,7 @@ import { decodeJwtPayload } from "@/lib/jwt";
 interface UserInfo {
   id: string;
   email: string;
+  display_name?: string | null;
   email_verified: boolean;
   onboarding_completed_at: string | null;
   created_at: string;
@@ -64,6 +65,7 @@ function hydrateFromToken(
     user: {
       id: p.sub,
       email: p.email,
+      display_name: p.display_name ?? null,
       email_verified: true,
       onboarding_completed_at: p.onboarding_completed_at ?? null,
       created_at: "",

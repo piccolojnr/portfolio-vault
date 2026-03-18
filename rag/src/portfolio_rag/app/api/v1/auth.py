@@ -27,6 +27,7 @@ from portfolio_rag.domain.models.auth import (
     ResetPasswordRequest,
     SwitchOrgRequest,
     TokenResponse,
+    UpdateMeRequest,
     UserRead,
     VerifyTokenRequest,
 )
@@ -261,7 +262,9 @@ async def me(
         user=UserRead(
             id=str(user.id),
             email=user.email,
+            display_name=user.display_name,
             email_verified=user.email_verified,
+            use_case=user.use_case,
             onboarding_completed_at=user.onboarding_completed_at,
             created_at=user.created_at,
         ),
@@ -319,6 +322,7 @@ async def switch_org(
         org_name=org.name if org else "",
         email_verified=current_user.get("email_verified", True),
         onboarding_completed_at=current_user.get("onboarding_completed_at"),
+        display_name=current_user.get("display_name"),
     )
     return TokenResponse(access_token=access_token)
 
@@ -391,6 +395,50 @@ async def complete_onboarding(
         org_name=org_name,
         onboarding_completed_at=user.onboarding_completed_at,
         email_verified=user.email_verified,
+        display_name=user.display_name,
     )
     _set_refresh_cookie(response, raw_refresh, settings)
+    return TokenResponse(access_token=access_token)
+
+
+@router.patch("/me", response_model=TokenResponse)
+async def update_me(
+    body: UpdateMeRequest,
+    session: DBSession,
+    settings=Depends(get_live_settings),
+    current_user: dict = Depends(get_current_user),
+):
+    import uuid as _uuid
+    from sqlmodel import select
+    from portfolio_rag.app.core.security import create_access_token
+    from portfolio_rag.infrastructure.db.models.user import User
+    from portfolio_rag.infrastructure.db.models.base import utcnow
+
+    user_id = _uuid.UUID(current_user["sub"])
+    user = (
+        await session.execute(select(User).where(User.id == user_id))
+    ).scalars().first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if body.display_name is not None:
+        user.display_name = body.display_name
+    if body.use_case is not None:
+        user.use_case = body.use_case
+    user.updated_at = utcnow()
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
+
+    access_token = create_access_token(
+        str(user.id),
+        current_user.get("org_id", ""),
+        current_user.get("role", "member"),
+        user.email,
+        settings,
+        org_name=current_user.get("org_name", ""),
+        onboarding_completed_at=current_user.get("onboarding_completed_at"),
+        email_verified=user.email_verified,
+        display_name=user.display_name,
+    )
     return TokenResponse(access_token=access_token)

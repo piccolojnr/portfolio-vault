@@ -4,14 +4,14 @@ FastAPI backend that turns markdown vault documents into a searchable, conversat
 
 ## Stack
 
-| Layer | Technology |
-|---|---|
-| API | FastAPI + uvicorn |
-| Vector DB | Qdrant (local file or cloud) |
-| Relational DB | PostgreSQL via SQLModel + asyncpg |
-| Embeddings | OpenAI `text-embedding-3-small` / `text-embedding-3-large` |
-| Generation | Anthropic Claude or OpenAI GPT (configurable) |
-| Encryption | Fernet symmetric encryption (`cryptography`) |
+| Layer         | Technology                                                 |
+| ------------- | ---------------------------------------------------------- |
+| API           | FastAPI + uvicorn                                          |
+| Vector DB     | Qdrant (local file or cloud)                               |
+| Relational DB | PostgreSQL via SQLModel + asyncpg                          |
+| Embeddings    | OpenAI `text-embedding-3-small` / `text-embedding-3-large` |
+| Generation    | Anthropic Claude or OpenAI GPT (configurable)              |
+| Encryption    | Fernet symmetric encryption (`cryptography`)               |
 
 ## Project Structure
 
@@ -147,18 +147,19 @@ All routes are prefixed with `/api/v1`.
 
 ### Health
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/health` | Liveness check |
+| Method | Path      | Description    |
+| ------ | --------- | -------------- |
+| `GET`  | `/health` | Liveness check |
 
 ### Query (RAG)
 
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/retrieve` | Semantic search — returns top-k chunks, no LLM |
-| `POST` | `/query` | Full RAG — retrieve chunks then generate an answer |
+| Method | Path        | Description                                        |
+| ------ | ----------- | -------------------------------------------------- |
+| `POST` | `/retrieve` | Semantic search — returns top-k chunks, no LLM     |
+| `POST` | `/query`    | Full RAG — retrieve chunks then generate an answer |
 
 **Query request body:**
+
 ```json
 {
   "question": "What projects has Daud built?",
@@ -169,24 +170,25 @@ All routes are prefixed with `/api/v1`.
 
 ### Vault Management
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/vault/documents` | Paginated document list |
-| `GET` | `/vault/documents/{slug}` | Single document with full content |
-| `PUT` | `/vault/documents/{slug}` | Update document content |
-| `POST` | `/vault/documents/{slug}/reindex` | Re-embed a single document (background) |
-| `GET` | `/vault/documents/{slug}/reindex/{run_id}` | Poll reindex status |
+| Method | Path                                       | Description                             |
+| ------ | ------------------------------------------ | --------------------------------------- |
+| `GET`  | `/vault/documents`                         | Paginated document list                 |
+| `GET`  | `/vault/documents/{slug}`                  | Single document with full content       |
+| `PUT`  | `/vault/documents/{slug}`                  | Update document content                 |
+| `POST` | `/vault/documents/{slug}/reindex`          | Re-embed a single document (background) |
+| `GET`  | `/vault/documents/{slug}/reindex/{run_id}` | Poll reindex status                     |
 
 ### Pipeline
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/pipeline/runs` | Paginated list of pipeline runs |
-| `GET` | `/pipeline/runs/{run_id}` | Single run detail |
-| `GET` | `/pipeline/cost-estimate` | Estimate embedding cost before running |
-| `POST` | `/pipeline/run` | Run full index pipeline (Server-Sent Events) |
+| Method | Path                      | Description                                  |
+| ------ | ------------------------- | -------------------------------------------- |
+| `GET`  | `/pipeline/runs`          | Paginated list of pipeline runs              |
+| `GET`  | `/pipeline/runs/{run_id}` | Single run detail                            |
+| `GET`  | `/pipeline/cost-estimate` | Estimate embedding cost before running       |
+| `POST` | `/pipeline/run`           | Run full index pipeline (Server-Sent Events) |
 
 **SSE events from `POST /pipeline/run`:**
+
 ```
 data: {"event": "started", "doc_count": 11, "run_id": "..."}
 data: {"event": "chunked", "chunk_count": 87}
@@ -196,12 +198,13 @@ data: {"event": "done", "chunk_count": 87, "run_id": "..."}
 
 ### Settings
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/settings` | Current effective settings (keys masked to bool) |
-| `PUT` | `/settings` | Update models, API keys, or cost limit |
+| Method | Path        | Description                                      |
+| ------ | ----------- | ------------------------------------------------ |
+| `GET`  | `/settings` | Current effective settings (keys masked to bool) |
+| `PUT`  | `/settings` | Update models, API keys, or cost limit           |
 
 **Settings update body** (all fields optional):
+
 ```json
 {
   "openai_api_key": "sk-...",
@@ -209,7 +212,7 @@ data: {"event": "done", "chunk_count": 87, "run_id": "..."}
   "embedding_model": "text-embedding-3-large",
   "anthropic_model": "claude-opus-4-6",
   "openai_model": "gpt-4o-mini",
-  "cost_limit_usd": 0.10
+  "cost_limit_usd": 0.1
 }
 ```
 
@@ -235,16 +238,17 @@ Keys are encrypted with Fernet (AES-128-CBC + HMAC) using a SHA-256 derived key 
 
 ### Conversations
 
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/conversations` | Create a new conversation |
-| `GET` | `/conversations` | List all conversations (newest first) |
-| `GET` | `/conversations/{id}` | Conversation detail + full message history |
-| `PATCH` | `/conversations/{id}` | Update title |
-| `DELETE` | `/conversations/{id}` | Delete conversation + all messages (cascade) |
-| `POST` | `/conversations/{id}/messages` | Persist a message; triggers auto-title after first assistant message |
+| Method   | Path                           | Description                                                          |
+| -------- | ------------------------------ | -------------------------------------------------------------------- |
+| `POST`   | `/conversations`               | Create a new conversation                                            |
+| `GET`    | `/conversations`               | List all conversations (newest first)                                |
+| `GET`    | `/conversations/{id}`          | Conversation detail + full message history                           |
+| `PATCH`  | `/conversations/{id}`          | Update title                                                         |
+| `DELETE` | `/conversations/{id}`          | Delete conversation + all messages (cascade)                         |
+| `POST`   | `/conversations/{id}/messages` | Persist a message; triggers auto-title after first assistant message |
 
 **Message body:**
+
 ```json
 { "role": "user", "content": "...", "doc_type": null }
 ```
@@ -253,12 +257,13 @@ Keys are encrypted with Fernet (AES-128-CBC + HMAC) using a SHA-256 derived key 
 
 ### Export
 
-| Method | Path | Description |
-|---|---|---|
+| Method | Path           | Description                 |
+| ------ | -------------- | --------------------------- |
 | `POST` | `/export/docx` | Markdown → `.docx` download |
-| `POST` | `/export/pdf` | Markdown → `.pdf` download |
+| `POST` | `/export/pdf`  | Markdown → `.pdf` download  |
 
 **Export request body:**
+
 ```json
 { "content": "# My Cover Letter\n\n...", "title": "Cover Letter — Stripe" }
 ```
@@ -267,10 +272,23 @@ Requires `python-docx`, `markdown`, and `weasyprint` — all installed via `pip 
 
 ## Script Reference
 
-| Script | Description |
-|---|---|
-| `scripts/00_migrate_db.py` | Create all tables (idempotent via `CREATE TABLE IF NOT EXISTS`) |
-| `scripts/00_seed_db.py` | Upsert vault `.md` files into `vault_documents` |
-| `scripts/01_chunk.py` | Print chunks to stdout (no writes) — useful for tuning |
-| `scripts/02_embed_and_store.py` | Full index pipeline with run tracking |
-| `scripts/03_query.py` | Interactive CLI: type a question, get an answer |
+| Script                          | Description                                                     |
+| ------------------------------- | --------------------------------------------------------------- |
+| `scripts/00_migrate_db.py`      | Create all tables (idempotent via `CREATE TABLE IF NOT EXISTS`) |
+| `scripts/00_seed_db.py`         | Upsert vault `.md` files into `vault_documents`                 |
+| `scripts/01_chunk.py`           | Print chunks to stdout (no writes) — useful for tuning          |
+| `scripts/02_embed_and_store.py` | Full index pipeline with run tracking                           |
+| `scripts/03_query.py`           | Interactive CLI: type a question, get an answer                 |
+
+<!-- future naming -->
+
+├────────────────────┼───────────────────────────────┤
+│ Product │ Memra │
+├────────────────────┼───────────────────────────────┤
+│ Backend (FastAPI) │ memra-api │
+├────────────────────┼───────────────────────────────┤
+│ Frontend (Next.js) │ memra-app │
+├────────────────────┼───────────────────────────────┤
+│ Python package │ memra (replace portfolio_rag) │
+├────────────────────┼───────────────────────────────┤
+│ Repo │ memra or keep as monorepo │

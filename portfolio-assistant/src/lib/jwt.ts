@@ -11,6 +11,7 @@ export interface JwtPayload {
   org_name: string;
   role: string;
   email: string;
+  display_name?: string | null;
   onboarding_completed_at: string | null;
   type: string;
   iat: number;
