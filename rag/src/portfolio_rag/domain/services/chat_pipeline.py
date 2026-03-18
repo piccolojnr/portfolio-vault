@@ -272,13 +272,18 @@ async def _stream_llm(
 # ── Retrieval dispatch ─────────────────────────────────────────────────────────
 
 async def _retrieve(message: str, settings) -> list[dict]:
-    """Dispatch retrieval to legacy Qdrant or LightRAG based on settings flag."""
+    """Dispatch retrieval to legacy Qdrant or LightRAG based on settings flag.
+
+    Use mode="local" for chat queries: entity-focused retrieval without global
+    graph traversal — meaningfully faster than "hybrid" for career-assistant
+    lookups with no accuracy loss on point-lookup questions.
+    """
     if settings.use_legacy_retrieval:
         from portfolio_rag.domain.services.retrieval import retrieve_legacy
         return await asyncio.to_thread(retrieve_legacy, message, settings, 5)
     else:
         from portfolio_rag.domain.services.lightrag_service import CORPUS_ID as _CID, query as lr_query
-        result = await lr_query(_CID, message, settings)
+        result = await lr_query(_CID, message, settings, mode="local")
         # Normalise LightRAG chunk keys to match legacy format
         return [
             {
@@ -313,8 +318,9 @@ async def _handle_retrieval(
     conv_id: str | None,
     settings,
     db_session_factory,
+    prefetched_chunks: list[dict] | None = None,
 ) -> AsyncGenerator[str, None]:
-    chunks = await _retrieve(message, settings)
+    chunks = prefetched_chunks if prefetched_chunks is not None else await _retrieve(message, settings)
     logger.info("[chat] retrieval — %d chunks", len(chunks))
     context = format_context(chunks)
     augmented = f"Relevant context from my portfolio vault:\n\n{context}\n\n---\n\n{message}"
@@ -330,8 +336,9 @@ async def _handle_document(
     conv_id: str | None,
     settings,
     db_session_factory,
+    prefetched_chunks: list[dict] | None = None,
 ) -> AsyncGenerator[str, None]:
-    chunks = await _retrieve(message, settings)
+    chunks = prefetched_chunks if prefetched_chunks is not None else await _retrieve(message, settings)
     logger.info("[chat] document — %d chunks", len(chunks))
     context = format_context(chunks)
     augmented = f"Relevant context from my portfolio vault:\n\n{context}\n\n---\n\n{message}"
@@ -348,6 +355,7 @@ async def _handle_refinement(
     needs_rag: bool,
     settings,
     db_session_factory,
+    prefetched_chunks: list[dict] | None = None,
 ) -> AsyncGenerator[str, None]:
     prior_doc = _extract_last_document(history)
     context_block = (
@@ -358,7 +366,7 @@ async def _handle_refinement(
     chunks_count = 0
     rag_chunks: list[dict] = []
     if needs_rag:
-        rag_chunks = await _retrieve(message, settings)
+        rag_chunks = prefetched_chunks if prefetched_chunks is not None else await _retrieve(message, settings)
         chunks_count = len(rag_chunks)
         extra = format_context(rag_chunks)
         context_block += f"Additional context from my portfolio vault:\n\n{extra}\n\n"
@@ -385,9 +393,13 @@ async def stream_response(
     conversation_id: str | None,
     settings,
     db_session_factory,
+    prefetched_chunks: list[dict] | None = None,
 ) -> AsyncGenerator[str, None]:
     """
     Routes a classified message to the appropriate handler and yields SSE events.
+
+    prefetched_chunks: when provided (parallelised fetch path in chat.py), these
+    are passed directly to the handler so retrieval is not repeated.
     """
     intent = classification.intent
     needs_rag = classification.needs_rag
@@ -395,14 +407,14 @@ async def stream_response(
     if intent == "conversational":
         gen = _handle_conversational(message, history, conversation_id, settings, db_session_factory)
     elif intent == "retrieval":
-        gen = _handle_retrieval(message, history, conversation_id, settings, db_session_factory)
+        gen = _handle_retrieval(message, history, conversation_id, settings, db_session_factory, prefetched_chunks=prefetched_chunks)
     elif intent == "document":
-        gen = _handle_document(message, history, conversation_id, settings, db_session_factory)
+        gen = _handle_document(message, history, conversation_id, settings, db_session_factory, prefetched_chunks=prefetched_chunks)
     elif intent == "refinement":
-        gen = _handle_refinement(message, history, conversation_id, needs_rag, settings, db_session_factory)
+        gen = _handle_refinement(message, history, conversation_id, needs_rag, settings, db_session_factory, prefetched_chunks=prefetched_chunks)
     else:
         # Exhaustiveness guard — unknown intent falls back to retrieval
-        gen = _handle_retrieval(message, history, conversation_id, settings, db_session_factory)
+        gen = _handle_retrieval(message, history, conversation_id, settings, db_session_factory, prefetched_chunks=prefetched_chunks)
 
     async for event in gen:
         yield event

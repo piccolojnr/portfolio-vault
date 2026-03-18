@@ -266,7 +266,7 @@ async def get_or_create_instance(corpus_id: str, settings) -> "LightRAG":
             graph_storage="NetworkXStorage",  # PGGraphStorage requires Apache AGE (unavailable)
             llm_model_func=_make_llm_func(settings),
             llm_model_name=llm_name,
-            llm_model_max_async=2,
+            llm_model_max_async=4,
             embedding_func=_make_embedding_func(settings),
         )
 

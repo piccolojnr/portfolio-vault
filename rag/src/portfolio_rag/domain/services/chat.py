@@ -19,6 +19,7 @@ StreamingResponse and owns no business logic.
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from typing import AsyncGenerator
 from uuid import UUID
@@ -89,12 +90,31 @@ async def build_event_stream(
                 else trim.kept_messages
             )
 
-    # ── Step 3: Classify intent ───────────────────────────────────────────────
-    classification = await classify_intent(
-        message, history, chat_settings,
-        db_session_factory=db_session_factory,
-        conversation_id=conversation_id,
+    # ── Step 3: Classify intent + speculative retrieval (parallel) ───────────
+    # Fire both tasks concurrently.  Retrieval is cancelled if the classified
+    # intent turns out to be conversational (no RAG needed).
+    intent_task = asyncio.create_task(
+        classify_intent(
+            message, history, chat_settings,
+            db_session_factory=db_session_factory,
+            conversation_id=conversation_id,
+        )
     )
+    retrieval_task = asyncio.create_task(
+        chat_pipeline._retrieve(message, chat_settings)
+    )
+
+    classification = await intent_task
+
+    prefetched_chunks: list[dict] | None = None
+    if classification.needs_rag:
+        prefetched_chunks = await retrieval_task
+    else:
+        retrieval_task.cancel()
+        try:
+            await retrieval_task
+        except (asyncio.CancelledError, Exception):
+            pass
 
     # ── Steps 4-5: Stream + background summarisation ──────────────────────────
     async def _generate() -> AsyncGenerator[str, None]:
@@ -105,6 +125,7 @@ async def build_event_stream(
             conversation_id,
             chat_settings,
             db_session_factory,
+            prefetched_chunks=prefetched_chunks,
         ):
             yield event
 
