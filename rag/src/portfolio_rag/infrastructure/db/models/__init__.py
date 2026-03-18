@@ -19,6 +19,7 @@ from portfolio_rag.infrastructure.db.models.auth_tokens import (
     MagicLinkToken,
     PasswordResetToken,
 )
+from portfolio_rag.infrastructure.db.models.corpus import Corpus
 from portfolio_rag.infrastructure.db.models.org import (
     Organisation,
     OrganisationMember,
@@ -31,4 +32,5 @@ __all__ = [
     "Conversation", "Message", "Job",
     "User", "RefreshToken", "MagicLinkToken", "PasswordResetToken",
     "Organisation", "OrganisationMember", "OrganisationInvite", "OrganisationSetting",
+    "Corpus",
 ]

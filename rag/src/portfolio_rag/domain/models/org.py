@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel
+
+
+class CorpusRead(BaseModel):
+    id: str
+    name: str
+    corpus_key: str
+    created_at: datetime
 
 
 class OrgWithRole(BaseModel):

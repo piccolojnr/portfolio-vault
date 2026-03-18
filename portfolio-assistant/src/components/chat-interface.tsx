@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { ArrowUp, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,14 +15,16 @@ import { useConversations } from "./conversation-context";
 import { readSSEStream } from "@/lib/sse-reader";
 import { type VirtualItem } from "@tanstack/react-virtual";
 import { useConversation, type Message } from "@/hooks/use-conversation";
+import { useAuth } from "@/components/auth-provider";
+import { useActiveCorpus } from "@/lib/corpus";
 
 const SUGGESTIONS = [
-  "Write a cover letter for a remote Next.js role",
-  "Which projects show I can handle payments end-to-end?",
-  "Help me prep for an interview about the kiosk project",
-  "What are my strongest projects for a backend role?",
-  "Draft a LinkedIn summary from my bio",
-  "How would I answer: tell me about a hard technical problem you solved?",
+  "Summarise what's in this knowledge base",
+  "What topics are covered in my documents?",
+  "Find connections between [topic A] and [topic B]",
+  "What do my documents say about [topic]?",
+  "Generate a summary report on [topic]",
+  "What are the key insights from [document name]?",
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -82,6 +85,8 @@ function MessageRow({
 export function ChatInterface({ slug }: { slug?: string }) {
   const { createLocalConversation } = useConversations();
   const qc = useQueryClient();
+  const { org, isAuthenticated } = useAuth();
+  const { data: corpusData, isLoading: corpusLoading } = useActiveCorpus(org?.id);
 
   const {
     messages,
@@ -103,6 +108,8 @@ export function ChatInterface({ slug }: { slug?: string }) {
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // Tracks the conversation ID created during this session (for retry on new-chat page)
+  const liveConvIdRef = useRef<string | undefined>(slug);
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -122,11 +129,12 @@ export function ChatInterface({ slug }: { slug?: string }) {
 
       let messageSources: SourceRef[] = [];
 
-      let currentId = slug;
+      let currentId = liveConvIdRef.current ?? slug;
       if (!currentId) {
         try {
           const conv = await createConversation();
           currentId = conv.id;
+          liveConvIdRef.current = currentId;
           createLocalConversation(conv);
           // Update URL without triggering a Next.js route change (avoids remount)
           window.history.replaceState(null, "", `/${currentId}`);
@@ -308,20 +316,17 @@ export function ChatInterface({ slug }: { slug?: string }) {
             <div className="flex items-center gap-2 mb-4">
               <Sparkles className="h-3.5 w-3.5 text-primary" />
               <span className="font-mono text-[10px] sm:text-[11px] text-primary tracking-widest uppercase">
-                Portfolio vault · RAG-powered
+                {org?.name ?? "Knowledge Base"}
               </span>
             </div>
 
             <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight leading-[1.15] mb-3 text-foreground">
-              What do you need,
-              <br />
-              Daud?
+              What would you like to know?
             </h1>
 
             <p className="text-[14px] sm:text-[15px] text-muted-foreground leading-relaxed mb-2 max-w-120">
-              I retrieve only the relevant parts of your vault for each question
-              — no context stuffing. Ask me to write, tailor, or prepare
-              anything.
+              I retrieve only the relevant parts of your knowledge base for each
+              question — no context stuffing. Ask anything about your documents.
             </p>
 
             <Separator className="my-6 sm:my-8 bg-border" />
@@ -385,6 +390,27 @@ export function ChatInterface({ slug }: { slug?: string }) {
         />
       </div>
 
+      {/* ── No-corpus banner (replaces input when no active knowledge base) ── */}
+      {isAuthenticated && !corpusLoading && !corpusData?.corpus && (
+        <div className="absolute bottom-0 left-0 right-0 z-10 px-3 sm:px-6 pb-6">
+          <div className="max-w-170 mx-auto bg-surface border border-amber-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <span className="text-amber-400 text-lg shrink-0">⚠</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground">No knowledge base selected</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Select an active knowledge base in Organisation Settings to start chatting.
+              </p>
+            </div>
+            <Link
+              href="/settings/organisation"
+              className="shrink-0 text-xs text-primary hover:underline font-mono whitespace-nowrap"
+            >
+              Go to Settings →
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* ── Floating input bar ── */}
       <div className="absolute bottom-0 left-0 right-0 pointer-events-none z-10  pt-14 sm:pt-20 px-3 sm:px-6">
         <div
@@ -417,7 +443,7 @@ export function ChatInterface({ slug }: { slug?: string }) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKey}
-              placeholder="Ask anything about your portfolio…"
+              placeholder="Ask anything about your knowledge base…"
               rows={1}
               // className="flex-1 bg-transparent border-none shadow-none outline-none focus-visible:ring-0 text-foreground text-sm leading-relaxed font-sans resize-none min-h-6 max-h-40 caret-primary placeholder:text-muted-foreground p-0"
               className="flex-1 bg-transparent border-none shadow-none outline-none focus-visible:ring-0 text-foreground text-sm leading-relaxed font-sans resize-none min-h-6 max-h-40 caret-primary placeholder:text-muted-foreground"

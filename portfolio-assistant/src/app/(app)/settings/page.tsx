@@ -398,7 +398,7 @@ export default function SettingsPage() {
           {/* Cost limits */}
           <section className="rounded-xl border border-border bg-surface/40 p-5">
             <SectionHeading>Cost limits</SectionHeading>
-            <FieldRow label="Pipeline limit" hint="0 = no limit">
+            <FieldRow label="Processing limit" hint="0 = no limit">
               <div className="flex items-center gap-2">
                 <span className="text-[12px] font-mono text-muted-foreground">
                   $

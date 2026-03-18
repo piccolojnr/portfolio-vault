@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from portfolio_rag.infrastructure.db.models.base import utcnow
+from portfolio_rag.infrastructure.db.models.corpus import Corpus
 from portfolio_rag.infrastructure.db.models.org import (
     Organisation,
     OrganisationInvite,
@@ -308,6 +309,47 @@ async def update_member_role(
     await session.commit()
     await session.refresh(target)
     return target
+
+
+async def get_active_corpus(
+    session: AsyncSession, org_id: uuid.UUID
+) -> Corpus:
+    """Return the org's active corpus. Raises LookupError if none set."""
+    org = await session.get(Organisation, org_id)
+    if not org or not org.active_corpus_id:
+        raise LookupError("no_active_corpus")
+    corpus = await session.get(Corpus, org.active_corpus_id)
+    if not corpus:
+        raise LookupError("no_active_corpus")
+    return corpus
+
+
+async def set_active_corpus(
+    session: AsyncSession,
+    org_id: uuid.UUID,
+    corpus_id: uuid.UUID,
+    actor_user_id: str,
+) -> Corpus:
+    """Set the org's active corpus. Requires admin or owner role."""
+    await _require_actor_role(session, org_id, actor_user_id, "admin", "owner")
+    corpus = await session.get(Corpus, corpus_id)
+    if not corpus or corpus.org_id != org_id:
+        raise ValueError("Corpus not found in this organisation")
+    org = await session.get(Organisation, org_id)
+    org.active_corpus_id = corpus_id  # type: ignore[union-attr]
+    session.add(org)
+    await session.commit()
+    return corpus
+
+
+async def list_corpora(
+    session: AsyncSession, org_id: uuid.UUID
+) -> list[Corpus]:
+    """Return all corpora belonging to org_id."""
+    result = await session.execute(
+        select(Corpus).where(Corpus.org_id == org_id)
+    )
+    return list(result.scalars().all())
 
 
 async def transfer_ownership(

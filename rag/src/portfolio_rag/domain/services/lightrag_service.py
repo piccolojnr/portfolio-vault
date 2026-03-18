@@ -60,7 +60,7 @@ def set_session_factory(factory) -> None:
     _session_factory = factory
 
 
-async def _log_embed_bg(token_count: int, model: str) -> None:
+async def _log_embed_bg(token_count: int, model: str, *, org_id=None) -> None:
     """Best-effort background task: log an embed call to ai_calls."""
     if _session_factory is None:
         return
@@ -73,6 +73,7 @@ async def _log_embed_bg(token_count: int, model: str) -> None:
                 provider="openai",
                 input_tokens=token_count,
                 output_tokens=0,
+                org_id=org_id,
             )
             await _session.commit()
     except Exception:
@@ -181,7 +182,7 @@ def _make_llm_func(settings):
 
 # ── embedding function ────────────────────────────────────────────────────────
 
-def _make_embedding_func(settings):
+def _make_embedding_func(settings, *, org_id=None):
     """Return an EmbeddingFunc wrapping portfolio_rag.infrastructure.llm.embedding for LightRAG.
 
     COMPAT lightrag-hku >=1.4.x
@@ -205,13 +206,14 @@ def _make_embedding_func(settings):
         from portfolio_rag.infrastructure.llm.embedding import _embed_openai
         vectors, token_count = _embed_openai(texts, settings)
         if token_count:
-            asyncio.ensure_future(_log_embed_bg(token_count, settings.embedding_model))
+            asyncio.ensure_future(_log_embed_bg(token_count, settings.embedding_model, org_id=org_id))
         # COMPAT: must be ndarray — EmbeddingFunc.__call__ calls result.size
         return np.array(vectors, dtype=np.float32)
 
     return EmbeddingFunc(
-        embedding_dim=1536,   # text-embedding-3-small
+        embedding_dim=1536,
         max_token_size=8191,
+        model_name="text-embedding-3-small",
         func=_embed,
     )
 
@@ -228,7 +230,7 @@ class QueryResult:
 
 # ── registry API ──────────────────────────────────────────────────────────────
 
-async def get_or_create_instance(corpus_id: str, settings) -> "LightRAG":
+async def get_or_create_instance(corpus_id: str, settings, *, org_id=None) -> "LightRAG":
     """Return the cached LightRAG instance for corpus_id, creating it if needed.
 
     working_dir is corpus-scoped: rag/data/graphs/<corpus_id>/
@@ -267,7 +269,7 @@ async def get_or_create_instance(corpus_id: str, settings) -> "LightRAG":
             llm_model_func=_make_llm_func(settings),
             llm_model_name=llm_name,
             llm_model_max_async=4,
-            embedding_func=_make_embedding_func(settings),
+            embedding_func=_make_embedding_func(settings, org_id=org_id),
         )
 
         await rag.initialize_storages()
@@ -281,6 +283,8 @@ async def ingest(
     content: str,
     document_id: str,
     settings,
+    *,
+    org_id=None,
 ) -> None:
     """Insert a single document into the LightRAG corpus.
 
@@ -297,7 +301,7 @@ async def ingest(
     import logging
     _logger = logging.getLogger(__name__)
 
-    rag = await get_or_create_instance(corpus_id, settings)
+    rag = await get_or_create_instance(corpus_id, settings, org_id=org_id)
     try:
         await asyncio.wait_for(
             rag.ainsert(content, file_paths=[document_id]),
@@ -321,7 +325,8 @@ async def query(
     query_text: str,
     settings,
     *,
-    mode: str = "hybrid", # "retrieval_only" or "generation_only" to skip LLM or retrieval phases, respectively
+    mode: str = "hybrid",
+    org_id=None,
 ) -> QueryResult:
     """Query the corpus.  Returns answer text plus structured graph data.
 
@@ -331,7 +336,7 @@ async def query(
     """
     from lightrag import QueryParam
 
-    rag = await get_or_create_instance(corpus_id, settings)
+    rag = await get_or_create_instance(corpus_id, settings, org_id=org_id)
     param = QueryParam(mode=mode)
 
     answer = await rag.aquery(query_text, param=param)

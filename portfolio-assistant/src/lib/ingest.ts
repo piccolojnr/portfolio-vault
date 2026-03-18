@@ -31,7 +31,6 @@ export interface DuplicateCheckResult {
 }
 
 export async function checkDuplicates(
-  corpus_id: string,
   files: DuplicateCheckFile[]
 ): Promise<DuplicateCheckResult[]> {
   const data = await apiFetch<{ results: DuplicateCheckResult[] }>(
@@ -39,7 +38,7 @@ export async function checkDuplicates(
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ corpus_id, files }),
+      body: JSON.stringify({ files }),
     }
   );
   return data.results;
@@ -47,12 +46,10 @@ export async function checkDuplicates(
 
 export async function uploadDocument(
   file: File,
-  corpus_id: string,
   hash: string
 ): Promise<{ id: string; slug: string; title: string }> {
   const form = new FormData();
   form.append("file", file);
-  form.append("corpus_id", corpus_id);
   form.append("file_hash", hash);
   // Do NOT set Content-Type — browser adds multipart boundary automatically
   const token = getAccessToken();

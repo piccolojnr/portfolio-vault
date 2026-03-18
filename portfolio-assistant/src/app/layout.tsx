@@ -2,6 +2,9 @@ import "./globals.css";
 
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { QueryProvider } from "@/components/query-provider";
+import { AuthProvider } from "@/components/auth-provider";
+import { Toaster } from "sonner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -43,7 +46,12 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased overflow-hidden`}
       >
-        {children}
+        <QueryProvider>
+          <AuthProvider>
+            {children}
+            <Toaster position="bottom-right" />
+          </AuthProvider>
+        </QueryProvider>
       </body>
     </html>
   );

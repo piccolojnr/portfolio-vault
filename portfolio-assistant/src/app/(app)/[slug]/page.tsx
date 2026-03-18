@@ -10,5 +10,5 @@ export default function ConversationPage({
 }) {
   const { slug } = use(params);
 
-  return <ChatInterface slug={slug} />;
+  return <ChatInterface key={slug} slug={slug} />;
 }

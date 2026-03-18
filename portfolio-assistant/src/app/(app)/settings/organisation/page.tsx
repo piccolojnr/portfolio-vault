@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { apiFetch } from "@/lib/api";
+import { useActiveCorpus, useOrgCorpora, useSetActiveCorpus } from "@/lib/corpus";
+import { Button } from "@/components/ui/button";
 
 interface Member {
   user_id: string;
@@ -11,12 +13,49 @@ interface Member {
   joined_at: string;
 }
 
+// ── Sub-components ──────────────────────────────────────────────────────────────
+
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <h2 className="text-[13px] font-semibold text-foreground font-mono border-b border-border/40 pb-2 mb-4">
+      {children}
+    </h2>
+  );
+}
+
+function FieldRow({
+  label,
+  children,
+  hint,
+}: {
+  label: string;
+  children: React.ReactNode;
+  hint?: string;
+}) {
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 py-2.5">
+      <label className="w-40 shrink-0 text-[12px] font-mono text-muted-foreground">
+        {label}
+      </label>
+      <div className="flex-1 min-w-0">{children}</div>
+      {hint && (
+        <p className="text-[10px] text-muted-foreground/50 font-mono sm:w-32 sm:text-right shrink-0">
+          {hint}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ── Main page ───────────────────────────────────────────────────────────────────
+
 export default function OrgSettingsPage() {
   const { org, refresh: refreshAuth } = useAuth();
 
   const [orgName, setOrgName] = useState(org?.name ?? "");
   const [nameSaving, setNameSaving] = useState(false);
   const [nameError, setNameError] = useState("");
+  const [nameSaved, setNameSaved] = useState(false);
 
   const [members, setMembers] = useState<Member[]>([]);
   const [membersLoading, setMembersLoading] = useState(true);
@@ -30,6 +69,11 @@ export default function OrgSettingsPage() {
   const [transferTarget, setTransferTarget] = useState("");
   const [transferConfirm, setTransferConfirm] = useState(false);
   const [transferError, setTransferError] = useState("");
+
+  // Hooks must be called unconditionally
+  const { data: activeCorpusData } = useActiveCorpus(org?.id);
+  const { data: corporaData } = useOrgCorpora(org?.id);
+  const setActiveCorpusMut = useSetActiveCorpus(org?.id ?? "");
 
   useEffect(() => {
     if (!org) return;
@@ -46,6 +90,7 @@ export default function OrgSettingsPage() {
     if (!org) return;
     setNameError("");
     setNameSaving(true);
+    setNameSaved(false);
     try {
       await apiFetch(`/api/orgs/${org.id}`, {
         method: "PATCH",
@@ -53,6 +98,8 @@ export default function OrgSettingsPage() {
         body: JSON.stringify({ name: orgName }),
       });
       await refreshAuth();
+      setNameSaved(true);
+      setTimeout(() => setNameSaved(false), 3000);
     } catch (err) {
       setNameError(String(err));
     } finally {
@@ -63,9 +110,7 @@ export default function OrgSettingsPage() {
   const removeMember = async (userId: string) => {
     if (!org) return;
     try {
-      await apiFetch(`/api/orgs/${org.id}/members/${userId}`, {
-        method: "DELETE",
-      });
+      await apiFetch(`/api/orgs/${org.id}/members/${userId}`, { method: "DELETE" });
       setMembers((m) => m.filter((x) => x.user_id !== userId));
     } catch (err) {
       alert(String(err));
@@ -126,186 +171,265 @@ export default function OrgSettingsPage() {
     }
   };
 
+  // Loading state
   if (!org) {
     return (
-      <div className="p-8 text-sm text-muted-foreground font-mono">
-        Loading organisation…
+      <div className="h-full flex flex-col bg-bg text-foreground overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="max-w-2xl mx-auto w-full px-4 py-6 space-y-8">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-32 animate-pulse rounded-xl bg-muted/20" />
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
 
   const isOwner = org.role === "owner";
+  const canManage = isOwner || org.role === "admin";
+  const corpora = corporaData?.corpora ?? [];
 
   return (
-    <div className=" mx-auto py-8 space-y-10">
-      <h1 className="text-xl font-mono font-semibold">organisation settings</h1>
+    <div className="h-full flex flex-col bg-bg text-foreground overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="max-w-2xl mx-auto w-full px-4 py-6 space-y-8">
 
-      {/* Org name */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-mono font-medium">name</h2>
-        <form onSubmit={saveOrgName} className="flex gap-2">
-          <input
-            value={orgName}
-            onChange={(e) => setOrgName(e.target.value)}
-            disabled={!isOwner}
-            className="flex-1 px-3 py-2 rounded-md border border-border bg-background text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
-          />
-          {isOwner && (
-            <button
-              type="submit"
-              disabled={nameSaving}
-              className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-mono hover:bg-primary/90 transition-colors disabled:opacity-50"
-            >
-              {nameSaving ? "…" : "save"}
-            </button>
-          )}
-        </form>
-        {nameError && <p className="text-xs text-destructive">{nameError}</p>}
-      </section>
+          {/* Header */}
+          <div>
+            <h1 className="text-lg font-semibold tracking-tight text-foreground">
+              Organisation
+            </h1>
+            <p className="mt-0.5 text-[13px] text-muted-foreground">
+              Manage your organisation name, knowledge base, and team.
+            </p>
+          </div>
 
-      {/* Members */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-mono font-medium">members</h2>
-        {membersLoading ? (
-          <p className="text-xs text-muted-foreground">Loading…</p>
-        ) : (
-          <div className="rounded-md border border-border divide-y divide-border">
-            {members.map((m) => (
-              <div
-                key={m.user_id}
-                className="flex items-center justify-between px-3 py-2"
-              >
-                <div>
-                  <div className="text-sm font-mono">{m.email}</div>
-                  <div className="text-xs text-muted-foreground">
-                    joined {new Date(m.joined_at).toLocaleDateString()}
-                  </div>
-                </div>
+          {/* General */}
+          <section className="rounded-xl border border-border bg-surface/40 p-5">
+            <SectionHeading>General</SectionHeading>
+            <form onSubmit={saveOrgName}>
+              <FieldRow label="Name">
                 <div className="flex items-center gap-2">
-                  {isOwner && m.role !== "owner" ? (
+                  <input
+                    value={orgName}
+                    onChange={(e) => setOrgName(e.target.value)}
+                    disabled={!isOwner}
+                    className="flex-1 bg-surface border border-border rounded-md px-3 py-1.5 text-[12px] font-mono focus:outline-none focus:ring-1 focus:ring-primary/40 disabled:opacity-50"
+                  />
+                  {isOwner && (
+                    <Button
+                      type="submit"
+                      size="sm"
+                      disabled={nameSaving}
+                      className="h-7 px-3 text-[11px] font-mono"
+                    >
+                      {nameSaving ? "…" : "save"}
+                    </Button>
+                  )}
+                  {nameSaved && (
+                    <span className="text-[11px] font-mono text-green-400">Saved</span>
+                  )}
+                </div>
+                {nameError && (
+                  <p className="mt-1 text-[11px] text-destructive font-mono">{nameError}</p>
+                )}
+              </FieldRow>
+            </form>
+          </section>
+
+          {/* Knowledge Base */}
+          <section className="rounded-xl border border-border bg-surface/40 p-5">
+            <SectionHeading>Knowledge Base</SectionHeading>
+            <p className="text-[11px] font-mono text-muted-foreground/60 mb-3">
+              All conversations in this organisation search the active knowledge base.
+            </p>
+            {!activeCorpusData?.corpus && (
+              <div className="mb-4 text-[11px] font-mono text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-md px-3 py-2">
+                No knowledge base selected — chat will not work until you select one.
+              </div>
+            )}
+            <FieldRow label="Active corpus">
+              <select
+                value={activeCorpusData?.corpus?.id ?? ""}
+                onChange={(e) => {
+                  if (e.target.value) setActiveCorpusMut.mutate(e.target.value);
+                }}
+                disabled={!canManage}
+                className="w-full bg-surface border border-border rounded-md px-3 py-1.5 text-[12px] font-mono focus:outline-none focus:ring-1 focus:ring-primary/40 disabled:opacity-50 appearance-none cursor-pointer"
+              >
+                <option value="">— select knowledge base —</option>
+                {corpora.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </FieldRow>
+          </section>
+
+          {/* Team Members */}
+          <section className="rounded-xl border border-border bg-surface/40 p-5">
+            <SectionHeading>Team Members</SectionHeading>
+            {membersLoading ? (
+              <div className="space-y-2">
+                {[...Array(2)].map((_, i) => (
+                  <div key={i} className="h-10 animate-pulse rounded-lg bg-muted/20" />
+                ))}
+              </div>
+            ) : members.length === 0 ? (
+              <p className="text-[12px] font-mono text-muted-foreground/50">No members found.</p>
+            ) : (
+              <div className="divide-y divide-border/30">
+                {members.map((m) => (
+                  <div
+                    key={m.user_id}
+                    className="flex items-center justify-between py-2.5 gap-4"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-[12px] font-mono text-foreground truncate">{m.email}</div>
+                      <div className="text-[10px] font-mono text-muted-foreground/50">
+                        joined {new Date(m.joined_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {isOwner && m.role !== "owner" ? (
+                        <select
+                          value={m.role}
+                          onChange={(e) => updateRole(m.user_id, e.target.value)}
+                          className="bg-surface border border-border rounded-md px-2 py-1 text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-primary/40 appearance-none cursor-pointer"
+                        >
+                          <option value="member">member</option>
+                          <option value="admin">admin</option>
+                        </select>
+                      ) : (
+                        <span className="text-[11px] font-mono text-muted-foreground/60">
+                          {m.role}
+                        </span>
+                      )}
+                      {isOwner && m.role !== "owner" && (
+                        <button
+                          onClick={() => removeMember(m.user_id)}
+                          className="text-[11px] font-mono text-muted-foreground/40 hover:text-destructive transition-colors"
+                        >
+                          remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Invite */}
+          {canManage && (
+            <section className="rounded-xl border border-border bg-surface/40 p-5">
+              <SectionHeading>Invite someone to {org.name}</SectionHeading>
+              <form onSubmit={sendInvite}>
+                <FieldRow label="Email">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="email"
+                      required
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      placeholder="email@example.com"
+                      className="flex-1 min-w-0 basis-full sm:basis-auto bg-surface border border-border rounded-md px-3 py-1.5 text-[12px] font-mono focus:outline-none focus:ring-1 focus:ring-primary/40"
+                    />
                     <select
-                      value={m.role}
-                      onChange={(e) => updateRole(m.user_id, e.target.value)}
-                      className="text-xs font-mono border border-border rounded px-2 py-1 bg-background"
+                      value={inviteRole}
+                      onChange={(e) => setInviteRole(e.target.value)}
+                      className="bg-surface border border-border rounded-md px-2 py-1.5 text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-primary/40 appearance-none cursor-pointer"
                     >
                       <option value="member">member</option>
                       <option value="admin">admin</option>
                     </select>
-                  ) : (
-                    <span className="text-xs font-mono text-muted-foreground">
-                      {m.role}
-                    </span>
-                  )}
-                  {isOwner && m.role !== "owner" && (
-                    <button
-                      onClick={() => removeMember(m.user_id)}
-                      className="text-xs text-destructive hover:underline font-mono"
+                    <Button
+                      type="submit"
+                      size="sm"
+                      disabled={inviteSending}
+                      className="h-7 px-3 text-[11px] font-mono"
                     >
-                      remove
-                    </button>
+                      {inviteSending ? "…" : "invite"}
+                    </Button>
+                  </div>
+                </FieldRow>
+                {inviteError && (
+                  <p className="mt-1 text-[11px] text-destructive font-mono">{inviteError}</p>
+                )}
+                {inviteSuccess && (
+                  <p className="mt-1 text-[11px] text-green-400 font-mono">{inviteSuccess}</p>
+                )}
+              </form>
+            </section>
+          )}
+
+          {/* Danger zone — transfer ownership */}
+          {isOwner && (
+            <section className="rounded-xl border border-destructive/30 bg-surface/40 p-5">
+              <SectionHeading>Danger Zone</SectionHeading>
+              {!transferConfirm ? (
+                <FieldRow label="Transfer ownership">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setTransferConfirm(true)}
+                    className="h-7 px-3 text-[11px] font-mono border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    transfer ownership…
+                  </Button>
+                </FieldRow>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-[12px] font-mono text-destructive">
+                    This cannot be undone. Select the new owner:
+                  </p>
+                  <select
+                    value={transferTarget}
+                    onChange={(e) => setTransferTarget(e.target.value)}
+                    className="w-full bg-surface border border-border rounded-md px-3 py-1.5 text-[12px] font-mono focus:outline-none focus:ring-1 focus:ring-primary/40 appearance-none cursor-pointer"
+                  >
+                    <option value="">select member…</option>
+                    {members
+                      .filter((m) => m.role !== "owner")
+                      .map((m) => (
+                        <option key={m.user_id} value={m.user_id}>
+                          {m.email} ({m.role})
+                        </option>
+                      ))}
+                  </select>
+                  {transferError && (
+                    <p className="text-[11px] text-destructive font-mono">{transferError}</p>
                   )}
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      disabled={!transferTarget}
+                      onClick={transferOwnership}
+                      className="h-7 px-3 text-[11px] font-mono bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      confirm transfer
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setTransferConfirm(false);
+                        setTransferError("");
+                      }}
+                      className="h-7 px-2 text-[11px] font-mono"
+                    >
+                      cancel
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Invite */}
-      {(isOwner || org.role === "admin") && (
-        <section className="space-y-3">
-          <h2 className="text-sm font-mono font-medium">invite member</h2>
-          <form onSubmit={sendInvite} className="flex gap-2">
-            <input
-              type="email"
-              required
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              placeholder="email@example.com"
-              className="flex-1 px-3 py-2 rounded-md border border-border bg-background text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-            <select
-              value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value)}
-              className="text-xs font-mono border border-border rounded px-2 py-1 bg-background"
-            >
-              <option value="member">member</option>
-              <option value="admin">admin</option>
-            </select>
-            <button
-              type="submit"
-              disabled={inviteSending}
-              className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-mono hover:bg-primary/90 transition-colors disabled:opacity-50"
-            >
-              {inviteSending ? "…" : "invite"}
-            </button>
-          </form>
-          {inviteError && (
-            <p className="text-xs text-destructive">{inviteError}</p>
-          )}
-          {inviteSuccess && (
-            <p className="text-xs text-green-500">{inviteSuccess}</p>
-          )}
-        </section>
-      )}
-
-      {/* Transfer ownership */}
-      {isOwner && (
-        <section className="space-y-3">
-          <h2 className="text-sm font-mono font-medium text-destructive">
-            transfer ownership
-          </h2>
-          {!transferConfirm ? (
-            <button
-              onClick={() => setTransferConfirm(true)}
-              className="px-4 py-2 rounded-md border border-destructive text-destructive text-sm font-mono hover:bg-destructive/10 transition-colors"
-            >
-              transfer ownership…
-            </button>
-          ) : (
-            <div className="space-y-3 rounded-md border border-destructive p-4">
-              <p className="text-sm text-destructive font-mono">
-                This cannot be undone. Select the new owner:
-              </p>
-              <select
-                value={transferTarget}
-                onChange={(e) => setTransferTarget(e.target.value)}
-                className="w-full text-sm font-mono border border-border rounded px-2 py-1 bg-background"
-              >
-                <option value="">select member…</option>
-                {members
-                  .filter((m) => m.role !== "owner")
-                  .map((m) => (
-                    <option key={m.user_id} value={m.user_id}>
-                      {m.email} ({m.role})
-                    </option>
-                  ))}
-              </select>
-              {transferError && (
-                <p className="text-xs text-destructive">{transferError}</p>
               )}
-              <div className="flex gap-2">
-                <button
-                  onClick={transferOwnership}
-                  disabled={!transferTarget}
-                  className="px-4 py-2 rounded-md bg-destructive text-destructive-foreground text-sm font-mono hover:bg-destructive/90 transition-colors disabled:opacity-50"
-                >
-                  confirm transfer
-                </button>
-                <button
-                  onClick={() => {
-                    setTransferConfirm(false);
-                    setTransferError("");
-                  }}
-                  className="px-4 py-2 rounded-md border border-border text-sm font-mono hover:bg-surface transition-colors"
-                >
-                  cancel
-                </button>
-              </div>
-            </div>
+            </section>
           )}
-        </section>
-      )}
+
+        </div>
+      </div>
     </div>
   );
 }

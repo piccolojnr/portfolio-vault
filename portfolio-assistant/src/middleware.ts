@@ -28,6 +28,7 @@ export function middleware(request: NextRequest) {
   // access_token on mount before any protected content renders.
   const accessToken = request.cookies.get("access_token");
   const refreshToken = request.cookies.get("refresh_token");
+  console.log("Middleware check:", { pathname, accessToken: !!accessToken, refreshToken: !!refreshToken });
   if (!accessToken?.value && !refreshToken?.value) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirect", pathname);

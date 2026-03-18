@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 async def handle_ingest_document(payload: dict) -> None:
     """
-    payload: { "document_id": str, "corpus_id": str }
+    payload: { "document_id": str, "corpus_id": str, "org_id": str }
     Delegates entirely to ingestion_service.ingest_document, which handles
     processing→ready/failed status transitions.
     """
@@ -25,9 +25,13 @@ async def handle_ingest_document(payload: dict) -> None:
     from portfolio_rag.domain.services.ingestion_service import ingest_document
 
     doc_id = payload["document_id"]
+    corpus_key = payload.get("corpus_id") or None
+    org_id_str = payload.get("org_id")
     settings = get_settings()
-    logger.info("[handler] ingest_document doc_id=%s", doc_id)
-    await ingest_document(doc_id, settings)
+    logger.info("[handler] ingest_document doc_id=%s corpus=%s", doc_id, corpus_key)
+    import uuid as _uuid
+    await ingest_document(doc_id, settings, corpus_key=corpus_key,
+                          org_id=_uuid.UUID(org_id_str) if org_id_str else None)
 
 
 async def handle_reingest_document(payload: dict) -> None:
@@ -66,8 +70,12 @@ async def handle_reingest_document(payload: dict) -> None:
     finally:
         await engine.dispose()
 
-    logger.info("[handler] reingest_document doc_id=%s", doc_id)
-    await ingest_document(doc_id, settings)
+    corpus_key = payload.get("corpus_id") or None
+    org_id_str = payload.get("org_id")
+    logger.info("[handler] reingest_document doc_id=%s corpus=%s", doc_id, corpus_key)
+    import uuid as _uuid
+    await ingest_document(doc_id, settings, corpus_key=corpus_key,
+                          org_id=_uuid.UUID(org_id_str) if org_id_str else None)
 
 
 async def handle_summarise_conversation(payload: dict) -> None:

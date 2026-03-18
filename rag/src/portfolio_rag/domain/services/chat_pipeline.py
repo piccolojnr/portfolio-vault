@@ -24,6 +24,7 @@ import asyncio
 import json
 import logging
 import re
+import uuid as _uuid_mod
 from typing import AsyncGenerator
 from uuid import UUID
 
@@ -274,7 +275,9 @@ async def _stream_llm(
 
 # ── Retrieval dispatch ─────────────────────────────────────────────────────────
 
-async def _retrieve(message: str, settings, mode: str = "local") -> list[dict]:
+async def _retrieve(
+    message: str, settings, mode: str = "local", corpus_key: str | None = None, *, org_id=None
+) -> list[dict]:
     """Dispatch retrieval to legacy Qdrant or LightRAG based on settings flag.
 
     mode is passed through to LightRAG's QueryParam.  Valid values:
@@ -283,13 +286,15 @@ async def _retrieve(message: str, settings, mode: str = "local") -> list[dict]:
       "global" — community summaries only
       "naive"  — vector search only, no graph
     Ignored when use_legacy_retrieval=True (legacy path has no mode concept).
+    corpus_key overrides the default CORPUS_ID for LightRAG retrieval.
     """
     if settings.use_legacy_retrieval:
         from portfolio_rag.domain.services.retrieval import retrieve_legacy
         return await asyncio.to_thread(retrieve_legacy, message, settings, 5)
     else:
         from portfolio_rag.domain.services.lightrag_service import CORPUS_ID as _CID, query as lr_query
-        result = await lr_query(_CID, message, settings, mode=mode)
+        effective_corpus = corpus_key or _CID
+        result = await lr_query(effective_corpus, message, settings, mode=mode, org_id=org_id)
         # Normalise LightRAG chunk keys to match legacy format
         return [
             {
@@ -311,12 +316,22 @@ async def _handle_conversational(
     settings,
     db_session_factory,
     org_id=None,
+    corpus_key: str | None = None,
 ) -> AsyncGenerator[str, None]:
     logger.info("[chat] conversational — skipping RAG")
     meta = {"intent": "conversational", "rag_retrieved": False, "chunks_count": 0}
     messages = [*history, {"role": "user", "content": message}]
     async for event in _stream_llm(messages, message, conv_id, meta, settings, db_session_factory, chunks=None, org_id=org_id):
         yield event
+
+
+_NO_DOCS_HINT = (
+    "Your knowledge base doesn't have any documents yet.\n\n"
+    "To get started:\n"
+    "1. Go to the **Documents** page\n"
+    "2. Click **Add** to upload `.md` or `.txt` files, or click **Write** to create a document\n"
+    "3. Wait for processing to complete, then come back and ask anything"
+)
 
 
 async def _handle_retrieval(
@@ -327,11 +342,16 @@ async def _handle_retrieval(
     db_session_factory,
     prefetched_chunks: list[dict] | None = None,
     org_id=None,
+    corpus_key: str | None = None,
 ) -> AsyncGenerator[str, None]:
-    chunks = prefetched_chunks if prefetched_chunks is not None else await _retrieve(message, settings)
+    chunks = prefetched_chunks if prefetched_chunks is not None else await _retrieve(message, settings, corpus_key=corpus_key, org_id=org_id)
     logger.info("[chat] retrieval — %d chunks", len(chunks))
+    if not chunks:
+        yield _sse({"text": _NO_DOCS_HINT})
+        yield "data: [DONE]\n\n"
+        return
     context = format_context(chunks)
-    augmented = f"Relevant context from my portfolio vault:\n\n{context}\n\n---\n\n{message}"
+    augmented = f"Relevant context from your knowledge base:\n\n{context}\n\n---\n\n{message}"
     messages = [*history, {"role": "user", "content": augmented}]
     meta = {"intent": "retrieval", "rag_retrieved": True, "chunks_count": len(chunks)}
     async for event in _stream_llm(messages, message, conv_id, meta, settings, db_session_factory, chunks=chunks, org_id=org_id):
@@ -346,11 +366,16 @@ async def _handle_document(
     db_session_factory,
     prefetched_chunks: list[dict] | None = None,
     org_id=None,
+    corpus_key: str | None = None,
 ) -> AsyncGenerator[str, None]:
-    chunks = prefetched_chunks if prefetched_chunks is not None else await _retrieve(message, settings)
+    chunks = prefetched_chunks if prefetched_chunks is not None else await _retrieve(message, settings, corpus_key=corpus_key, org_id=org_id)
     logger.info("[chat] document — %d chunks", len(chunks))
+    if not chunks:
+        yield _sse({"text": _NO_DOCS_HINT})
+        yield "data: [DONE]\n\n"
+        return
     context = format_context(chunks)
-    augmented = f"Relevant context from my portfolio vault:\n\n{context}\n\n---\n\n{message}"
+    augmented = f"Relevant context from your knowledge base:\n\n{context}\n\n---\n\n{message}"
     messages = [*history, {"role": "user", "content": augmented}]
     meta = {"intent": "document", "rag_retrieved": True, "chunks_count": len(chunks)}
     async for event in _stream_llm(messages, message, conv_id, meta, settings, db_session_factory, chunks=chunks, org_id=org_id):
@@ -366,6 +391,7 @@ async def _handle_refinement(
     db_session_factory,
     prefetched_chunks: list[dict] | None = None,
     org_id=None,
+    corpus_key: str | None = None,
 ) -> AsyncGenerator[str, None]:
     prior_doc = _extract_last_document(history)
     context_block = (
@@ -376,10 +402,14 @@ async def _handle_refinement(
     chunks_count = 0
     rag_chunks: list[dict] = []
     if needs_rag:
-        rag_chunks = prefetched_chunks if prefetched_chunks is not None else await _retrieve(message, settings)
+        rag_chunks = prefetched_chunks if prefetched_chunks is not None else await _retrieve(message, settings, corpus_key=corpus_key, org_id=org_id)
+        if not rag_chunks and not prior_doc:
+            yield _sse({"text": _NO_DOCS_HINT})
+            yield "data: [DONE]\n\n"
+            return
         chunks_count = len(rag_chunks)
         extra = format_context(rag_chunks)
-        context_block += f"Additional context from my portfolio vault:\n\n{extra}\n\n"
+        context_block += f"Additional context from your knowledge base:\n\n{extra}\n\n"
         logger.info("[chat] refinement + RAG — %d chunks", chunks_count)
     else:
         logger.info("[chat] refinement — no RAG, using prior document only")
@@ -405,27 +435,45 @@ async def stream_response(
     db_session_factory,
     prefetched_chunks: list[dict] | None = None,
     org_id=None,
+    corpus_key: str | None = None,
 ) -> AsyncGenerator[str, None]:
     """
     Routes a classified message to the appropriate handler and yields SSE events.
 
     prefetched_chunks: when provided (parallelised fetch path in chat.py), these
     are passed directly to the handler so retrieval is not repeated.
+    corpus_key: when provided (resolved upstream in chat.py), skips the DB lookup.
     """
     intent = classification.intent
     needs_rag = classification.needs_rag
 
+    # Resolve active corpus key if not already provided by the caller
+    if not settings.use_legacy_retrieval and corpus_key is None and org_id and db_session_factory:
+        try:
+            from portfolio_rag.domain.services import org_service
+            async with db_session_factory() as _sess:
+                corpus = await org_service.get_active_corpus(_sess, _uuid_mod.UUID(str(org_id)))
+                corpus_key = corpus.corpus_key
+        except LookupError:
+            yield _sse({
+                "type": "error",
+                "code": "no_active_corpus",
+                "message": "No knowledge base selected. Set an active knowledge base in Organisation Settings.",
+            })
+            yield "data: [DONE]\n\n"
+            return
+
     if intent == "conversational":
-        gen = _handle_conversational(message, history, conversation_id, settings, db_session_factory, org_id=org_id)
+        gen = _handle_conversational(message, history, conversation_id, settings, db_session_factory, org_id=org_id, corpus_key=corpus_key)
     elif intent == "retrieval":
-        gen = _handle_retrieval(message, history, conversation_id, settings, db_session_factory, prefetched_chunks=prefetched_chunks, org_id=org_id)
+        gen = _handle_retrieval(message, history, conversation_id, settings, db_session_factory, prefetched_chunks=prefetched_chunks, org_id=org_id, corpus_key=corpus_key)
     elif intent == "document":
-        gen = _handle_document(message, history, conversation_id, settings, db_session_factory, prefetched_chunks=prefetched_chunks, org_id=org_id)
+        gen = _handle_document(message, history, conversation_id, settings, db_session_factory, prefetched_chunks=prefetched_chunks, org_id=org_id, corpus_key=corpus_key)
     elif intent == "refinement":
-        gen = _handle_refinement(message, history, conversation_id, needs_rag, settings, db_session_factory, prefetched_chunks=prefetched_chunks, org_id=org_id)
+        gen = _handle_refinement(message, history, conversation_id, needs_rag, settings, db_session_factory, prefetched_chunks=prefetched_chunks, org_id=org_id, corpus_key=corpus_key)
     else:
         # Exhaustiveness guard — unknown intent falls back to retrieval
-        gen = _handle_retrieval(message, history, conversation_id, settings, db_session_factory, prefetched_chunks=prefetched_chunks, org_id=org_id)
+        gen = _handle_retrieval(message, history, conversation_id, settings, db_session_factory, prefetched_chunks=prefetched_chunks, org_id=org_id, corpus_key=corpus_key)
 
     async for event in gen:
         yield event

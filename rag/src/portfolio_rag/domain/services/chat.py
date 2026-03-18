@@ -94,6 +94,19 @@ async def build_event_stream(
                 else trim.kept_messages
             )
 
+    # ── Step 2b: Resolve active corpus key before any retrieval ──────────────
+    # Must happen before speculative retrieval so chunks come from the right workspace.
+    corpus_key: str | None = None
+    if not chat_settings.use_legacy_retrieval and org_id:
+        from portfolio_rag.domain.services import org_service
+        try:
+            async with db_session_factory() as _sess:
+                _corpus = await org_service.get_active_corpus(_sess, org_id)
+                corpus_key = _corpus.corpus_key
+        except LookupError:
+            # No active corpus — stream_response will emit the structured error event
+            pass
+
     # ── Step 3: Classify intent + speculative retrieval (parallel) ───────────
     prefetched_chunks: list[dict] | None = None
 
@@ -102,7 +115,9 @@ async def build_event_stream(
         needs_rag = intent_override != "conversational"
         classification = Classification(intent=intent_override, needs_rag=needs_rag)
         if needs_rag:
-            prefetched_chunks = await chat_pipeline._retrieve(message, chat_settings, mode=lightrag_mode or "local")
+            prefetched_chunks = await chat_pipeline._retrieve(
+                message, chat_settings, mode=lightrag_mode or "local", corpus_key=corpus_key, org_id=org_id
+            )
     else:
         # Fire both tasks concurrently.  Retrieval is cancelled if the classified
         # intent turns out to be conversational (no RAG needed).
@@ -111,10 +126,13 @@ async def build_event_stream(
                 message, history, chat_settings,
                 db_session_factory=db_session_factory,
                 conversation_id=conversation_id,
+                org_id=org_id,
             )
         )
         retrieval_task = asyncio.create_task(
-            chat_pipeline._retrieve(message, chat_settings, mode=lightrag_mode or "local")
+            chat_pipeline._retrieve(
+                message, chat_settings, mode=lightrag_mode or "local", corpus_key=corpus_key, org_id=org_id
+            )
         )
 
         classification = await intent_task
@@ -139,6 +157,7 @@ async def build_event_stream(
             db_session_factory,
             prefetched_chunks=prefetched_chunks,
             org_id=org_id,
+            corpus_key=corpus_key,
         ):
             yield event
 

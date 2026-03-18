@@ -24,6 +24,11 @@ class Organisation(SQLModel, table=True):
     plan: str = Field(default="free")
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
+    # Nullable FK to corpora.id — set after corpus creation to avoid circular dep at DDL time
+    active_corpus_id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(sa.UUID(as_uuid=True), nullable=True),
+    )
 
 
 class OrganisationMember(SQLModel, table=True):

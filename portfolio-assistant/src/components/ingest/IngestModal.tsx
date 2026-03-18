@@ -9,8 +9,6 @@ import {
   getDocumentStatus,
   reIngestDocument,
 } from "@/lib/ingest";
-
-const CORPUS_ID = "portfolio_vault";
 const POLL_INTERVAL_MS = 3000;
 const TERMINAL = new Set(["ready", "failed"]);
 const SUPPORTED_EXTS = new Set(["md", "txt"]);
@@ -181,7 +179,6 @@ export function IngestModal({
 
     setPhase("checking");
     const results = await checkDuplicates(
-      CORPUS_ID,
       entries.map((e) => ({
         filename: e.file.name,
         hash: e.hash!,
@@ -216,7 +213,7 @@ export function IngestModal({
         prev.map((e) => (e === entry ? { ...e, uploadStatus: "uploading" } : e))
       );
       try {
-        const result = await uploadDocument(entry.file, CORPUS_ID, entry.hash!);
+        const result = await uploadDocument(entry.file, entry.hash!);
         setFiles((prev) =>
           prev.map((e) =>
             e === entry
@@ -342,7 +339,7 @@ export function IngestModal({
         <div className="w-full max-w-lg bg-bg border border-border/60 rounded-2xl shadow-2xl flex flex-col max-h-[85vh]">
           {/* Header */}
           <div className="px-5 pt-5 pb-3 border-b border-border/40 shrink-0 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-foreground">Ingest Files</h2>
+            <h2 className="text-sm font-semibold text-foreground">Add Documents</h2>
             <button
               onClick={onClose}
               className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded"
@@ -407,7 +404,7 @@ export function IngestModal({
 
                 {/* Ready section */}
                 <Section
-                  title="Ready to ingest"
+                  title="Ready to add"
                   count={newFiles.length}
                   open={openSections.ready}
                   onToggle={() => toggleSection("ready")}
@@ -478,7 +475,7 @@ export function IngestModal({
                 {/* Duplicates */}
                 {dupFiles.length > 0 && (
                   <Section
-                    title="Skipped — already in corpus"
+                    title="Skipped — already in your knowledge base"
                     count={dupFiles.length}
                     open={openSections.duplicate}
                     onToggle={() => toggleSection("duplicate")}
@@ -505,7 +502,7 @@ export function IngestModal({
                               duplicate of &ldquo;{e.existingTitle}&rdquo;
                               {" · "}
                               <span className="italic">
-                                Already ingested. Re-ingest from the vault if you want to update it.
+                                Already added. Reprocess from the documents page if you want to update it.
                               </span>
                             </p>
                           )}
@@ -612,7 +609,7 @@ export function IngestModal({
             {phase === "processing" && (
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                  Building knowledge graph…
+                  Processing documents…
                 </p>
                 {uploadedFiles.map((e) => (
                   <div
@@ -639,7 +636,7 @@ export function IngestModal({
                       {e.processingStatus === "processing" && (
                         <span className="text-[11px] text-yellow-400 font-mono flex items-center gap-1.5">
                           <span className="inline-block h-3 w-3 animate-spin rounded-full border border-yellow-400 border-t-transparent" />
-                          Processing — Building knowledge graph…
+                          Processing…
                         </span>
                       )}
                       {e.processingStatus === "ready" && (
@@ -687,8 +684,8 @@ export function IngestModal({
                 </Button>
                 <Button size="sm" disabled={checkedCount === 0} onClick={startUpload}>
                   {checkedCount === 0
-                    ? "Nothing to ingest"
-                    : `Ingest ${checkedCount} file${checkedCount !== 1 ? "s" : ""}`}
+                    ? "Nothing to add"
+                    : `Add ${checkedCount} document${checkedCount !== 1 ? "s" : ""}`}
                 </Button>
               </>
             )}

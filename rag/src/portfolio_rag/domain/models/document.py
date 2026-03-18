@@ -57,7 +57,7 @@ class DuplicateCheckFile(BaseModel):
 
 
 class DuplicateCheckRequest(BaseModel):
-    corpus_id: str = DEFAULT_CORPUS_ID
+    corpus_id: Optional[str] = None  # ignored — backend resolves from org's active corpus
     files: list[DuplicateCheckFile]
 
 

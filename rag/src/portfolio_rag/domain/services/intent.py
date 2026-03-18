@@ -3,12 +3,10 @@ core/intent.py
 --------------
 Fast intent classification for incoming chat messages.
 
-Ports lib/intent.ts verbatim.
-
 Four intents:
   conversational — small talk, greetings, thanks, short reactions
-  retrieval      — questions about Daud's background/skills/projects
-  document       — explicit request to generate CV / cover letter / bio
+  retrieval      — any question that requires knowledge base context to answer
+  document       — explicit request to generate a structured document (report, summary, etc.)
   refinement     — modify / improve a document already in the conversation
 """
 
@@ -29,23 +27,23 @@ IntentType = Literal["conversational", "retrieval", "document", "refinement"]
 class Classification:
     intent: IntentType
     needs_rag: bool
-    has_prior_document: bool
 
 
-CLASSIFIER_SYSTEM = """You are an intent classifier for a career assistant chatbot that helps a user named Daud with his portfolio, CV, cover letters, and job applications.
+CLASSIFIER_SYSTEM = """You are an intent classifier for a knowledge base assistant. Users ask questions about documents stored in their knowledge base.
 
 Classify the user's current message into exactly one intent:
-- "conversational": small talk, greetings, thanks, short reactions, clarifying questions about the assistant itself
-- "retrieval": questions about Daud's experience, skills, projects, background, or anything requiring portfolio information
-- "document": explicit request to generate a new CV, cover letter, resume, or bio from scratch
-- "refinement": request to modify, shorten, improve, or extend a document already in the conversation; OR a follow-up that references a previously generated document
+- "conversational": pure small talk, greetings, thanks, short reactions ("hi", "thanks", "great"), or questions about the assistant itself ("what can you do?")
+- "retrieval": ANY question that might be answered using the knowledge base — questions about topics, people, projects, technologies, events, facts, summaries, comparisons, or anything where context from stored documents would help. When in doubt, use "retrieval".
+- "document": explicit request to generate a new structured document (report, summary document, briefing, etc.) based on knowledge base content
+- "refinement": request to modify, shorten, improve, or extend a document already present in the conversation history
 
 Also output:
-- needs_rag: true if vault chunks should be retrieved (true for retrieval/document; false for conversational; conditionally true for refinement if the request needs new information, e.g. "add my kiosk project" — true, "make it shorter" — false)
-- has_prior_document: true if there is a <document ...> block in the recent conversation history
+- needs_rag: true if knowledge base chunks should be retrieved (true for retrieval/document; false for conversational; conditionally true for refinement if the request needs new information beyond what is already in the conversation — e.g. "add information about X" → true, "make it shorter" → false)
+
+IMPORTANT: Err on the side of "retrieval" with needs_rag=true. Only use "conversational" for messages that are clearly pure small talk with no informational intent.
 
 Respond with valid JSON only. No markdown fences, no explanation. Example:
-{"intent":"retrieval","needs_rag":true,"has_prior_document":false}"""
+{"intent":"retrieval","needs_rag":true}"""
 
 
 def scan_for_document(history: list[dict]) -> bool:
@@ -65,6 +63,7 @@ async def classify_intent(
     *,
     db_session_factory=None,
     conversation_id: str | None = None,
+    org_id=None,
 ) -> Classification:
     """
     Classifies a user message into an intent + retrieval metadata.
@@ -73,8 +72,7 @@ async def classify_intent(
     call fails or returns unparseable JSON — safe over-retrieval beats silent
     context loss.
     """
-    prior = scan_for_document(history)
-    fallback = Classification(intent="retrieval", needs_rag=True, has_prior_document=prior)
+    fallback = Classification(intent="retrieval", needs_rag=True)
 
     if not settings.anthropic_api_key and not settings.openai_api_key:
         return fallback
@@ -103,14 +101,8 @@ async def classify_intent(
         result = Classification(
             intent=parsed["intent"],
             needs_rag=bool(parsed["needs_rag"]),
-            # Ground-truth override: if we can see a document in history, trust that
-            # over the LLM's answer (it only saw the last 4 messages).
-            has_prior_document=bool(parsed.get("has_prior_document", False)) or prior,
         )
-        logger.info(
-            "[intent] %s | needs_rag=%s | prior_doc=%s",
-            result.intent, result.needs_rag, result.has_prior_document,
-        )
+        logger.info("[intent] %s | needs_rag=%s", result.intent, result.needs_rag)
 
         # Log best-effort
         if db_session_factory and usage:
@@ -124,6 +116,7 @@ async def classify_intent(
                         input_tokens=usage["input_tokens"],
                         output_tokens=usage["output_tokens"],
                         conversation_id=conversation_id,
+                        org_id=org_id,
                     )
                     await _session.commit()
             except Exception:

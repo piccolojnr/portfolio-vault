@@ -16,11 +16,13 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from portfolio_rag.app.core.db import get_db_conn
 from portfolio_rag.app.core.dependencies import get_current_user, get_live_settings, require_role
 from portfolio_rag.domain.models.org import (
+    CorpusRead,
     InviteMemberRequest,
     InvitePreview,
     InviteRead,
@@ -234,6 +236,62 @@ async def update_member_role(
         role=member.role,
         joined_at=member.joined_at,
     )
+
+
+@router.get("/{org_id}/corpora", response_model=list[CorpusRead])
+async def list_corpora(
+    org_id: str,
+    session: DBSession,
+    current_user: dict = Depends(get_current_user),
+):
+    oid = _parse_org_id(org_id)
+    _assert_org_scope(current_user, oid)
+    corpora = await org_service.list_corpora(session, oid)
+    return [
+        CorpusRead(id=str(c.id), name=c.name, corpus_key=c.corpus_key, created_at=c.created_at)
+        for c in corpora
+    ]
+
+
+class SetActiveCorpusRequest(BaseModel):
+    corpus_id: str
+
+
+@router.get("/{org_id}/active-corpus")
+async def get_active_corpus(
+    org_id: str,
+    session: DBSession,
+    current_user: dict = Depends(get_current_user),
+):
+    oid = _parse_org_id(org_id)
+    _assert_org_scope(current_user, oid)
+    try:
+        corpus = await org_service.get_active_corpus(session, oid)
+        return {"corpus": CorpusRead(id=str(corpus.id), name=corpus.name, corpus_key=corpus.corpus_key, created_at=corpus.created_at)}
+    except LookupError:
+        return {"corpus": None}
+
+
+@router.post("/{org_id}/active-corpus")
+async def set_active_corpus(
+    org_id: str,
+    body: SetActiveCorpusRequest,
+    session: DBSession,
+    current_user: dict = Depends(require_role("owner", "admin")),
+):
+    oid = _parse_org_id(org_id)
+    _assert_org_scope(current_user, oid)
+    try:
+        corpus_id = uuid.UUID(body.corpus_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid corpus_id")
+    try:
+        corpus = await org_service.set_active_corpus(session, oid, corpus_id, current_user["sub"])
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    return {"corpus": CorpusRead(id=str(corpus.id), name=corpus.name, corpus_key=corpus.corpus_key, created_at=corpus.created_at)}
 
 
 @router.post("/{org_id}/transfer-ownership", status_code=204)

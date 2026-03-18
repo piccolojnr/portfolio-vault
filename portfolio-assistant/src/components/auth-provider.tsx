@@ -66,6 +66,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setOrg(null);
         return;
       }
+      if (res.status === 404) {
+        // User deleted from DB — clear tokens and redirect to login.
+        setUser(null);
+        setOrg(null);
+        await clearTokens();
+        router.push("/login");
+        return;
+      }
       if (!res.ok) {
         setUser(null);
         setOrg(null);
@@ -81,7 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       setOrg(null);
     }
-  }, []);
+  }, [router]);
 
   const refresh = useCallback(async () => {
     await fetchMe();

@@ -25,7 +25,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-from portfolio_rag.domain.services.lightrag_service import CORPUS_ID
+from portfolio_rag.domain.services.lightrag_service import CORPUS_ID as _DEFAULT_CORPUS_ID
 from portfolio_rag.domain.services import lightrag_service
 from portfolio_rag.infrastructure.db.repository import (
     get_doc_by_id,
@@ -40,9 +40,15 @@ async def ingest_document(
     doc_id: str,
     settings,
     *,
+    corpus_key: str | None = None,
     file_data: bytes | None = None,
+    org_id=None,
 ) -> None:
     """Ingest a single Document into the LightRAG corpus.
+
+    corpus_key selects which LightRAG workspace to write to.  Defaults to the
+    legacy "portfolio_vault" constant when not supplied so older callers that
+    haven't been updated yet continue to work.
 
     If file_data is provided, the bytes are stored via the configured
     StorageBackend and file metadata is written to the document's columns
@@ -52,6 +58,7 @@ async def ingest_document(
     "failed" on error.  Raises on unexpected errors so the caller can record
     the failure in the pipeline run audit row.
     """
+    effective_corpus = corpus_key or _DEFAULT_CORPUS_ID
     doc = get_doc_by_id(settings.database_url, doc_id)
     if doc is None:
         raise LookupError(f"Document {doc_id!r} not found")
@@ -78,7 +85,7 @@ async def ingest_document(
         if encoding_warning:
             extra_meta["encoding_warning"] = encoding_warning
 
-        await lightrag_service.ingest(CORPUS_ID, text, doc_id, settings)
+        await lightrag_service.ingest(effective_corpus, text, doc_id, settings, org_id=org_id)
         logger.info("[ingest] lightrag done for slug=%s, writing ready status", doc.slug)
         update_doc_metadata(settings.database_url, doc_id, {**extra_meta, "lightrag_status": "ready"})
     except Exception as exc:

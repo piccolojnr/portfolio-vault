@@ -6,6 +6,12 @@ export async function GET(req: NextRequest) {
   const res = await serverFetch(`${RAG_BACKEND_URL}/api/v1/auth/me`, req);
   const data = await res.json().catch(() => ({}));
 
+
+  if (res.status === 404) {
+    req.cookies.delete("access_token");
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   if (!res.ok) {
     return Response.json(data, { status: res.status });
   }

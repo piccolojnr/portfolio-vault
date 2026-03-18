@@ -18,7 +18,9 @@ function LoginContent() {
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Already authenticated — redirect
+  console.log("LoginPage render:", { isAuthenticated });
+  // Already authenticat
+  // ed — redirect
   if (isAuthenticated) {
     const redirect = searchParams.get("redirect") ?? "/";
     router.replace(redirect);
@@ -81,7 +83,9 @@ function LoginContent() {
         <div className="space-y-1">
           <h1 className="text-xl font-mono font-semibold">sign in</h1>
           <p className="text-sm text-muted-foreground">
-            {mode === "password" ? "Enter your credentials" : "Get a magic link by email"}
+            {mode === "password"
+              ? "Enter your credentials"
+              : "Get a magic link by email"}
           </p>
         </div>
 
@@ -90,9 +94,14 @@ function LoginContent() {
             Check your email for a magic link. It expires in 15 minutes.
           </div>
         ) : (
-          <form onSubmit={mode === "password" ? handleLogin : handleMagicLink} className="space-y-3">
+          <form
+            onSubmit={mode === "password" ? handleLogin : handleMagicLink}
+            className="space-y-3"
+          >
             <div className="space-y-1">
-              <label className="text-xs font-mono text-muted-foreground">email</label>
+              <label className="text-xs font-mono text-muted-foreground">
+                email
+              </label>
               <input
                 type="email"
                 required
@@ -105,7 +114,9 @@ function LoginContent() {
 
             {mode === "password" && (
               <div className="space-y-1">
-                <label className="text-xs font-mono text-muted-foreground">password</label>
+                <label className="text-xs font-mono text-muted-foreground">
+                  password
+                </label>
                 <input
                   type="password"
                   required
@@ -117,29 +128,40 @@ function LoginContent() {
               </div>
             )}
 
-            {error && (
-              <p className="text-xs text-destructive">{error}</p>
-            )}
+            {error && <p className="text-xs text-destructive">{error}</p>}
 
             <button
               type="submit"
               disabled={loading}
               className="w-full py-2 rounded-md bg-primary text-primary-foreground text-sm font-mono hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
-              {loading ? "…" : mode === "password" ? "sign in" : "send magic link"}
+              {loading
+                ? "…"
+                : mode === "password"
+                  ? "sign in"
+                  : "send magic link"}
             </button>
           </form>
         )}
 
         <div className="flex items-center justify-between text-xs font-mono text-muted-foreground">
           <button
-            onClick={() => { setMode(mode === "password" ? "magic" : "password"); setError(""); setSent(false); }}
+            onClick={() => {
+              setMode(mode === "password" ? "magic" : "password");
+              setError("");
+              setSent(false);
+            }}
             className="hover:text-foreground transition-colors"
           >
-            {mode === "password" ? "use magic link instead" : "use password instead"}
+            {mode === "password"
+              ? "use magic link instead"
+              : "use password instead"}
           </button>
           {mode === "password" && (
-            <Link href="/auth/reset-password" className="hover:text-foreground transition-colors">
+            <Link
+              href="/auth/reset-password"
+              className="hover:text-foreground transition-colors"
+            >
               forgot password?
             </Link>
           )}

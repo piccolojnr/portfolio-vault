@@ -13,7 +13,6 @@ import {
   reIngestDocument,
 } from "@/lib/ingest";
 
-const CORPUS_ID = "portfolio_vault";
 const POLL_MS = 3000;
 const TERMINAL = new Set(["ready", "failed"]);
 const SUPPORTED = new Set(["md", "txt"]);
@@ -276,7 +275,6 @@ export default function IngestPage() {
       }
 
       const results = await checkDuplicates(
-        CORPUS_ID,
         batchEntries.map((e) => ({
           filename: e.file.name,
           hash: e.hash!,
@@ -345,7 +343,7 @@ export default function IngestPage() {
         ),
       );
       try {
-        const res = await uploadDocument(entry.file, CORPUS_ID, entry.hash!);
+        const res = await uploadDocument(entry.file, entry.hash!);
         setFiles((p) =>
           p.map((e) =>
             e.hash === entry.hash

@@ -25,13 +25,12 @@ from portfolio_rag.domain.models.document import (
     CorpusDocCreate,
     CorpusDocDetail,
     CorpusDocUpdate,
-    DEFAULT_CORPUS_ID,
     DocumentStatusResponse,
     DuplicateCheckRequest,
     DuplicateCheckResponse,
     PaginatedDocs,
 )
-from portfolio_rag.domain.services import job_queue
+from portfolio_rag.domain.services import job_queue, org_service
 from portfolio_rag.infrastructure.db.scoped_repository import DocumentRepository
 from portfolio_rag.infrastructure.storage import get_storage_backend
 from portfolio_rag.domain.services import document as svc
@@ -72,13 +71,27 @@ async def create_document(
 
 # ── Fixed-path routes (must come before /{slug}) ──────────────────────────────
 
+async def _get_active_corpus_key(session: AsyncSession, org_id: UUID) -> str:
+    """Resolve the org's active corpus_key. Raises 400 if none is set."""
+    try:
+        corpus = await org_service.get_active_corpus(session, org_id)
+        return corpus.corpus_key
+    except LookupError:
+        raise HTTPException(
+            status_code=400,
+            detail="No active knowledge base. Set one in Organisation Settings.",
+        )
+
+
 @router.post("/check-duplicates", response_model=DuplicateCheckResponse)
 async def check_duplicates_endpoint(
     body: DuplicateCheckRequest,
     session: DBSession,
     current_user: dict = Depends(get_current_user),
 ):
-    return await _repo(session, current_user).check_duplicates(body.corpus_id, body.files)
+    org_id = UUID(current_user["org_id"])
+    corpus_key = await _get_active_corpus_key(session, org_id)
+    return await _repo(session, current_user).check_duplicates(corpus_key, body.files)
 
 
 @router.post("/upload", status_code=201)
@@ -86,10 +99,12 @@ async def upload_document(
     session: DBSession,
     current_user: dict = Depends(get_current_user),
     file: UploadFile = File(...),
-    corpus_id: str = Form(DEFAULT_CORPUS_ID),
     file_hash: str = Form(...),
 ):
     import hashlib
+
+    org_id = UUID(current_user["org_id"])
+    corpus_id = await _get_active_corpus_key(session, org_id)
 
     data = await file.read()
 
@@ -233,14 +248,16 @@ async def reingest_document(
     session.add(doc)
     await session.commit()
 
+    org_id = UUID(current_user["org_id"])
+    corpus_id = doc.corpus_id or await _get_active_corpus_key(session, org_id)
     await job_queue.enqueue(
         session, "reingest_document",
         {
             "document_id": doc_id,
-            "corpus_id": doc.corpus_id or "portfolio_vault",
+            "corpus_id": corpus_id,
             "org_id": str(current_user["org_id"]),
         },
-        org_id=UUID(current_user["org_id"]),
+        org_id=org_id,
     )
     await session.commit()
     return {"status": "queued"}

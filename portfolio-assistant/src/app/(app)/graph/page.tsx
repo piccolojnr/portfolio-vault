@@ -3,6 +3,8 @@
 import dynamic from "next/dynamic";
 import { use, useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/components/auth-provider";
+import { useActiveCorpus } from "@/lib/corpus";
 
 const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
   ssr: false,
@@ -38,7 +40,11 @@ export default function GraphPage({
 }: {
   searchParams: Promise<{ corpus?: string; node?: string; search?: string }>;
 }) {
-  const { corpus = "portfolio_vault", node, search: searchParam } = use(searchParams);
+  const { corpus: corpusParam, node, search: searchParam } = use(searchParams);
+  const { org } = useAuth();
+  const { data: corpusData } = useActiveCorpus(org?.id);
+  // Use active corpus key; fall back to URL ?corpus= param for deep-linking, then default
+  const corpus = corpusData?.corpus?.corpus_key ?? corpusParam ?? "portfolio_vault";
   const targetNodeId = node;
 
   const [search, setSearch] = useState(searchParam ?? "");
@@ -53,6 +59,9 @@ export default function GraphPage({
   }, []);
   const initialFocusDoneRef = useRef(false);
 
+  // Don't fetch until we know the real corpus_key — avoids a wasted "portfolio_vault" request
+  const corpusReady = !!corpusData;
+
   const { data: graphData, isLoading: loading } = useQuery<GraphData>({
     queryKey: ["graph", corpus],
     queryFn: () =>
@@ -62,6 +71,7 @@ export default function GraphPage({
       }),
     staleTime: 5 * 60 * 1000,
     placeholderData: { nodes: [], links: [] },
+    enabled: corpusReady,
   });
 
   const handleNodeClick = useCallback(
@@ -149,7 +159,7 @@ export default function GraphPage({
           className="w-64 text-sm bg-muted/50 border border-border rounded px-3 py-1.5 focus:outline-none focus:border-amber-400"
         />
         <span className="font-mono text-sm text-muted-foreground">
-          Knowledge Graph — {corpus}
+          Knowledge Graph
         </span>
       </div>
       <div className="flex flex-1 min-h-0 relative">
@@ -191,7 +201,7 @@ export default function GraphPage({
             </div>
             <div className="flex flex-col items-center gap-2">
               <h2 className="text-xl font-medium tracking-tight bg-linear-to-r from-amber-200 to-amber-500 bg-clip-text text-transparent">
-                Initializing Neural Map
+                Loading Knowledge Graph
               </h2>
               <p className="text-sm text-muted-foreground font-mono animate-pulse">
                 {loading ? "Fetching nodes..." : "Simulating physics..."}

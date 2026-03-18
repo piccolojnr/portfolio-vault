@@ -27,6 +27,7 @@ from portfolio_rag.infrastructure.db.models.auth_tokens import (
     RefreshToken,
 )
 from portfolio_rag.infrastructure.db.models.base import utcnow
+from portfolio_rag.infrastructure.db.models.corpus import Corpus
 from portfolio_rag.infrastructure.db.models.org import (
     Organisation,
     OrganisationMember,
@@ -50,7 +51,7 @@ async def _create_org_for_user(
     user_id,
     email: str,
 ) -> Organisation:
-    """Create an Organisation + OrganisationMember (owner) + default setting."""
+    """Create an Organisation + OrganisationMember (owner) + default Corpus."""
     prefix = email.split("@")[0]
     org = Organisation(
         name=f"{prefix}'s Workspace",
@@ -63,13 +64,17 @@ async def _create_org_for_user(
     member = OrganisationMember(user_id=user_id, org_id=org.id, role="owner")
     session.add(member)
 
-    setting = OrganisationSetting(
+    # Create a default corpus; corpus_key = org.id (unique per org, isolates Qdrant/LightRAG data)
+    corpus = Corpus(
         org_id=org.id,
-        key="default_corpus_id",
-        value=str(org.id),
-        is_secret=False,
+        name=f"{prefix}'s Knowledge Base",
+        corpus_key=str(org.id),
     )
-    session.add(setting)
+    session.add(corpus)
+    await session.flush()  # populate corpus.id
+
+    org.active_corpus_id = corpus.id
+    session.add(org)
 
     return org
 

@@ -12,6 +12,8 @@ import {
 import { reIngestDocument } from "@/lib/ingest";
 import { StatusBadge } from "@/components/ingest/IngestModal";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/components/auth-provider";
+import { useActiveCorpus } from "@/lib/corpus";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -231,7 +233,7 @@ function DocRow({ doc, selected, onSelect, onRefresh }: RowProps) {
                 e.stopPropagation();
                 setConfirmReingest(true);
               }}
-              title="Re-ingest into knowledge graph"
+              title="Reprocess"
               className="p-1.5 rounded text-muted-foreground hover:text-primary transition-colors"
             >
               <svg
@@ -336,7 +338,7 @@ function BulkBar({
           <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5" strokeLinecap="round" />
           <path d="M8 1v4l2-2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        Re-ingest {count}
+        Reprocess {count}
       </Button>
       <Button size="sm" variant="destructive" onClick={onDelete}>
         Delete {count}
@@ -399,6 +401,8 @@ const NON_TERMINAL = new Set(["pending", "processing"]);
 
 export default function DocumentsPage() {
   const qc = useQueryClient();
+  const { org } = useAuth();
+  const { data: corpusData } = useActiveCorpus(org?.id);
   const [tab, setTab] = useState<Tab>("all");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -534,7 +538,7 @@ export default function DocumentsPage() {
             <p className="text-[11px] text-muted-foreground mt-0.5">
               {loading
                 ? "Loading…"
-                : `${total} document${total !== 1 ? "s" : ""} · corpus: portfolio_vault`}
+                : `${total} document${total !== 1 ? "s" : ""} · ${corpusData?.corpus?.name ?? "Knowledge Base"}`}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -556,7 +560,7 @@ export default function DocumentsPage() {
                   />
                   <path d="M2 14h12" strokeLinecap="round" />
                 </svg>
-                Ingest
+                Add
               </Button>
             </Link>
             <Link href="/documents/new">
@@ -684,7 +688,7 @@ export default function DocumentsPage() {
                 href="/documents/ingest"
                 className="text-xs text-primary hover:underline mt-2"
               >
-                Ingest your first files →
+                Add your first documents →
               </Link>
             )}
           </div>
@@ -782,9 +786,9 @@ export default function DocumentsPage() {
       {/* Bulk confirm dialogs */}
       {bulkReingestConfirm && (
         <ConfirmDialog
-          title={`Re-ingest ${selected.size} document${selected.size !== 1 ? "s" : ""}?`}
+          title={`Reprocess ${selected.size} document${selected.size !== 1 ? "s" : ""}?`}
           body="This will rebuild the chunks, embeddings, and knowledge graph for each selected document. Previous index entries will be replaced."
-          confirm="Re-ingest"
+          confirm="Reprocess"
           onConfirm={() =>
             bulkReingestMut.mutate(selectedItems.map((d) => d.id))
           }

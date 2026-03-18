@@ -31,6 +31,14 @@ function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleString();
 }
 
+const STATUS_LABELS: Record<string, string> = {
+  pending: "Queued",
+  running: "Processing",
+  done: "Ready",
+  retrying: "Retrying",
+  failed: "Failed",
+};
+
 function StatusBadge({ status }: { status: string }) {
   const cls: Record<string, string> = {
     pending: "bg-muted/40 text-muted-foreground",
@@ -43,7 +51,7 @@ function StatusBadge({ status }: { status: string }) {
     <span
       className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${cls[status] ?? "bg-muted/20 text-muted-foreground"}`}
     >
-      {status}
+      {STATUS_LABELS[status] ?? status}
     </span>
   );
 }
