@@ -9,6 +9,7 @@
 | **Status** | Completed — handed over |
 | **Period** | June 2024 – August 2024 (3 months) |
 | **Role** | Frontend developer (intern) |
+| **Creator** | Daud Rahim |
 | **Type** | Team (me + backend researcher/developer at CSIR) |
 | **Client / Organisation** | Council for Scientific and Industrial Research — Institute of Industrial Research (CSIR-INSTI) |
 | **Industry** | Government / Research / Environmental monitoring |

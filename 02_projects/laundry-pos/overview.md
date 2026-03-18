@@ -9,6 +9,7 @@
 | **Status** | Live — active testing / soft launch with paying client |
 | **Period** | January 2026 – Present |
 | **Role** | Solo developer — designed, built, deploying |
+| **Creator** | Daud Rahim |
 | **Type** | Solo |
 | **Client / Organisation** | Confidential — laundry business in Ghana |
 | **Industry** | Retail / Laundry / SaaS (planned) |

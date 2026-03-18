@@ -9,6 +9,7 @@
 | **Status** | Live — actively maintained |
 | **Period** | July 2025 – Present |
 | **Role** | Solo developer — designed, built, deployed, and maintaining |
+| **Creator** | Daud Rahim |
 | **Type** | Solo |
 | **Client / Organisation** | Student Representative Council (SRC), Knutsford University |
 | **Industry** | Education / Civic |

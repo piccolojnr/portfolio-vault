@@ -9,6 +9,7 @@
 | **Status** | Live |
 | **Period** | Early 2025 (approx. 2 months) |
 | **Role** | Sole developer — full implementation from Figma to production |
+| **Creator** | Daud Rahim |
 | **Type** | Solo (client via Paper Merchant) |
 | **Client / Organisation** | KGL Group |
 | **Industry** | Enterprise / Conglomerate / ICT |

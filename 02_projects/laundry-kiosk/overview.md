@@ -9,6 +9,7 @@
 | **Status** | Working prototype — awaiting public deployment |
 | **Period** | December 2025 – Present |
 | **Role** | Sole technical developer — all four layers |
+| **Creator** | Daud Rahim |
 | **Type** | Team (2 people: me + co-founder who provided resources/hardware) |
 | **Client / Organisation** | Internal / startup project |
 | **Industry** | IoT / Laundry / Consumer tech |

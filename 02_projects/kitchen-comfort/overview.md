@@ -9,6 +9,7 @@
 | **Status** | Live — handed over to client |
 | **Period** | August 2025 |
 | **Role** | Solo developer — designed and built end-to-end |
+| **Creator** | Daud Rahim |
 | **Type** | Solo |
 | **Client / Organisation** | Kitchen Comfort |
 | **Industry** | E-commerce / Kitchenware / Retail |

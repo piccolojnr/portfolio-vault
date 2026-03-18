@@ -9,6 +9,7 @@
 | **Status** | Live |
 | **Period** | ~Early 2025 – January 2026 (~1 year) |
 | **Role** | Sole developer — full implementation from Figma to production |
+| **Creator** | Daud Rahim |
 | **Type** | Solo (referral via Paper Merchant / KGL Group) |
 | **Client / Organisation** | Allied Ghana (Allied Oil) |
 | **Industry** | Energy / Fuel & Lubricants |
