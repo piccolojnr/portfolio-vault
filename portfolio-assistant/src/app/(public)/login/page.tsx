@@ -9,7 +9,7 @@ import { useAuth } from "@/components/auth-provider";
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { refresh, isAuthenticated } = useAuth();
+  const { refresh } = useAuth();
 
   const [mode, setMode] = useState<"password" | "magic">("password");
   const [email, setEmail] = useState("");
@@ -17,15 +17,6 @@ function LoginContent() {
   const [error, setError] = useState("");
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  console.log("LoginPage render:", { isAuthenticated });
-  // Already authenticat
-  // ed — redirect
-  if (isAuthenticated) {
-    const redirect = searchParams.get("redirect") ?? "/";
-    router.replace(redirect);
-    return null;
-  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,10 +50,11 @@ function LoginContent() {
     setError("");
     setLoading(true);
     try {
+      const redirect = searchParams.get("redirect");
       const res = await fetch("/api/auth/magic-link", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, ...(redirect ? { redirect_url: redirect } : {}) }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));

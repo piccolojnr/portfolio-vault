@@ -162,14 +162,13 @@ class DocumentRepository(ScopedRepository):
         await self._session.commit()
 
     async def check_duplicates(
-        self, corpus_id: str, files: list[DuplicateCheckFile]
+        self, files: list[DuplicateCheckFile]
     ) -> DuplicateCheckResponse:
         hashes = [f.hash for f in files]
         rows = (
             await self._session.execute(
                 select(Document).where(
                     Document.org_id == self._org_id,
-                    Document.corpus_id == corpus_id,
                     Document.file_hash.in_(hashes),
                 )
             )

@@ -89,9 +89,7 @@ async def check_duplicates_endpoint(
     session: DBSession,
     current_user: dict = Depends(get_current_user),
 ):
-    org_id = UUID(current_user["org_id"])
-    corpus_key = await _get_active_corpus_key(session, org_id)
-    return await _repo(session, current_user).check_duplicates(corpus_key, body.files)
+    return await _repo(session, current_user).check_duplicates(body.files)
 
 
 @router.post("/upload", status_code=201)

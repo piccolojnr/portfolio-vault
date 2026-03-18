@@ -150,21 +150,30 @@ async def register(
             session,
             "send_verify_email",
             {"email": email, "verify_url": verify_url, "expiry_hours": 24},
+            org_id=org.id,
         )
         await session.commit()
     except Exception:
         pass
 
     access_token = create_access_token(
-        str(user.id), str(org.id), "owner", email, settings
+        str(user.id), str(org.id), "owner", email, settings,
+        org_name=org.name,
+        onboarding_completed_at=user.onboarding_completed_at,
+        email_verified=user.email_verified,
     )
     return user, access_token, raw_refresh
 
 
-async def verify_email(session: AsyncSession, token: str, settings) -> User:
+async def verify_email(
+    session: AsyncSession,
+    token: str,
+    settings,
+) -> tuple[User, str, str]:
     """
     Mark a user's email as verified via magic-link token.
 
+    Returns (user, access_token, refresh_token_raw).
     Raises ValueError if token not found or expired.
     """
     from portfolio_rag.domain.services import job_queue
@@ -196,8 +205,28 @@ async def verify_email(session: AsyncSession, token: str, settings) -> User:
 
     user.email_verified = True
     session.add(user)
+
+    # Issue a refresh token
+    raw_refresh, refresh_hash = create_refresh_token()
+    refresh_expires = utcnow() + timedelta(days=settings.jwt_refresh_expiry_days)
+    refresh_token = RefreshToken(
+        user_id=user.id,
+        token_hash=refresh_hash,
+        revoked=False,
+        expires_at=refresh_expires,
+    )
+    session.add(refresh_token)
+
     await session.commit()
     await session.refresh(user)
+
+    # Look up org for token
+    member = (
+        await session.execute(
+            select(OrganisationMember).where(OrganisationMember.user_id == user.id)
+        )
+    ).scalars().first()
+    org_id = str(member.org_id) if member else ""
 
     try:
         await job_queue.enqueue(
@@ -209,12 +238,27 @@ async def verify_email(session: AsyncSession, token: str, settings) -> User:
                 "app_url": settings.app_url,
                 "app_name": settings.app_name,
             },
+            org_id=member.org_id if member else None,
         )
         await session.commit()
     except Exception:
         pass
+    role = member.role if member else "member"
+    org_name = ""
+    if member:
+        _org = (await session.execute(
+            select(Organisation).where(Organisation.id == member.org_id)
+        )).scalars().first()
+        if _org:
+            org_name = _org.name
 
-    return user
+    access_token = create_access_token(
+        str(user.id), org_id, role, user.email, settings,
+        org_name=org_name,
+        onboarding_completed_at=user.onboarding_completed_at,
+        email_verified=True,
+    )
+    return user, access_token, raw_refresh
 
 
 async def login(
@@ -251,6 +295,13 @@ async def login(
     ).scalars().first()
     org_id = str(member.org_id) if member else ""
     role = member.role if member else "member"
+    org_name = ""
+    if member:
+        _org = (await session.execute(
+            select(Organisation).where(Organisation.id == member.org_id)
+        )).scalars().first()
+        if _org:
+            org_name = _org.name
 
     raw_refresh, refresh_hash = create_refresh_token()
     refresh_expires = utcnow() + timedelta(days=settings.jwt_refresh_expiry_days)
@@ -263,11 +314,21 @@ async def login(
     session.add(refresh_token)
     await session.commit()
 
-    access_token = create_access_token(str(user.id), org_id, role, email, settings)
+    access_token = create_access_token(str(user.id), org_id, role, email, settings,
+        org_name=org_name,
+        onboarding_completed_at=user.onboarding_completed_at,
+        email_verified=user.email_verified,
+    )
     return access_token, raw_refresh
 
 
-async def send_magic_link(session: AsyncSession, email: str, settings) -> None:
+async def send_magic_link(
+    session: AsyncSession,
+    email: str,
+    settings,
+    *,
+    redirect_url: str | None = None,
+) -> None:
     """
     Enqueue a magic-link email (rate-limited to 3 per 15 min per email).
 
@@ -301,6 +362,9 @@ async def send_magic_link(session: AsyncSession, email: str, settings) -> None:
     session.add(ml_token)
 
     magic_link_url = f"{settings.app_url}/auth/magic-link?token={raw}"
+    if redirect_url:
+        from urllib.parse import quote
+        magic_link_url += f"&redirect={quote(redirect_url, safe='')}"
     await job_queue.enqueue(
         session,
         "send_magic_link_email",
@@ -350,6 +414,7 @@ async def verify_magic_link(
         await session.flush()
         org = await _create_org_for_user(session, user.id, email)
         org_id = str(org.id)
+        org_name = org.name
         role = "owner"
     else:
         member = (
@@ -359,6 +424,13 @@ async def verify_magic_link(
         ).scalars().first()
         org_id = str(member.org_id) if member else ""
         role = member.role if member else "member"
+        org_name = ""
+        if member:
+            _org = (await session.execute(
+                select(Organisation).where(Organisation.id == member.org_id)
+            )).scalars().first()
+            if _org:
+                org_name = _org.name
 
     raw_refresh, refresh_hash = create_refresh_token()
     refresh_expires = utcnow() + timedelta(days=settings.jwt_refresh_expiry_days)
@@ -372,7 +444,11 @@ async def verify_magic_link(
     await session.commit()
     await session.refresh(user)
 
-    access_token = create_access_token(str(user.id), org_id, role, email, settings)
+    access_token = create_access_token(str(user.id), org_id, role, email, settings,
+        org_name=org_name,
+        onboarding_completed_at=user.onboarding_completed_at,
+        email_verified=user.email_verified,
+    )
     return user, access_token, raw_refresh
 
 
@@ -419,6 +495,13 @@ async def refresh(
     ).scalars().first()
     org_id = str(member.org_id) if member else ""
     role = member.role if member else "member"
+    org_name = ""
+    if member:
+        _org = (await session.execute(
+            select(Organisation).where(Organisation.id == member.org_id)
+        )).scalars().first()
+        if _org:
+            org_name = _org.name
 
     raw_new, hash_new = create_refresh_token()
     new_token = RefreshToken(
@@ -430,7 +513,11 @@ async def refresh(
     session.add(new_token)
     await session.commit()
 
-    access_token = create_access_token(str(user.id), org_id, role, user.email, settings)
+    access_token = create_access_token(str(user.id), org_id, role, user.email, settings,
+        org_name=org_name,
+        onboarding_completed_at=user.onboarding_completed_at,
+        email_verified=user.email_verified,
+    )
     return access_token, raw_new
 
 

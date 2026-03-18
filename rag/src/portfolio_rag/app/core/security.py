@@ -22,6 +22,10 @@ def create_access_token(
     role: str,
     email: str,
     settings,
+    *,
+    org_name: str = "",
+    onboarding_completed_at=None,
+    email_verified: bool = True,
 ) -> str:
     """Create a signed HS256 access JWT."""
     import jwt
@@ -30,8 +34,14 @@ def create_access_token(
     payload = {
         "sub": user_id,
         "org_id": org_id,
+        "org_name": org_name,
         "role": role,
         "email": email,
+        "email_verified": email_verified,
+        "onboarding_completed_at": (
+            onboarding_completed_at.isoformat()
+            if onboarding_completed_at is not None else None
+        ),
         "type": "access",
         "iat": now,
         "exp": now + timedelta(minutes=settings.jwt_access_expiry_minutes),

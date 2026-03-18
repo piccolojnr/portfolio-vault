@@ -20,6 +20,7 @@ class LoginRequest(BaseModel):
 
 class MagicLinkRequest(BaseModel):
     email: str
+    redirect_url: str | None = None
 
 
 class VerifyTokenRequest(BaseModel):

@@ -153,6 +153,49 @@ async def list_members(
     return [MemberRead(**m) for m in members]
 
 
+@router.get("/{org_id}/invites", response_model=list[InviteRead])
+async def list_invites(
+    org_id: str,
+    session: DBSession,
+    current_user: dict = Depends(require_role("owner", "admin")),
+):
+    oid = _parse_org_id(org_id)
+    _assert_org_scope(current_user, oid)
+    invites = await org_service.list_invites(session, oid, current_user["sub"])
+    return [
+        InviteRead(
+            id=str(i.id),
+            org_id=str(i.org_id),
+            email=i.email,
+            role=i.role,
+            invited_by=str(i.invited_by) if i.invited_by else None,
+            expires_at=i.expires_at,
+            accepted=i.accepted,
+            created_at=i.created_at,
+        )
+        for i in invites
+    ]
+
+
+@router.delete("/{org_id}/invites/{invite_id}", status_code=204)
+async def revoke_invite(
+    org_id: str,
+    invite_id: str,
+    session: DBSession,
+    current_user: dict = Depends(require_role("owner", "admin")),
+):
+    oid = _parse_org_id(org_id)
+    _assert_org_scope(current_user, oid)
+    try:
+        iid = uuid.UUID(invite_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid invite_id")
+    try:
+        await org_service.revoke_invite(session, oid, iid, current_user["sub"])
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 @router.post("/{org_id}/invites", response_model=InviteRead, status_code=201)
 async def create_invite(
     org_id: str,

@@ -2,9 +2,14 @@
  * lib/auth.ts
  * ===========
  * Client-side token management.
- * The access token lives in a module-level variable (in-memory) so it is
- * never directly readable from the DOM. The non-httponly `access_token`
- * cookie is only used by Next.js middleware and server-side API routes.
+ *
+ * Auth flow:
+ *  - Middleware validates the access_token cookie (JWT verify) on every
+ *    page navigation and silently refreshes it when expired.
+ *  - AuthProvider reads the fresh cookie on mount and calls setAccessToken()
+ *    to hydrate the in-memory token — no network call needed.
+ *  - apiFetch uses the in-memory token for API calls and calls
+ *    refreshAccessToken() as a fallback if the backend returns 401 mid-session.
  */
 
 let _token: string | null = null;

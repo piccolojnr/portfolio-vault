@@ -2,12 +2,10 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useAuth } from "@/components/auth-provider";
 
 function VerifyContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { refresh } = useAuth();
   const token = searchParams.get("token");
   const pending = searchParams.get("pending");
 
@@ -31,14 +29,13 @@ function VerifyContent() {
           return;
         }
         setStatus("success");
-        await refresh();
-        router.push("/onboarding");
+        router.push("/");
       })
       .catch((err) => {
         setStatus("error");
         setMessage(String(err));
       });
-  }, [token, router, refresh]);
+  }, [token, router]);
 
   if (pending) {
     return (

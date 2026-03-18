@@ -135,19 +135,20 @@ async def invite_member(
         org_name = org.name if org else str(org_id)
 
         app_url = getattr(settings, "app_url", "http://localhost:3000")
-        invite_url = f"{app_url}/orgs/invites/{raw_token}"
+        invite_url = f"{app_url}/auth/invite/{raw_token}"
 
         from portfolio_rag.domain.services import job_queue
         await job_queue.enqueue(
             session,
             "send_org_invite_email",
             {
-                "to_email": email,
+                "email": email,
                 "invited_by_email": actor_email,
                 "org_name": org_name,
                 "invite_url": invite_url,
                 "expiry_days": 7,
             },
+            org_id=org_id,
         )
     except Exception:
         pass  # email enqueue is best-effort; don't fail the invite creation
@@ -155,6 +156,49 @@ async def invite_member(
     await session.commit()
     await session.refresh(invite)
     return invite
+
+
+async def list_invites(
+    session: AsyncSession,
+    org_id: uuid.UUID,
+    actor_user_id: str,
+) -> list[OrganisationInvite]:
+    """Return all pending (un-accepted, not expired) invites for an org."""
+    await _require_actor_role(session, org_id, actor_user_id, "owner", "admin")
+    now = utcnow()
+    rows = (
+        await session.execute(
+            select(OrganisationInvite).where(
+                OrganisationInvite.org_id == org_id,
+                OrganisationInvite.accepted == False,  # noqa: E712
+                OrganisationInvite.expires_at > now,
+            ).order_by(OrganisationInvite.created_at.desc())
+        )
+    ).scalars().all()
+    return list(rows)
+
+
+async def revoke_invite(
+    session: AsyncSession,
+    org_id: uuid.UUID,
+    invite_id: uuid.UUID,
+    actor_user_id: str,
+) -> None:
+    """Delete a pending invite. Raises LookupError if not found."""
+    await _require_actor_role(session, org_id, actor_user_id, "owner", "admin")
+    invite = (
+        await session.execute(
+            select(OrganisationInvite).where(
+                OrganisationInvite.id == invite_id,
+                OrganisationInvite.org_id == org_id,
+                OrganisationInvite.accepted == False,  # noqa: E712
+            )
+        )
+    ).scalars().first()
+    if invite is None:
+        raise LookupError("Invite not found")
+    await session.delete(invite)
+    await session.commit()
 
 
 async def accept_invite(

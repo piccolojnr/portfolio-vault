@@ -3,22 +3,15 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useAuth } from "@/components/auth-provider";
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { isAuthenticated } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  if (isAuthenticated) {
-    router.replace("/");
-    return null;
-  }
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();

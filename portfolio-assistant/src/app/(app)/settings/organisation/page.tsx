@@ -13,6 +13,20 @@ interface Member {
   joined_at: string;
 }
 
+// Extract the backend `detail` message from an apiFetch error string.
+// apiFetch throws: "Error: STATUS: JSON_BODY" where JSON_BODY may have {detail: "..."}
+function apiDetail(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  const match = msg.match(/\d{3}: (.+)$/s);
+  if (match) {
+    try {
+      const parsed = JSON.parse(match[1]);
+      if (parsed.detail) return String(parsed.detail);
+    } catch {}
+  }
+  return msg;
+}
+
 // ── Sub-components ──────────────────────────────────────────────────────────────
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
@@ -66,6 +80,10 @@ export default function OrgSettingsPage() {
   const [inviteError, setInviteError] = useState("");
   const [inviteSuccess, setInviteSuccess] = useState("");
 
+  const [pendingInvites, setPendingInvites] = useState<{id: string; email: string; role: string; expires_at: string}[]>([]);
+  const [invitesLoading, setInvitesLoading] = useState(false);
+  const [revoking, setRevoking] = useState<string | null>(null);
+
   const [transferTarget, setTransferTarget] = useState("");
   const [transferConfirm, setTransferConfirm] = useState(false);
   const [transferError, setTransferError] = useState("");
@@ -75,6 +93,14 @@ export default function OrgSettingsPage() {
   const { data: corporaData } = useOrgCorpora(org?.id);
   const setActiveCorpusMut = useSetActiveCorpus(org?.id ?? "");
 
+  const loadInvites = (orgId: string) => {
+    setInvitesLoading(true);
+    apiFetch<{id: string; email: string; role: string; expires_at: string}[]>(`/api/orgs/${orgId}/invites`)
+      .then(setPendingInvites)
+      .catch(() => setPendingInvites([]))
+      .finally(() => setInvitesLoading(false));
+  };
+
   useEffect(() => {
     if (!org) return;
     setOrgName(org.name);
@@ -83,6 +109,7 @@ export default function OrgSettingsPage() {
       .then(setMembers)
       .catch(() => {})
       .finally(() => setMembersLoading(false));
+    loadInvites(org.id);
   }, [org]);
 
   const saveOrgName = async (e: React.FormEvent) => {
@@ -101,7 +128,7 @@ export default function OrgSettingsPage() {
       setNameSaved(true);
       setTimeout(() => setNameSaved(false), 3000);
     } catch (err) {
-      setNameError(String(err));
+      setNameError(apiDetail(err));
     } finally {
       setNameSaving(false);
     }
@@ -113,7 +140,7 @@ export default function OrgSettingsPage() {
       await apiFetch(`/api/orgs/${org.id}/members/${userId}`, { method: "DELETE" });
       setMembers((m) => m.filter((x) => x.user_id !== userId));
     } catch (err) {
-      alert(String(err));
+      alert(apiDetail(err));
     }
   };
 
@@ -130,7 +157,7 @@ export default function OrgSettingsPage() {
       );
       setMembers((m) => m.map((x) => (x.user_id === userId ? updated : x)));
     } catch (err) {
-      alert(String(err));
+      alert(apiDetail(err));
     }
   };
 
@@ -148,8 +175,9 @@ export default function OrgSettingsPage() {
       });
       setInviteSuccess(`Invitation sent to ${inviteEmail}`);
       setInviteEmail("");
+      loadInvites(org.id);
     } catch (err) {
-      setInviteError(String(err));
+      setInviteError(apiDetail(err));
     } finally {
       setInviteSending(false);
     }
@@ -167,7 +195,7 @@ export default function OrgSettingsPage() {
       await refreshAuth();
       setTransferConfirm(false);
     } catch (err) {
-      setTransferError(String(err));
+      setTransferError(apiDetail(err));
     }
   };
 
@@ -185,6 +213,19 @@ export default function OrgSettingsPage() {
       </div>
     );
   }
+
+  const revokeInvite = async (inviteId: string) => {
+    if (!org) return;
+    setRevoking(inviteId);
+    try {
+      await apiFetch(`/api/orgs/${org.id}/invites/${inviteId}`, { method: "DELETE" });
+      setPendingInvites((prev) => prev.filter((i) => i.id !== inviteId));
+    } catch (err) {
+      alert(apiDetail(err));
+    } finally {
+      setRevoking(null);
+    }
+  };
 
   const isOwner = org.role === "owner";
   const canManage = isOwner || org.role === "admin";
@@ -321,6 +362,42 @@ export default function OrgSettingsPage() {
               </div>
             )}
           </section>
+
+          {/* Pending Invites */}
+          {canManage && (
+            <section className="rounded-xl border border-border bg-surface/40 p-5">
+              <SectionHeading>Pending Invites</SectionHeading>
+              {invitesLoading ? (
+                <div className="space-y-2">
+                  {[...Array(2)].map((_, i) => (
+                    <div key={i} className="h-10 animate-pulse rounded-lg bg-muted/20" />
+                  ))}
+                </div>
+              ) : pendingInvites.length === 0 ? (
+                <p className="text-[12px] font-mono text-muted-foreground/50">No pending invites.</p>
+              ) : (
+                <div className="divide-y divide-border/30">
+                  {pendingInvites.map((inv) => (
+                    <div key={inv.id} className="flex items-center justify-between py-2.5 gap-4">
+                      <div className="min-w-0">
+                        <div className="text-[12px] font-mono text-foreground truncate">{inv.email}</div>
+                        <div className="text-[10px] font-mono text-muted-foreground/50">
+                          {inv.role} · expires {new Date(inv.expires_at).toLocaleDateString()}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => revokeInvite(inv.id)}
+                        disabled={revoking === inv.id}
+                        className="text-[11px] font-mono text-muted-foreground/40 hover:text-destructive transition-colors disabled:opacity-40"
+                      >
+                        {revoking === inv.id ? "…" : "revoke"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
 
           {/* Invite */}
           {canManage && (

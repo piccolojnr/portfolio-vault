@@ -15,11 +15,14 @@ DEFAULT_CORPUS_ID = "portfolio_vault"
 
 class Document(SQLModel, table=True):
     __tablename__ = "documents"
+    __table_args__ = (
+        sa.UniqueConstraint("org_id", "slug", name="uq_documents_org_slug"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     corpus_id: str = DEFAULT_CORPUS_ID
     type: str
-    slug: str = Field(sa_column=Column(sa.String, unique=True, nullable=False))
+    slug: str = Field(sa_column=Column(sa.String, nullable=False))
     title: str = ""
     extracted_text: str = ""
     source_type: str = "text"         # "text" | "file"

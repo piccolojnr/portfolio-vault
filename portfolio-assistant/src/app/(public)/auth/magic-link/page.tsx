@@ -10,6 +10,7 @@ function MagicLinkContent() {
   const searchParams = useSearchParams();
   const { refresh } = useAuth();
   const token = searchParams.get("token");
+  const redirect = searchParams.get("redirect");
 
   const [status, setStatus] = useState<"idle" | "verifying" | "error">("idle");
   const [message, setMessage] = useState("");
@@ -37,13 +38,13 @@ function MagicLinkContent() {
         const { access_token } = await res.json();
         setAccessToken(access_token);
         await refresh();
-        router.push("/onboarding");
+        router.push(redirect ?? "/");
       })
       .catch((err) => {
         setStatus("error");
         setMessage(String(err));
       });
-  }, [token, router, refresh]);
+  }, [token, redirect, router, refresh]);
 
   if (status === "verifying" || status === "idle") {
     return (

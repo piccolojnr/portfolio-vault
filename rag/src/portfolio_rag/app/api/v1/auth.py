@@ -76,20 +76,22 @@ async def register(
     return TokenResponse(access_token=access_token)
 
 
-@router.post("/verify-email")
+@router.post("/verify-email", response_model=TokenResponse)
 async def verify_email(
     body: VerifyTokenRequest,
+    response: Response,
     session: DBSession,
     settings=Depends(get_live_settings),
 ):
     from portfolio_rag.domain.services.auth_service import verify_email as svc_verify
 
     try:
-        await svc_verify(session, body.token, settings)
+        _user, access_token, refresh_raw = await svc_verify(session, body.token, settings)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-    return {"message": "Email verified"}
+    _set_refresh_cookie(response, refresh_raw, settings)
+    return TokenResponse(access_token=access_token)
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -121,7 +123,7 @@ async def request_magic_link(
     from portfolio_rag.domain.services.auth_service import send_magic_link
 
     try:
-        await send_magic_link(session, body.email, settings)
+        await send_magic_link(session, body.email, settings, redirect_url=body.redirect_url)
     except ValueError as exc:
         raise HTTPException(status_code=429, detail=str(exc))
 
@@ -314,18 +316,22 @@ async def switch_org(
     return TokenResponse(access_token=access_token)
 
 
-@router.patch("/onboarding", response_model=MeResponse)
+@router.patch("/onboarding", response_model=TokenResponse)
 async def complete_onboarding(
     body: OnboardingRequest,
+    response: Response,
     session: DBSession,
     settings=Depends(get_live_settings),
     current_user: dict = Depends(get_current_user),
 ):
     import uuid as _uuid
     from sqlmodel import select
+    from portfolio_rag.app.core.security import create_access_token, create_refresh_token as svc_create_refresh
+    from portfolio_rag.infrastructure.db.models.auth_tokens import RefreshToken
     from portfolio_rag.infrastructure.db.models.user import User
     from portfolio_rag.infrastructure.db.models.org import Organisation
     from portfolio_rag.infrastructure.db.models.base import utcnow
+    from datetime import timedelta
 
     user_id = _uuid.UUID(current_user["sub"])
     org_id_str = current_user.get("org_id", "")
@@ -340,11 +346,10 @@ async def complete_onboarding(
     user.onboarding_completed_at = utcnow()
     user.updated_at = utcnow()
     session.add(user)
-    await session.commit()
-    await session.refresh(user)
 
     org = None
     role = current_user.get("role", "member")
+    org_name = current_user.get("org_name", "")
     if org_id_str:
         try:
             org_uuid = _uuid.UUID(org_id_str)
@@ -353,25 +358,32 @@ async def complete_onboarding(
                     select(Organisation).where(Organisation.id == org_uuid)
                 )
             ).scalars().first()
+            if org:
+                org_name = org.name
         except (ValueError, Exception):
             pass
 
     if org is None:
         raise HTTPException(status_code=404, detail="Organisation not found")
 
-    return MeResponse(
-        user=UserRead(
-            id=str(user.id),
-            email=user.email,
-            email_verified=user.email_verified,
-            onboarding_completed_at=user.onboarding_completed_at,
-            created_at=user.created_at,
-        ),
-        org=OrgRead(
-            id=str(org.id),
-            name=org.name,
-            slug=org.slug,
-            plan=org.plan,
-            role=role,
-        ),
+    # Issue fresh refresh token
+    raw_refresh, refresh_hash = svc_create_refresh()
+    refresh_expires = utcnow() + timedelta(days=settings.jwt_refresh_expiry_days)
+    new_refresh_token = RefreshToken(
+        user_id=user.id,
+        token_hash=refresh_hash,
+        revoked=False,
+        expires_at=refresh_expires,
     )
+    session.add(new_refresh_token)
+    await session.commit()
+    await session.refresh(user)
+
+    access_token = create_access_token(
+        str(user.id), org_id_str, role, user.email, settings,
+        org_name=org_name,
+        onboarding_completed_at=user.onboarding_completed_at,
+        email_verified=user.email_verified,
+    )
+    _set_refresh_cookie(response, raw_refresh, settings)
+    return TokenResponse(access_token=access_token)

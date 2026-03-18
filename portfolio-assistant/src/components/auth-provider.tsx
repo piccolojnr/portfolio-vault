@@ -8,7 +8,8 @@ import {
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
-import { setAccessToken, clearTokens, refreshAccessToken } from "@/lib/auth";
+import { setAccessToken, clearTokens } from "@/lib/auth";
+import { decodeJwtPayload } from "@/lib/jwt";
 
 interface UserInfo {
   id: string;
@@ -48,37 +49,64 @@ export function useAuth() {
   return useContext(AuthContext);
 }
 
+function readAccessTokenCookie(): string | null {
+  if (typeof document === "undefined") return null;
+  const m = document.cookie.match(/(?:^|;\s*)access_token=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+function hydrateFromToken(
+  token: string,
+): { user: UserInfo; org: OrgInfo } | null {
+  const p = decodeJwtPayload(token);
+  if (!p || p.type !== "access") return null;
+  return {
+    user: {
+      id: p.sub,
+      email: p.email,
+      email_verified: true,
+      onboarding_completed_at: p.onboarding_completed_at ?? null,
+      created_at: "",
+    },
+    org: {
+      id: p.org_id,
+      name: p.org_name,
+      slug: "",
+      plan: "",
+      role: p.role,
+    },
+  };
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [user, setUser] = useState<UserInfo | null>(null);
   const [org, setOrg] = useState<OrgInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchMe = useCallback(async (retried = false): Promise<void> => {
+  // Hydrate from the access_token cookie — no network call required.
+  // Middleware ensures the cookie is always fresh before the page loads.
+  useEffect(() => {
+    const token = readAccessTokenCookie();
+    if (token) {
+      setAccessToken(token);
+      const hydrated = hydrateFromToken(token);
+      if (hydrated) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setUser(hydrated.user);
+        setOrg(hydrated.org);
+      }
+    }
+    setIsLoading(false);
+  }, []);
+
+  // Explicit refresh — call after mutations that change user/org data
+  // (e.g. updating org name, completing onboarding). Hits /api/auth/me for
+  // an authoritative response including org slug, plan, and fresh state.
+  const refresh = useCallback(async () => {
     try {
       const res = await fetch("/api/auth/me");
-      if (res.status === 401 && !retried) {
-        const newToken = await refreshAccessToken();
-        if (newToken) {
-          return fetchMe(true);
-        }
-        setUser(null);
-        setOrg(null);
-        return;
-      }
-      if (res.status === 404) {
-        // User deleted from DB — clear tokens and redirect to login.
-        setUser(null);
-        setOrg(null);
-        await clearTokens();
-        router.push("/login");
-        return;
-      }
-      if (!res.ok) {
-        setUser(null);
-        setOrg(null);
-        return;
-      }
+      if (!res.ok) return;
       const data = await res.json();
       if (data.access_token) {
         setAccessToken(data.access_token);
@@ -86,14 +114,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(data.user ?? null);
       setOrg(data.org ?? null);
     } catch {
-      setUser(null);
-      setOrg(null);
+      // best-effort
     }
-  }, [router]);
-
-  const refresh = useCallback(async () => {
-    await fetchMe();
-  }, [fetchMe]);
+  }, []);
 
   const logout = useCallback(async () => {
     await clearTokens();
@@ -101,10 +124,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setOrg(null);
     router.push("/login");
   }, [router]);
-
-  useEffect(() => {
-    fetchMe().finally(() => setIsLoading(false));
-  }, [fetchMe]);
 
   return (
     <AuthContext.Provider

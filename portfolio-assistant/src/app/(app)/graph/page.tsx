@@ -3,8 +3,6 @@
 import dynamic from "next/dynamic";
 import { use, useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "@/components/auth-provider";
-import { useActiveCorpus } from "@/lib/corpus";
 
 const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
   ssr: false,
@@ -38,13 +36,9 @@ interface GraphData {
 export default function GraphPage({
   searchParams,
 }: {
-  searchParams: Promise<{ corpus?: string; node?: string; search?: string }>;
+  searchParams: Promise<{ node?: string; search?: string }>;
 }) {
-  const { corpus: corpusParam, node, search: searchParam } = use(searchParams);
-  const { org } = useAuth();
-  const { data: corpusData } = useActiveCorpus(org?.id);
-  // Use active corpus key; fall back to URL ?corpus= param for deep-linking, then default
-  const corpus = corpusData?.corpus?.corpus_key ?? corpusParam ?? "portfolio_vault";
+  const { node, search: searchParam } = use(searchParams);
   const targetNodeId = node;
 
   const [search, setSearch] = useState(searchParam ?? "");
@@ -59,19 +53,22 @@ export default function GraphPage({
   }, []);
   const initialFocusDoneRef = useRef(false);
 
-  // Don't fetch until we know the real corpus_key — avoids a wasted "portfolio_vault" request
-  const corpusReady = !!corpusData;
-
-  const { data: graphData, isLoading: loading } = useQuery<GraphData>({
-    queryKey: ["graph", corpus],
+  const {
+    data: graphData,
+    isLoading: loading,
+    error,
+  } = useQuery<GraphData>({
+    queryKey: ["graph"],
     queryFn: () =>
-      fetch(`/api/graph/${corpus}`).then((r) => {
-        if (!r.ok) throw new Error(`Graph fetch failed: ${r.status}`);
+      fetch("/api/graph").then((r) => {
+        if (!r.ok)
+          return r
+            .json()
+            .then((d) => Promise.reject(new Error(d.detail ?? r.status)));
         return r.json();
       }),
     staleTime: 5 * 60 * 1000,
-    placeholderData: { nodes: [], links: [] },
-    enabled: corpusReady,
+    retry: false,
   });
 
   const handleNodeClick = useCallback(
@@ -79,32 +76,32 @@ export default function GraphPage({
       setSelected(node);
       const neighbors = new Set<string>([node.id]);
       (graphData?.links ?? []).forEach((link) => {
-        const src = typeof link.source === "object" ? link.source.id : link.source;
-        const tgt = typeof link.target === "object" ? link.target.id : link.target;
+        const src =
+          typeof link.source === "object" ? link.source.id : link.source;
+        const tgt =
+          typeof link.target === "object" ? link.target.id : link.target;
         if (src === node.id) neighbors.add(tgt);
         if (tgt === node.id) neighbors.add(src);
       });
       setHighlightNodes(neighbors);
-      
+
       if (graphRef.current) {
         graphRef.current.centerAt(node.x, node.y, 500);
         graphRef.current.zoom(4, 500);
       }
-      
+
       const url = new URL(window.location.href);
-      url.searchParams.set("corpus", corpus);
       url.searchParams.set("node", node.id);
       window.history.replaceState(null, "", url.toString());
     },
-    [graphData?.links, corpus],
+    [graphData?.links],
   );
 
   useEffect(() => {
     if (loading) return;
 
-    // Guard: data fetched but empty
-    if (!graphData?.nodes.length) {
-      // Small delay for empty state to prevent flicker during transitions
+    // Guard: fetch failed or empty graph
+    if (error || !graphData?.nodes.length) {
       const timer = setTimeout(() => setGraphReady(true), 500);
       return () => clearTimeout(timer);
     }
@@ -113,7 +110,9 @@ export default function GraphPage({
 
     if (targetNodeId && !initialFocusDoneRef.current) {
       const node = graphData.nodes.find(
-        (n) => n.id === targetNodeId || n.label.toLowerCase() === targetNodeId.toLowerCase()
+        (n) =>
+          n.id === targetNodeId ||
+          n.label.toLowerCase() === targetNodeId.toLowerCase(),
       );
 
       if (node) {
@@ -132,7 +131,8 @@ export default function GraphPage({
         setGraphReady(true);
       }, 150);
     }
-  }, [loading, graphData, targetNodeId, handleNodeClick, graphMounted, graphReady]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, graphData, targetNodeId, handleNodeClick, graphMounted, graphReady, ]);
 
   const getNodeColor = (node: GraphNode) => {
     if (search && !node.label.toLowerCase().includes(search.toLowerCase()))
@@ -163,10 +163,14 @@ export default function GraphPage({
         </span>
       </div>
       <div className="flex flex-1 min-h-0 relative">
-        <div className={`flex-1 relative transition-opacity duration-1000 ${graphReady ? 'opacity-100' : 'opacity-0'}`}>
-          {graphReady && !graphData?.nodes.length && (
-            <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-              No graph data available for this search.
+        <div
+          className={`flex-1 relative transition-opacity duration-1000 ${graphReady ? "opacity-100" : "opacity-0"}`}
+        >
+          {graphReady && (error || !graphData?.nodes.length) && (
+            <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm text-center px-8">
+              {error
+                ? (error as Error).message
+                : "No graph data yet. Ingest documents to build the knowledge graph."}
             </div>
           )}
           {!loading && !!graphData?.nodes.length && (
@@ -191,7 +195,7 @@ export default function GraphPage({
             />
           )}
         </div>
-        
+
         {(!graphReady || loading) && (
           <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md transition-all duration-500">
             <div className="relative w-24 h-24 mb-6">
@@ -221,8 +225,14 @@ export default function GraphPage({
             <div className="space-y-1">
               <p className="text-xs text-muted-foreground mb-2">Connections:</p>
               {neighbors.map((link, i) => {
-                const src = typeof link.source === "object" ? link.source.id : link.source;
-                const tgt = typeof link.target === "object" ? link.target.id : link.target;
+                const src =
+                  typeof link.source === "object"
+                    ? link.source.id
+                    : link.source;
+                const tgt =
+                  typeof link.target === "object"
+                    ? link.target.id
+                    : link.target;
                 const otherId = src === selected.id ? tgt : src;
                 const otherNode = (graphData?.nodes ?? []).find(
                   (n) => n.id === otherId,
