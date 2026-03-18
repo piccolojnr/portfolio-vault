@@ -108,9 +108,10 @@ interface RowProps {
   selected: boolean;
   onSelect: (v: boolean) => void;
   onRefresh: () => void;
+  canManage: boolean;
 }
 
-function DocRow({ doc, selected, onSelect, onRefresh }: RowProps) {
+function DocRow({ doc, selected, onSelect, onRefresh, canManage }: RowProps) {
   const router = useRouter();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmReingest, setConfirmReingest] = useState(false);
@@ -208,97 +209,101 @@ function DocRow({ doc, selected, onSelect, onRefresh }: RowProps) {
       <td className="pr-4 py-3 w-28" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           {/* Re-ingest */}
-          {confirmReingest ? (
-            <span className="flex items-center gap-1 text-[11px]">
-              <button
-                onClick={handleReingest}
-                className="text-primary hover:underline"
-              >
-                Yes
-              </button>
-              <span className="text-muted-foreground/40">/</span>
+          {canManage && (
+            confirmReingest ? (
+              <span className="flex items-center gap-1 text-[11px]">
+                <button
+                  onClick={handleReingest}
+                  className="text-primary hover:underline"
+                >
+                  Yes
+                </button>
+                <span className="text-muted-foreground/40">/</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setConfirmReingest(false);
+                  }}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  No
+                </button>
+              </span>
+            ) : (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  setConfirmReingest(false);
+                  setConfirmReingest(true);
                 }}
-                className="text-muted-foreground hover:text-foreground"
+                title="Reprocess"
+                className="p-1.5 rounded text-muted-foreground hover:text-primary transition-colors"
               >
-                No
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                >
+                  <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5" strokeLinecap="round" />
+                  <path
+                    d="M8 1v4l2-2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
               </button>
-            </span>
-          ) : (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setConfirmReingest(true);
-              }}
-              title="Reprocess"
-              className="p-1.5 rounded text-muted-foreground hover:text-primary transition-colors"
-            >
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-              >
-                <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5" strokeLinecap="round" />
-                <path
-                  d="M8 1v4l2-2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
+            )
           )}
 
           {/* Delete */}
-          {confirmDelete ? (
-            <span className="flex items-center gap-1 text-[11px]">
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className="text-destructive hover:underline disabled:opacity-50"
-              >
-                {deleting ? "…" : "Yes"}
-              </button>
-              <span className="text-muted-foreground/40">/</span>
+          {canManage && (
+            confirmDelete ? (
+              <span className="flex items-center gap-1 text-[11px]">
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="text-destructive hover:underline disabled:opacity-50"
+                >
+                  {deleting ? "…" : "Yes"}
+                </button>
+                <span className="text-muted-foreground/40">/</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setConfirmDelete(false);
+                  }}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  No
+                </button>
+              </span>
+            ) : (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  setConfirmDelete(false);
+                  setConfirmDelete(true);
                 }}
-                className="text-muted-foreground hover:text-foreground"
+                title="Delete"
+                className="p-1.5 rounded text-muted-foreground hover:text-destructive transition-colors"
               >
-                No
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                >
+                  <path
+                    d="M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 10h8l1-10"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
               </button>
-            </span>
-          ) : (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setConfirmDelete(true);
-              }}
-              title="Delete"
-              className="p-1.5 rounded text-muted-foreground hover:text-destructive transition-colors"
-            >
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-              >
-                <path
-                  d="M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 10h8l1-10"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
+            )
           )}
         </div>
       </td>
@@ -402,6 +407,7 @@ const NON_TERMINAL = new Set(["pending", "processing"]);
 export default function DocumentsPage() {
   const qc = useQueryClient();
   const { org } = useAuth();
+  const canManage = org?.role === "admin" || org?.role === "owner";
   const { data: corpusData } = useActiveCorpus(org?.id);
   const [tab, setTab] = useState<Tab>("all");
   const [search, setSearch] = useState("");
@@ -541,48 +547,50 @@ export default function DocumentsPage() {
                 : `${total} document${total !== 1 ? "s" : ""} · ${corpusData?.corpus?.name ?? "Knowledge Base"}`}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Link href="/documents/ingest">
-              <Button variant="outline" size="sm">
-                <svg
-                  className="mr-1.5"
-                  width="11"
-                  height="11"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path
-                    d="M8 12V4M4 8l4-4 4 4"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path d="M2 14h12" strokeLinecap="round" />
-                </svg>
-                Add
-              </Button>
-            </Link>
-            <Link href="/documents/new">
-              <Button size="sm">
-                <svg
-                  className="mr-1.5"
-                  width="11"
-                  height="11"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                >
-                  <path
-                    d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                Write
-              </Button>
-            </Link>
-          </div>
+          {canManage && (
+            <div className="flex items-center gap-2">
+              <Link href="/documents/ingest">
+                <Button variant="outline" size="sm">
+                  <svg
+                    className="mr-1.5"
+                    width="11"
+                    height="11"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path
+                      d="M8 12V4M4 8l4-4 4 4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path d="M2 14h12" strokeLinecap="round" />
+                  </svg>
+                  Add
+                </Button>
+              </Link>
+              <Link href="/documents/new">
+                <Button size="sm">
+                  <svg
+                    className="mr-1.5"
+                    width="11"
+                    height="11"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                  >
+                    <path
+                      d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  Write
+                </Button>
+              </Link>
+            </div>
+          )}
         </div>
 
         {/* Tabs */}
@@ -736,6 +744,7 @@ export default function DocumentsPage() {
                   onRefresh={() =>
                     qc.invalidateQueries({ queryKey: ["documents", page] })
                   }
+                  canManage={canManage}
                 />
               ))}
             </tbody>
@@ -774,7 +783,7 @@ export default function DocumentsPage() {
       </div>
 
       {/* Bulk action bar */}
-      {selected.size > 0 && (
+      {canManage && selected.size > 0 && (
         <BulkBar
           count={selected.size}
           onReingest={() => setBulkReingestConfirm(true)}

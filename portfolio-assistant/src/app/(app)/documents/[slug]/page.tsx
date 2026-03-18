@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { getDocument, updateDocument, type CorpusDocDetail } from "@/lib/documents";
 import { getDocumentStatus, reIngestDocument } from "@/lib/ingest";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/components/auth-provider";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -50,9 +51,11 @@ function formatBytes(n: number): string {
 function InlineTitle({
   value,
   onSave,
+  canEdit,
 }: {
   value: string;
   onSave: (v: string) => void;
+  canEdit: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [local, setLocal] = useState(value);
@@ -83,15 +86,17 @@ function InlineTitle({
           {value || <span className="text-muted-foreground/40 italic">Untitled</span>}
         </h1>
       )}
-      <button
-        onClick={() => setEditing(true)}
-        className="shrink-0 opacity-0 group-hover:opacity-100 p-1 rounded text-muted-foreground/50 hover:text-foreground transition-all"
-        title="Edit title"
-      >
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" strokeLinejoin="round"/>
-        </svg>
-      </button>
+      {canEdit && (
+        <button
+          onClick={() => setEditing(true)}
+          className="shrink-0 opacity-0 group-hover:opacity-100 p-1 rounded text-muted-foreground/50 hover:text-foreground transition-all"
+          title="Edit title"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" strokeLinejoin="round"/>
+          </svg>
+        </button>
+      )}
     </div>
   );
 }
@@ -113,9 +118,11 @@ function MetaRow({ label, children }: { label: string; children: React.ReactNode
 function IngestionPanel({
   docId,
   initialStatus,
+  canManage,
 }: {
   docId: string;
   initialStatus?: string;
+  canManage: boolean;
 }) {
   const [status, setStatus] = useState(initialStatus ?? "pending");
   const [error, setError] = useState<string | undefined>();
@@ -174,34 +181,36 @@ function IngestionPanel({
         </div>
       )}
 
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={reingesting || status === "processing"}
-        onClick={handleReingest}
-      >
-        {reingesting ? (
-          <>
-            <span className="mr-1.5 inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-            Queuing…
-          </>
-        ) : (
-          <>
-            <svg className="mr-1.5" width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5" strokeLinecap="round"/>
-              <path d="M8 1v4l2-2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            Re-ingest
-          </>
-        )}
-      </Button>
+      {canManage && (
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={reingesting || status === "processing"}
+          onClick={handleReingest}
+        >
+          {reingesting ? (
+            <>
+              <span className="mr-1.5 inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              Queuing…
+            </>
+          ) : (
+            <>
+              <svg className="mr-1.5" width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5" strokeLinecap="round"/>
+                <path d="M8 1v4l2-2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              Re-ingest
+            </>
+          )}
+        </Button>
+      )}
     </div>
   );
 }
 
 // ── Content preview ───────────────────────────────────────────────────────────
 
-function ContentPreview({ doc }: { doc: CorpusDocDetail }) {
+function ContentPreview({ doc, canManage }: { doc: CorpusDocDetail; canManage: boolean }) {
   const [open, setOpen] = useState(doc.source_type === "text");
   const preview = doc.extracted_text?.slice(0, 500) ?? "";
   const hasContent = !!doc.extracted_text;
@@ -234,24 +243,26 @@ function ContentPreview({ doc }: { doc: CorpusDocDetail }) {
                   Showing first 500 of {doc.extracted_text.length.toLocaleString()} characters
                 </p>
               )}
-              <div className="mt-4">
-                <Link
-                  href={`/documents/${doc.slug}/edit`}
-                  className="text-sm text-primary hover:underline inline-flex items-center gap-1"
-                >
-                  View / edit full content
-                  <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M6 3h7v7M13 3L3 13" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </Link>
-              </div>
+              {canManage && (
+                <div className="mt-4">
+                  <Link
+                    href={`/documents/${doc.slug}/edit`}
+                    className="text-sm text-primary hover:underline inline-flex items-center gap-1"
+                  >
+                    View / edit full content
+                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M6 3h7v7M13 3L3 13" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </Link>
+                </div>
+              )}
             </>
           ) : (
             <p className="text-sm text-muted-foreground/60 italic">
               {doc.source_type === "file"
                 ? "Content will be available after ingestion completes."
                 : "No content yet. "}
-              {doc.source_type === "text" && (
+              {doc.source_type === "text" && canManage && (
                 <Link href={`/documents/${doc.slug}/edit`} className="text-primary hover:underline not-italic">
                   Open editor →
                 </Link>
@@ -273,6 +284,8 @@ export default function DocumentDetailPage({
 }) {
   const { slug } = use(params);
   const router = useRouter();
+  const { org } = useAuth();
+  const canManage = org?.role === "admin" || org?.role === "owner";
 
   const [doc, setDoc] = useState<CorpusDocDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -325,7 +338,7 @@ export default function DocumentDetailPage({
 
         {doc ? (
           <div className="space-y-2">
-            <InlineTitle value={doc.title} onSave={(v) => save({ title: v })} />
+            <InlineTitle value={doc.title} onSave={(v) => save({ title: v })} canEdit={canManage} />
             <div className="flex items-center gap-2 flex-wrap">
               {/* Type pill */}
               <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-mono font-medium ${TYPE_COLORS[doc.type] ?? "bg-muted/40 text-muted-foreground border-border"}`}>
@@ -336,15 +349,17 @@ export default function DocumentDetailPage({
                 {doc.source_type === "file" ? "📎 file" : "✎ text"}
               </span>
               {/* Edit link */}
-              <Link
-                href={`/documents/${slug}/edit`}
-                className="ml-auto text-xs text-primary hover:underline inline-flex items-center gap-1"
-              >
-                Edit content
-                <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M6 3h7v7M13 3L3 13" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </Link>
+              {canManage && (
+                <Link
+                  href={`/documents/${slug}/edit`}
+                  className="ml-auto text-xs text-primary hover:underline inline-flex items-center gap-1"
+                >
+                  Edit content
+                  <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M6 3h7v7M13 3L3 13" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </Link>
+              )}
             </div>
           </div>
         ) : (
@@ -409,10 +424,10 @@ export default function DocumentDetailPage({
             </section>
 
             {/* Ingestion status */}
-            <IngestionPanel docId={doc.id} initialStatus={doc.lightrag_status} />
+            <IngestionPanel docId={doc.id} initialStatus={doc.lightrag_status} canManage={canManage} />
 
             {/* Content preview */}
-            <ContentPreview doc={doc} />
+            <ContentPreview doc={doc} canManage={canManage} />
           </>
         ) : (
           <div className="space-y-4">

@@ -20,7 +20,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from portfolio_rag.app.core.db import get_db_conn
-from portfolio_rag.app.core.dependencies import get_current_user
+from portfolio_rag.app.core.dependencies import get_current_user, require_role
 from portfolio_rag.domain.models.document import (
     CorpusDocCreate,
     CorpusDocDetail,
@@ -60,7 +60,7 @@ async def list_documents(
 async def create_document(
     data: CorpusDocCreate,
     session: DBSession,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_role("owner", "admin")),
 ):
     try:
         doc = await _repo(session, current_user).create(data)
@@ -87,7 +87,7 @@ async def _get_active_corpus_key(session: AsyncSession, org_id: UUID) -> str:
 async def check_duplicates_endpoint(
     body: DuplicateCheckRequest,
     session: DBSession,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_role("owner", "admin")),
 ):
     return await _repo(session, current_user).check_duplicates(body.files)
 
@@ -95,7 +95,7 @@ async def check_duplicates_endpoint(
 @router.post("/upload", status_code=201)
 async def upload_document(
     session: DBSession,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_role("owner", "admin")),
     file: UploadFile = File(...),
     file_hash: str = Form(...),
 ):
@@ -188,7 +188,7 @@ async def update_document(
     slug: str,
     patch: CorpusDocUpdate,
     session: DBSession,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_role("owner", "admin")),
 ):
     try:
         doc = await _repo(session, current_user).update(slug, patch)
@@ -201,7 +201,7 @@ async def update_document(
 async def delete_document(
     slug: str,
     session: DBSession,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_role("owner", "admin")),
 ):
     try:
         await _repo(session, current_user).delete(slug)

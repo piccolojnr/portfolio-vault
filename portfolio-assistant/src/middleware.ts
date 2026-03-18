@@ -148,6 +148,25 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
+  // Member role gate — members are read-only
+  const MEMBER_BLOCKED: (string | RegExp)[] = [
+    "/settings",
+    "/admin",
+    "/documents/new",
+    "/documents/ingest",
+    /^\/documents\/[^/]+\/edit/,
+  ];
+  function isMemberBlocked(p: string): boolean {
+    return MEMBER_BLOCKED.some((rule) =>
+      typeof rule === "string"
+        ? p === rule || p.startsWith(rule + "/")
+        : rule.test(p),
+    );
+  }
+  if (payload.role === "member" && isMemberBlocked(pathname)) {
+    return NextResponse.redirect(new URL("/", request.url));
+  }
+
   const response = NextResponse.next();
 
   // Write fresh tokens from silent refresh into cookies

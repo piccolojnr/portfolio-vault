@@ -8,7 +8,8 @@ import { OrgSwitcher } from "./org-switcher";
 
 export function HeaderNav() {
   const pathname = usePathname();
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, org, isAuthenticated, logout } = useAuth();
+  const canManage = org?.role === "admin" || org?.role === "owner";
 
   const isVault = pathname.startsWith("/documents");
   const isSettings = pathname.startsWith("/settings");
@@ -29,18 +30,24 @@ export function HeaderNav() {
       <Link href="/documents" className={navLink(isVault)}>
         documents
       </Link>
-      <Link href="/settings" className={navLink(isSettings && !isOrgSettings)}>
-        settings
-      </Link>
-      <Link href="/settings/organisation" className={navLink(isOrgSettings)}>
-        org
-      </Link>
       <Link href="/graph" className={navLink(isGraph)}>
         graph
       </Link>
-      <Link href="/admin/jobs" className={navLink(isAdmin)}>
-        admin
-      </Link>
+      {canManage && (
+        <Link href="/settings" className={navLink(isSettings && !isOrgSettings)}>
+          settings
+        </Link>
+      )}
+      {canManage && (
+        <Link href="/settings/organisation" className={navLink(isOrgSettings)}>
+          org
+        </Link>
+      )}
+      {canManage && (
+        <Link href="/admin/jobs" className={navLink(isAdmin)}>
+          admin
+        </Link>
+      )}
 
       {isAuthenticated && (
         <>
