@@ -1,8 +1,7 @@
-"""Database management commands: create-migration, migrate, migrate-fresh, seed."""
+"""Database management commands: migrate, migrate-fresh, create-migration, stamp, seed."""
 
 from __future__ import annotations
 
-from datetime import datetime
 from pathlib import Path
 
 import typer
@@ -10,9 +9,27 @@ import typer
 app = typer.Typer(help="Database management commands.")
 
 
-# ── Shared helpers ─────────────────────────────────────────────────────────────
+# ── Helpers ────────────────────────────────────────────────────────────────────
 
-def get_engine():
+def _alembic_cfg():
+    """Return an Alembic Config with DATABASE_URL injected from Settings."""
+    from alembic.config import Config
+    from portfolio_rag.app.core.config import get_settings
+
+    ini_path = Path(__file__).parents[5] / "alembic.ini"
+    cfg = Config(str(ini_path))
+
+    settings = get_settings()
+    if not settings.database_url:
+        typer.echo("ERROR: DATABASE_URL is not set in rag/.env", err=True)
+        raise typer.Exit(1)
+
+    cfg.set_main_option("sqlalchemy.url", settings.database_url)
+    return cfg
+
+
+def _get_sync_engine():
+    """Synchronous engine for raw DDL operations (migrate-fresh schema drop)."""
     from sqlalchemy import create_engine
     from portfolio_rag.app.core.config import get_settings
 
@@ -20,69 +37,23 @@ def get_engine():
     if not settings.database_url:
         typer.echo("ERROR: DATABASE_URL is not set in rag/.env", err=True)
         raise typer.Exit(1)
-    return create_engine(settings.database_url), settings
-
-
-def migrations_dir() -> Path:
-    # cli/db.py is at src/portfolio_rag/app/core/cli/db.py — 5 parents up reaches rag/
-    return Path(__file__).parents[5] / "migrations"
-
-
-def run_migrations(engine) -> None:
-    """Apply every *.sql file in rag/migrations/ in alphabetical order."""
-    from sqlalchemy import text
-    from sqlmodel import SQLModel
-    import portfolio_rag.infrastructure.db  # noqa: F401 — populate SQLModel.metadata
-
-    sql_files = sorted(migrations_dir().glob("*.sql"))
-    if not sql_files:
-        typer.echo("No migration files found.")
-        return
-
-    with engine.connect() as conn:
-        for sql_file in sql_files:
-            sql = sql_file.read_text(encoding="utf-8")
-            conn.execute(text(sql))
-            conn.commit()
-            typer.echo(f"  applied  {sql_file.name}")
-
-    SQLModel.metadata.create_all(engine)
-    typer.echo("  synced   SQLModel.metadata")
+    return create_engine(settings.database_url)
 
 
 # ── Commands ───────────────────────────────────────────────────────────────────
 
-@app.command("create-migration")
-def create_migration(name: str):
-    """Scaffold a new empty SQL migration file in rag/migrations/."""
-    mdir = migrations_dir()
-    mdir.mkdir(exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    filename = f"{timestamp}_{name}.sql"
-    filepath = mdir / filename
-    filepath.write_text(f"-- Migration: {name}\n\nBEGIN;\n\n-- TODO\n\nCOMMIT;\n", encoding="utf-8")
-    typer.echo(f"  created  {filepath}")
-
-
 @app.command()
 def migrate():
-    """Apply all SQL migration files in rag/migrations/ then sync SQLModel metadata."""
-    engine, _ = get_engine()
-    run_migrations(engine)
+    """Apply all pending Alembic migrations (upgrade head)."""
+    from alembic import command
+
+    command.upgrade(_alembic_cfg(), "head")
     typer.echo(typer.style("\nMigration complete.", fg=typer.colors.GREEN, bold=True))
-
-
-_DROP_SQL = """
-DROP SCHEMA public CASCADE;
-CREATE SCHEMA public;
-GRANT ALL ON SCHEMA public TO postgres;
-GRANT ALL ON SCHEMA public TO public;
-"""
 
 
 @app.command("migrate-fresh")
 def migrate_fresh():
-    """DROP all tables and re-apply migrations from scratch. DESTROYS ALL DATA."""
+    """DROP all tables then re-apply all migrations from scratch. DESTROYS ALL DATA."""
     from sqlalchemy import text
 
     confirmed = typer.confirm(
@@ -93,15 +64,41 @@ def migrate_fresh():
         typer.echo("Aborted.")
         raise typer.Exit(0)
 
-    engine, _ = get_engine()
-
+    engine = _get_sync_engine()
     with engine.connect() as conn:
-        conn.execute(text(_DROP_SQL))
+        conn.execute(text("DROP SCHEMA public CASCADE"))
+        conn.execute(text("CREATE SCHEMA public"))
+        conn.execute(text("GRANT ALL ON SCHEMA public TO postgres"))
+        conn.execute(text("GRANT ALL ON SCHEMA public TO public"))
         conn.commit()
     typer.echo("  dropped  all tables")
 
-    run_migrations(engine)
+    from alembic import command
+    command.upgrade(_alembic_cfg(), "head")
     typer.echo(typer.style("\nFresh migration complete.", fg=typer.colors.GREEN, bold=True))
+
+
+@app.command("create-migration")
+def create_migration(name: str):
+    """Autogenerate a new Alembic revision by diffing models vs the live DB."""
+    from alembic import command
+
+    command.revision(_alembic_cfg(), autogenerate=True, message=name)
+
+
+@app.command()
+def stamp():
+    """Stamp the database at the current head without running any migrations.
+
+    Use this on an existing database that was created with the old custom
+    SQL migration system, to mark it as already up-to-date with Alembic:
+
+        rag stamp
+    """
+    from alembic import command
+
+    command.stamp(_alembic_cfg(), "head")
+    typer.echo(typer.style("\nDatabase stamped at head.", fg=typer.colors.GREEN, bold=True))
 
 
 _UPSERT_SQL = """
@@ -139,20 +136,23 @@ def seed():
     """Upsert all vault markdown documents into the database."""
     from sqlalchemy import text
 
-    engine, settings = get_engine()
+    engine = _get_sync_engine()
+    settings_obj = None
+    from portfolio_rag.app.core.config import get_settings
+    settings_obj = get_settings()
 
     vault_files = {
-        "bio":                   settings.project_dir / "bio.md",
-        "skills":                settings.project_dir / "skills.md",
-        "experience":            settings.project_dir / "experience.md",
-        "brag_sheet":            settings.project_dir / "brag_sheet.md",
-        "project_src_permit":    settings.project_dir / "02_projects/src-permit-system/overview.md",
-        "project_laundry_kiosk": settings.project_dir / "02_projects/laundry-kiosk/overview.md",
-        "project_laundry_pos":   settings.project_dir / "02_projects/laundry-pos/overview.md",
-        "project_kgl":           settings.project_dir / "02_projects/kgl-group-website/overview.md",
-        "project_allied":        settings.project_dir / "02_projects/allied-ghana-website/overview.md",
-        "project_kitchen":       settings.project_dir / "02_projects/kitchen-comfort/overview.md",
-        "project_csir":          settings.project_dir / "02_projects/csir-noise-dashboard/overview.md",
+        "bio":                   settings_obj.project_dir / "bio.md",
+        "skills":                settings_obj.project_dir / "skills.md",
+        "experience":            settings_obj.project_dir / "experience.md",
+        "brag_sheet":            settings_obj.project_dir / "brag_sheet.md",
+        "project_src_permit":    settings_obj.project_dir / "02_projects/src-permit-system/overview.md",
+        "project_laundry_kiosk": settings_obj.project_dir / "02_projects/laundry-kiosk/overview.md",
+        "project_laundry_pos":   settings_obj.project_dir / "02_projects/laundry-pos/overview.md",
+        "project_kgl":           settings_obj.project_dir / "02_projects/kgl-group-website/overview.md",
+        "project_allied":        settings_obj.project_dir / "02_projects/allied-ghana-website/overview.md",
+        "project_kitchen":       settings_obj.project_dir / "02_projects/kitchen-comfort/overview.md",
+        "project_csir":          settings_obj.project_dir / "02_projects/csir-noise-dashboard/overview.md",
     }
 
     with engine.connect() as conn:

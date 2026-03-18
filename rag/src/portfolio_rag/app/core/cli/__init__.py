@@ -19,6 +19,7 @@ from portfolio_rag.app.core.cli.db import (
     create_migration,
     migrate,
     migrate_fresh,
+    stamp,
     seed,
 )
 from portfolio_rag.app.core.cli.lightrag import clear_lightrag
@@ -33,6 +34,7 @@ app = typer.Typer(
 app.command("create-migration")(create_migration)
 app.command("migrate")(migrate)
 app.command("migrate-fresh")(migrate_fresh)
+app.command("stamp")(stamp)
 app.command("seed")(seed)
 app.command("clear-lightrag")(clear_lightrag)
 app.command("worker")(worker)
