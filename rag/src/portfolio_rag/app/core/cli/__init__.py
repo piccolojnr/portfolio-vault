@@ -5,9 +5,16 @@ Portfolio Vault RAG — management CLI
 Registered as `rag` in pyproject.toml [project.scripts].
 After `pip install -e .` (or the venv is already set up) run:
 
-  rag migrate                   # apply all pending SQL migrations
-  rag migrate-fresh             # DROP all tables, re-apply (wipes data)
-  rag create-migration <name>   # scaffold a new SQL migration file
+  # Database migrations — use Alembic directly (run from rag/):
+  alembic upgrade head                        # apply all pending migrations
+  alembic downgrade -1                        # roll back one revision
+  alembic revision --autogenerate -m "name"  # scaffold a new migration
+  alembic stamp head                          # mark DB up-to-date without running
+  alembic current                             # show current revision
+  alembic history                             # list all revisions
+
+  # App commands:
+  rag migrate-fresh             # DROP all tables + re-apply from scratch (wipes data)
   rag seed                      # upsert vault markdown files into the DB
   rag clear-lightrag            # wipe graph, Qdrant vectors, LightRAG PG tables
   rag worker                    # start the background job-queue worker
@@ -15,13 +22,7 @@ After `pip install -e .` (or the venv is already set up) run:
 
 import typer
 
-from portfolio_rag.app.core.cli.db import (
-    create_migration,
-    migrate,
-    migrate_fresh,
-    stamp,
-    seed,
-)
+from portfolio_rag.app.core.cli.db import migrate_fresh, seed
 from portfolio_rag.app.core.cli.lightrag import clear_lightrag
 from portfolio_rag.app.core.cli.worker import worker
 
@@ -31,10 +32,7 @@ app = typer.Typer(
     add_completion=False,
 )
 
-app.command("create-migration")(create_migration)
-app.command("migrate")(migrate)
 app.command("migrate-fresh")(migrate_fresh)
-app.command("stamp")(stamp)
 app.command("seed")(seed)
 app.command("clear-lightrag")(clear_lightrag)
 app.command("worker")(worker)

@@ -55,6 +55,22 @@ class Settings(BaseSettings):
     supabase_storage_key: str = ""
     storage_bucket: str = "documents"
 
+    # Auth / JWT
+    jwt_secret: str = ""
+    jwt_access_expiry_minutes: int = 15
+    jwt_refresh_expiry_days: int = 30
+
+    # Email
+    email_backend: str = "mailpit"       # "console" | "mailpit" | "resend"
+    email_from: str = "noreply@example.com"
+    resend_api_key: str = ""
+    mailpit_host: str = "localhost"
+    mailpit_port: int = 1025
+
+    # App metadata (used in email templates)
+    app_name: str = "Portfolio Vault"
+    app_url: str = "http://localhost:3000"
+
     # Feature flag: when True the query endpoint uses the legacy Qdrant retriever;
     # when False it routes through LightRAG.  Defaults to True so the existing
     # Qdrant index continues to serve queries while LightRAG ingestion catches up.

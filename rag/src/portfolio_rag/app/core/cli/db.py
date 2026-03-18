@@ -1,4 +1,14 @@
-"""Database management commands: migrate, migrate-fresh, create-migration, stamp, seed."""
+"""Database management commands: migrate-fresh, seed.
+
+For standard Alembic operations, use the Alembic CLI directly (run from rag/):
+
+    alembic upgrade head                        # apply all pending migrations
+    alembic downgrade -1                        # roll back one revision
+    alembic revision --autogenerate -m "name"  # scaffold a new migration
+    alembic stamp head                          # mark DB as up-to-date without running
+    alembic current                             # show current revision
+    alembic history                             # list all revisions
+"""
 
 from __future__ import annotations
 
@@ -10,6 +20,18 @@ app = typer.Typer(help="Database management commands.")
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
+
+def _get_sync_engine():
+    """Synchronous engine for raw DDL operations (migrate-fresh schema drop)."""
+    from sqlalchemy import create_engine
+    from portfolio_rag.app.core.config import get_settings
+
+    settings = get_settings()
+    if not settings.database_url:
+        typer.echo("ERROR: DATABASE_URL is not set in rag/.env", err=True)
+        raise typer.Exit(1)
+    return create_engine(settings.database_url)
+
 
 def _alembic_cfg():
     """Return an Alembic Config with DATABASE_URL injected from Settings."""
@@ -28,28 +50,7 @@ def _alembic_cfg():
     return cfg
 
 
-def _get_sync_engine():
-    """Synchronous engine for raw DDL operations (migrate-fresh schema drop)."""
-    from sqlalchemy import create_engine
-    from portfolio_rag.app.core.config import get_settings
-
-    settings = get_settings()
-    if not settings.database_url:
-        typer.echo("ERROR: DATABASE_URL is not set in rag/.env", err=True)
-        raise typer.Exit(1)
-    return create_engine(settings.database_url)
-
-
 # ── Commands ───────────────────────────────────────────────────────────────────
-
-@app.command()
-def migrate():
-    """Apply all pending Alembic migrations (upgrade head)."""
-    from alembic import command
-
-    command.upgrade(_alembic_cfg(), "head")
-    typer.echo(typer.style("\nMigration complete.", fg=typer.colors.GREEN, bold=True))
-
 
 @app.command("migrate-fresh")
 def migrate_fresh():
@@ -76,29 +77,6 @@ def migrate_fresh():
     from alembic import command
     command.upgrade(_alembic_cfg(), "head")
     typer.echo(typer.style("\nFresh migration complete.", fg=typer.colors.GREEN, bold=True))
-
-
-@app.command("create-migration")
-def create_migration(name: str):
-    """Autogenerate a new Alembic revision by diffing models vs the live DB."""
-    from alembic import command
-
-    command.revision(_alembic_cfg(), autogenerate=True, message=name)
-
-
-@app.command()
-def stamp():
-    """Stamp the database at the current head without running any migrations.
-
-    Use this on an existing database that was created with the old custom
-    SQL migration system, to mark it as already up-to-date with Alembic:
-
-        rag stamp
-    """
-    from alembic import command
-
-    command.stamp(_alembic_cfg(), "head")
-    typer.echo(typer.style("\nDatabase stamped at head.", fg=typer.colors.GREEN, bold=True))
 
 
 _UPSERT_SQL = """

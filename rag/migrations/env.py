@@ -3,10 +3,12 @@
 Reads DATABASE_URL from portfolio_rag Settings (rag/.env) and targets
 SQLModel.metadata populated by all infrastructure db models.
 
-Usage:
-    rag migrate                 # alembic upgrade head
-    rag create-migration NAME   # alembic revision --autogenerate -m NAME
-    rag stamp                   # alembic stamp head  (existing DBs after switching from custom migrations)
+Run from the rag/ directory:
+    alembic upgrade head
+    alembic downgrade -1
+    alembic revision --autogenerate -m "description"
+    alembic stamp head
+    alembic current
 """
 from __future__ import annotations
 
