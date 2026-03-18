@@ -32,7 +32,11 @@ router = APIRouter(prefix="/conversations", tags=["conversations"])
 
 
 def _repo(session, current_user: dict) -> ConversationRepository:
-    return ConversationRepository(session, UUID(current_user["org_id"]))
+    return ConversationRepository(
+        session,
+        UUID(current_user["org_id"]),
+        UUID(current_user["sub"]),
+    )
 
 
 @router.post("", response_model=ConversationSummary, status_code=201)

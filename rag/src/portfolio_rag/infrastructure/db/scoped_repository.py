@@ -240,13 +240,22 @@ class DocumentRepository(ScopedRepository):
 # ── Conversation Repository ────────────────────────────────────────────────────
 
 class ConversationRepository(ScopedRepository):
-    """Org-scoped CRUD for conversations and messages."""
+    """Org + user-scoped CRUD for conversations and messages."""
+
+    def __init__(self, session: AsyncSession, org_id: uuid.UUID, user_id: uuid.UUID) -> None:
+        super().__init__(session, org_id)
+        if not isinstance(user_id, uuid.UUID):
+            raise TypeError("user_id must be a uuid.UUID instance")
+        self._user_id = user_id
 
     async def list(self) -> list[ConversationSummary]:
         rows = (
             await self._session.execute(
                 select(Conversation)
-                .where(Conversation.org_id == self._org_id)
+                .where(
+                    Conversation.org_id == self._org_id,
+                    Conversation.user_id == self._user_id,
+                )
                 .order_by(Conversation.updated_at.desc())
             )
         ).scalars().all()
@@ -258,6 +267,7 @@ class ConversationRepository(ScopedRepository):
                 select(Conversation).where(
                     Conversation.id == conv_id,
                     Conversation.org_id == self._org_id,
+                    Conversation.user_id == self._user_id,
                 )
             )
         ).scalars().first()
@@ -277,7 +287,7 @@ class ConversationRepository(ScopedRepository):
         )
 
     async def create(self) -> Conversation:
-        conv = Conversation(org_id=self._org_id)
+        conv = Conversation(org_id=self._org_id, user_id=self._user_id)
         self._session.add(conv)
         await self._session.commit()
         await self._session.refresh(conv)
@@ -338,6 +348,7 @@ class ConversationRepository(ScopedRepository):
                 select(Conversation).where(
                     Conversation.id == conv_id,
                     Conversation.org_id == self._org_id,
+                    Conversation.user_id == self._user_id,
                 )
             )
         ).scalars().first()
@@ -351,6 +362,7 @@ class ConversationRepository(ScopedRepository):
                 select(Conversation).where(
                     Conversation.id == conv_id,
                     Conversation.org_id == self._org_id,
+                    Conversation.user_id == self._user_id,
                 )
             )
         ).scalars().first()

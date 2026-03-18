@@ -35,6 +35,15 @@ class Conversation(SQLModel, table=True):
             index=True,
         ),
     )
+    user_id: Optional[UUID] = Field(
+        default=None,
+        sa_column=Column(
+            sa.UUID(as_uuid=True),
+            sa.ForeignKey("users.id"),
+            nullable=False,   # enforced by migration 0011
+            index=False,       # covered by composite idx_conversations_org_user
+        ),
+    )
 
 
 class Message(SQLModel, table=True):

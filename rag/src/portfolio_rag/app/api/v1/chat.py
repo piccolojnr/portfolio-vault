@@ -15,7 +15,7 @@ SSE events emitted (by the service/pipeline):
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from portfolio_rag.app.core.config import Settings
@@ -24,6 +24,7 @@ from portfolio_rag.app.core.dependencies import get_current_user, get_live_setti
 from portfolio_rag.app.core.limiter import limiter
 from portfolio_rag.domain.models.chat import ChatStreamRequest
 from portfolio_rag.domain.services import chat as svc
+from portfolio_rag.infrastructure.db.scoped_repository import ConversationRepository
 
 router = APIRouter(tags=["chat"])
 
@@ -45,6 +46,16 @@ async def chat_stream(
 ):
     from uuid import UUID
     org_id = UUID(current_user["org_id"])
+    user_id = UUID(current_user["sub"])
+
+    # Ownership gate — 404 if the conversation belongs to a different user
+    if body.conversation_id:
+        repo = ConversationRepository(session, org_id, user_id)
+        try:
+            await repo.get(UUID(body.conversation_id), limit=0)
+        except LookupError:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+
     stream = await svc.build_event_stream(
         message=body.message,
         history=[m.model_dump() for m in body.history],
