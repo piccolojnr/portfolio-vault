@@ -35,8 +35,21 @@ async def get_live_settings(request: Request) -> Settings:
     try:
         async with factory() as session:
             overrides = await settings_db.load_overrides(session, base.secret_key)
-        if overrides:
-            return base.model_copy(update=overrides)
+            result = base.model_copy(update=overrides) if overrides else base
+            # Overlay org-level system_prompt
+            try:
+                from portfolio_rag.app.core.security import verify_access_token
+                auth = request.headers.get("Authorization", "")
+                if auth.startswith("Bearer "):
+                    payload = verify_access_token(auth[7:], result)
+                    org_id = payload.get("org_id")
+                    if org_id:
+                        org_prompt = await settings_db.load_org_system_prompt(session, org_id)
+                        if org_prompt:
+                            result = result.model_copy(update={"system_prompt": org_prompt})
+            except Exception:
+                pass  # best-effort
+        return result
     except Exception:
         pass  # DB read failed — fall through to env settings
     return base

@@ -12,9 +12,9 @@ export function HeaderNav() {
   const canManage = org?.role === "admin" || org?.role === "owner";
 
   const isVault = pathname.startsWith("/documents");
-  const isSettings = pathname.startsWith("/settings") && !pathname.startsWith("/settings/profile") && !pathname.startsWith("/settings/organisation");
   const isGraph = pathname.startsWith("/graph");
-  const isAdmin = pathname.startsWith("/admin");
+  const isAdmin =
+    pathname.startsWith("/admin") && pathname !== "/admin/settings";
   const isOrgSettings = pathname.startsWith("/settings/organisation");
   const isProfile = pathname.startsWith("/settings/profile");
 
@@ -34,11 +34,6 @@ export function HeaderNav() {
       <Link href="/graph" className={navLink(isGraph)}>
         graph
       </Link>
-      {canManage && (
-        <Link href="/settings" className={navLink(isSettings)}>
-          settings
-        </Link>
-      )}
       {canManage && (
         <Link href="/settings/organisation" className={navLink(isOrgSettings)}>
           org

@@ -337,6 +337,38 @@ async def set_active_corpus(
     return {"corpus": CorpusRead(id=str(corpus.id), name=corpus.name, corpus_key=corpus.corpus_key, created_at=corpus.created_at)}
 
 
+class SystemPromptUpdate(BaseModel):
+    system_prompt: str
+
+
+@router.get("/{org_id}/system-prompt")
+async def get_org_system_prompt(
+    org_id: str,
+    session: DBSession,
+    current_user: dict = Depends(require_role("owner", "admin")),
+):
+    from portfolio_rag.domain.services.settings_db import load_org_system_prompt
+    from portfolio_rag.domain.models.settings import DEFAULT_PERSONA_PROMPT
+    oid = _parse_org_id(org_id)
+    _assert_org_scope(current_user, oid)
+    prompt = await load_org_system_prompt(session, org_id)
+    return {"system_prompt": prompt if prompt is not None else DEFAULT_PERSONA_PROMPT}
+
+
+@router.patch("/{org_id}/system-prompt")
+async def set_org_system_prompt(
+    org_id: str,
+    body: SystemPromptUpdate,
+    session: DBSession,
+    current_user: dict = Depends(require_role("owner", "admin")),
+):
+    from portfolio_rag.domain.services.settings_db import save_org_system_prompt
+    oid = _parse_org_id(org_id)
+    _assert_org_scope(current_user, oid)
+    await save_org_system_prompt(session, org_id, body.system_prompt)
+    return {"system_prompt": body.system_prompt}
+
+
 @router.post("/{org_id}/transfer-ownership", status_code=204)
 async def transfer_ownership(
     org_id: str,

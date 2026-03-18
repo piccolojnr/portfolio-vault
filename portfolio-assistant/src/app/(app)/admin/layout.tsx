@@ -5,8 +5,9 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const tabs = [
-  { href: "/admin/jobs",     label: "Jobs" },
-  { href: "/admin/ai-calls", label: "AI Costs" },
+  { href: "/admin/jobs",      label: "Jobs" },
+  { href: "/admin/ai-calls",  label: "AI Costs" },
+  { href: "/admin/settings",  label: "Settings" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

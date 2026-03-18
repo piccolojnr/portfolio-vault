@@ -121,3 +121,37 @@ async def get_key_status(session: AsyncSession) -> dict[str, bool]:
     for row in rows:
         result[row.key] = bool(row.value)
     return result
+
+
+async def load_org_system_prompt(session: AsyncSession, org_id: str) -> str | None:
+    """Return org-specific system_prompt from organisation_settings, or None if not set."""
+    from portfolio_rag.infrastructure.db.models.org import OrganisationSetting
+    import uuid
+    row = (await session.execute(
+        select(OrganisationSetting).where(
+            OrganisationSetting.org_id == uuid.UUID(org_id),
+            OrganisationSetting.key == "system_prompt",
+        )
+    )).scalars().first()
+    return row.value if (row and row.value) else None
+
+
+async def save_org_system_prompt(session: AsyncSession, org_id: str, value: str) -> None:
+    """Upsert org-specific system_prompt into organisation_settings."""
+    from portfolio_rag.infrastructure.db.models.org import OrganisationSetting
+    from portfolio_rag.infrastructure.db.models.base import utcnow
+    import uuid
+    org_uuid = uuid.UUID(org_id)
+    row = (await session.execute(
+        select(OrganisationSetting).where(
+            OrganisationSetting.org_id == org_uuid,
+            OrganisationSetting.key == "system_prompt",
+        )
+    )).scalars().first()
+    if row is None:
+        row = OrganisationSetting(org_id=org_uuid, key="system_prompt", value=value)
+    else:
+        row.value = value
+        row.updated_at = utcnow()
+    session.add(row)
+    await session.commit()

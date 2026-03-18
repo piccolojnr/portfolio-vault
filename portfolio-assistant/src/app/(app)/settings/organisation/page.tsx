@@ -88,6 +88,10 @@ export default function OrgSettingsPage() {
   const [transferConfirm, setTransferConfirm] = useState(false);
   const [transferError, setTransferError] = useState("");
 
+  const [systemPrompt, setSystemPrompt] = useState("");
+  const [promptSaving, setPromptSaving] = useState(false);
+  const [promptSaveMsg, setPromptSaveMsg] = useState<{ text: string; ok: boolean } | null>(null);
+
   // Hooks must be called unconditionally
   const { data: activeCorpusData } = useActiveCorpus(org?.id);
   const { data: corporaData } = useOrgCorpora(org?.id);
@@ -110,6 +114,9 @@ export default function OrgSettingsPage() {
       .catch(() => {})
       .finally(() => setMembersLoading(false));
     loadInvites(org.id);
+    apiFetch<{ system_prompt: string }>(`/api/orgs/${org.id}/system-prompt`)
+      .then((d) => setSystemPrompt(d.system_prompt))
+      .catch(() => {});
   }, [org]);
 
   const saveOrgName = async (e: React.FormEvent) => {
@@ -196,6 +203,25 @@ export default function OrgSettingsPage() {
       setTransferConfirm(false);
     } catch (err) {
       setTransferError(apiDetail(err));
+    }
+  };
+
+  const saveSystemPrompt = async () => {
+    if (!org) return;
+    setPromptSaving(true);
+    setPromptSaveMsg(null);
+    try {
+      await apiFetch(`/api/orgs/${org.id}/system-prompt`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ system_prompt: systemPrompt }),
+      });
+      setPromptSaveMsg({ text: "Saved", ok: true });
+      setTimeout(() => setPromptSaveMsg(null), 3000);
+    } catch (e) {
+      setPromptSaveMsg({ text: apiDetail(e), ok: false });
+    } finally {
+      setPromptSaving(false);
     }
   };
 
@@ -439,6 +465,33 @@ export default function OrgSettingsPage() {
                   <p className="mt-1 text-[11px] text-green-400 font-mono">{inviteSuccess}</p>
                 )}
               </form>
+            </section>
+          )}
+
+          {/* System Prompt */}
+          {canManage && (
+            <section className="rounded-xl border border-border bg-surface/40 p-5">
+              <SectionHeading>System Prompt</SectionHeading>
+              <p className="text-[11px] font-mono text-muted-foreground/60 mb-3">
+                Defines the assistant&apos;s persona and tone. Fixed rules and document-format
+                instructions are appended automatically — edit only the identity/job section.
+              </p>
+              <textarea
+                value={systemPrompt}
+                onChange={(e) => setSystemPrompt(e.target.value)}
+                rows={12}
+                className="w-full bg-surface border border-border rounded-md px-3 py-2 text-[12px] font-mono focus:outline-none focus:ring-1 focus:ring-primary/40 resize-y"
+              />
+              <div className="flex items-center gap-3 mt-3">
+                <Button onClick={saveSystemPrompt} disabled={promptSaving} className="h-8 px-4 font-mono text-[12px]">
+                  {promptSaving ? "saving…" : "save prompt"}
+                </Button>
+                {promptSaveMsg && (
+                  <span className={`text-[12px] font-mono ${promptSaveMsg.ok ? "text-green-400" : "text-destructive"}`}>
+                    {promptSaveMsg.text}
+                  </span>
+                )}
+              </div>
             </section>
           )}
 

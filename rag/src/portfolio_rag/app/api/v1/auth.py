@@ -45,14 +45,14 @@ def _set_refresh_cookie(response: Response, token: str, settings) -> None:
         value=token,
         httponly=True,
         secure=True,
-        samesite="strict",
+        samesite="lax",
         max_age=settings.jwt_refresh_expiry_days * 86400,
-        path="/api/v1/auth",
+        path="/",
     )
 
 
 def _delete_refresh_cookie(response: Response) -> None:
-    response.delete_cookie("refresh_token", path="/api/v1/auth")
+    response.delete_cookie("refresh_token", path="/")
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────

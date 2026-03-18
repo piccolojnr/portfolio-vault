@@ -150,7 +150,6 @@ export async function middleware(request: NextRequest) {
 
   // Member role gate — members are read-only
   const MEMBER_BLOCKED: (string | RegExp)[] = [
-    "/settings",
     "/admin",
     "/documents/new",
     "/documents/ingest",
