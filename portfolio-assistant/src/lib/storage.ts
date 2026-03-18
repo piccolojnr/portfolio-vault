@@ -4,8 +4,11 @@
  * Client helper for resolving stored file paths to public URLs.
  */
 
+import { apiFetch } from "./api";
+
 export async function getFileUrl(filePath: string): Promise<string | null> {
-  const res = await fetch(`/api/storage/url?path=${encodeURIComponent(filePath)}`);
-  if (!res.ok) return null;
-  return (await res.json()).url ?? null;
+  const data = await apiFetch<{ url: string | null }>(
+    `/api/storage/url?path=${encodeURIComponent(filePath)}`
+  ).catch(() => null);
+  return data?.url ?? null;
 }

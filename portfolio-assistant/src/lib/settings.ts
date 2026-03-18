@@ -4,6 +4,8 @@
  * Typed API client for the settings page.
  */
 
+import { apiFetch } from "./api";
+
 export interface SettingsRead {
   openai_api_key_set: boolean;
   anthropic_api_key_set: boolean;
@@ -33,15 +35,6 @@ export interface SettingsUpdate {
   classifier_openai_model?: string;
   summarizer_anthropic_model?: string;
   summarizer_openai_model?: string;
-}
-
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, init);
-  if (!res.ok) {
-    const text = await res.text().catch(() => res.statusText);
-    throw new Error(`${res.status}: ${text}`);
-  }
-  return res.json() as Promise<T>;
 }
 
 export function getSettings(): Promise<SettingsRead> {

@@ -21,6 +21,7 @@ from portfolio_rag.domain.models.auth import (
     LoginRequest,
     MagicLinkRequest,
     MeResponse,
+    OnboardingRequest,
     OrgRead,
     RegisterRequest,
     ResetPasswordRequest,
@@ -259,6 +260,7 @@ async def me(
             id=str(user.id),
             email=user.email,
             email_verified=user.email_verified,
+            onboarding_completed_at=user.onboarding_completed_at,
             created_at=user.created_at,
         ),
         org=OrgRead(
@@ -310,3 +312,66 @@ async def switch_org(
         settings,
     )
     return TokenResponse(access_token=access_token)
+
+
+@router.patch("/onboarding", response_model=MeResponse)
+async def complete_onboarding(
+    body: OnboardingRequest,
+    session: DBSession,
+    settings=Depends(get_live_settings),
+    current_user: dict = Depends(get_current_user),
+):
+    import uuid as _uuid
+    from sqlmodel import select
+    from portfolio_rag.infrastructure.db.models.user import User
+    from portfolio_rag.infrastructure.db.models.org import Organisation
+    from portfolio_rag.infrastructure.db.models.base import utcnow
+
+    user_id = _uuid.UUID(current_user["sub"])
+    org_id_str = current_user.get("org_id", "")
+
+    user = (
+        await session.execute(select(User).where(User.id == user_id))
+    ).scalars().first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.use_case = body.use_case
+    user.onboarding_completed_at = utcnow()
+    user.updated_at = utcnow()
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
+
+    org = None
+    role = current_user.get("role", "member")
+    if org_id_str:
+        try:
+            org_uuid = _uuid.UUID(org_id_str)
+            org = (
+                await session.execute(
+                    select(Organisation).where(Organisation.id == org_uuid)
+                )
+            ).scalars().first()
+        except (ValueError, Exception):
+            pass
+
+    if org is None:
+        raise HTTPException(status_code=404, detail="Organisation not found")
+
+    return MeResponse(
+        user=UserRead(
+            id=str(user.id),
+            email=user.email,
+            email_verified=user.email_verified,
+            onboarding_completed_at=user.onboarding_completed_at,
+            created_at=user.created_at,
+        ),
+        org=OrgRead(
+            id=str(org.id),
+            name=org.name,
+            slug=org.slug,
+            plan=org.plan,
+            role=role,
+        ),
+    )

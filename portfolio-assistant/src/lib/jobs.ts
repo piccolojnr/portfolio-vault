@@ -1,3 +1,5 @@
+import { apiFetch } from "./api";
+
 export interface Job {
   id: string;
   type: string;
@@ -32,19 +34,13 @@ export async function getJobs(params?: {
   if (params?.status) qs.set("status", params.status);
   if (params?.limit != null) qs.set("limit", String(params.limit));
   if (params?.offset != null) qs.set("offset", String(params.offset));
-  const url = `/api/admin/jobs${qs.toString() ? `?${qs}` : ""}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Failed to fetch jobs: ${res.status}`);
-  return res.json();
+  return apiFetch(`/api/admin/jobs${qs.toString() ? `?${qs}` : ""}`);
 }
 
 export async function getStats(): Promise<JobStats> {
-  const res = await fetch("/api/admin/jobs/stats");
-  if (!res.ok) throw new Error(`Failed to fetch stats: ${res.status}`);
-  return res.json();
+  return apiFetch("/api/admin/jobs/stats");
 }
 
 export async function retryJob(id: string): Promise<void> {
-  const res = await fetch(`/api/admin/jobs/${id}/retry`, { method: "POST" });
-  if (!res.ok) throw new Error(`Failed to retry job: ${res.status}`);
+  return apiFetch(`/api/admin/jobs/${id}/retry`, { method: "POST" });
 }

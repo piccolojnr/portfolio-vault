@@ -1,12 +1,7 @@
 import "./globals.css";
 
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryProvider } from "@/components/query-provider";
-import { ConversationProvider } from "@/components/conversation-context";
-import { AppContent } from "@/components/app-content";
-import { Toaster } from "sonner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -18,14 +13,15 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 export const metadata: Metadata = {
   title: "Portfolio Assistant",
   description: "RAG-powered assistant for Daud Rahim's portfolio vault",
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-    viewportFit: "cover",
-  },
   icons: {
     icon: [
       { url: "/favicon.ico" },
@@ -47,14 +43,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased overflow-hidden`}
       >
-        <QueryProvider>
-          <TooltipProvider>
-            <ConversationProvider>
-              <AppContent>{children}</AppContent>
-            </ConversationProvider>
-          </TooltipProvider>
-          <Toaster position="bottom-right" />
-        </QueryProvider>
+        {children}
       </body>
     </html>
   );

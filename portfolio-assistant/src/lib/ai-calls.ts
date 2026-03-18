@@ -1,3 +1,5 @@
+import { apiFetch } from "./api";
+
 export interface AiCall {
   id: string;
   call_type: string;
@@ -35,13 +37,9 @@ export async function getAiCalls(params?: {
   if (params?.call_type) qs.set("call_type", params.call_type);
   if (params?.limit != null) qs.set("limit", String(params.limit));
   if (params?.offset != null) qs.set("offset", String(params.offset));
-  const res = await fetch(`/api/admin/ai-calls${qs.toString() ? `?${qs}` : ""}`);
-  if (!res.ok) throw new Error(`Failed to fetch ai-calls: ${res.status}`);
-  return res.json();
+  return apiFetch(`/api/admin/ai-calls${qs.toString() ? `?${qs}` : ""}`);
 }
 
 export async function getAiCallStats(): Promise<AiCallStats> {
-  const res = await fetch("/api/admin/ai-calls/stats");
-  if (!res.ok) throw new Error(`Failed to fetch ai-call stats: ${res.status}`);
-  return res.json();
+  return apiFetch("/api/admin/ai-calls/stats");
 }

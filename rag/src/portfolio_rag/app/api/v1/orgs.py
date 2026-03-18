@@ -27,6 +27,7 @@ from portfolio_rag.domain.models.org import (
     MemberRead,
     OrgWithRole,
     TransferOwnershipRequest,
+    UpdateOrgRequest,
     UpdateRoleRequest,
 )
 from portfolio_rag.domain.services import org_service
@@ -98,6 +99,41 @@ def _assert_org_scope(current_user: dict, org_id: uuid.UUID) -> None:
     token_org = current_user.get("org_id", "")
     if token_org != str(org_id):
         raise HTTPException(status_code=403, detail="Token is not scoped to this organisation")
+
+
+@router.patch("/{org_id}", response_model=OrgWithRole)
+async def update_org(
+    org_id: str,
+    body: UpdateOrgRequest,
+    session: DBSession,
+    current_user: dict = Depends(require_role("owner", "admin")),
+):
+    from sqlmodel import select
+    from portfolio_rag.infrastructure.db.models.org import Organisation
+    from portfolio_rag.infrastructure.db.models.base import utcnow
+
+    oid = _parse_org_id(org_id)
+    _assert_org_scope(current_user, oid)
+
+    org = (
+        await session.execute(select(Organisation).where(Organisation.id == oid))
+    ).scalars().first()
+    if org is None:
+        raise HTTPException(status_code=404, detail="Organisation not found")
+
+    org.name = body.name
+    org.updated_at = utcnow()
+    session.add(org)
+    await session.commit()
+    await session.refresh(org)
+
+    return OrgWithRole(
+        id=str(org.id),
+        name=org.name,
+        slug=org.slug,
+        plan=org.plan,
+        role=current_user.get("role", "member"),
+    )
 
 
 @router.get("/{org_id}/members", response_model=list[MemberRead])

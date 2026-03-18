@@ -5,6 +5,8 @@
  * All calls go through Next.js proxy routes (/api/documents/...).
  */
 
+import { apiFetch } from "./api";
+
 export interface CorpusDocSummary {
   id: string;
   slug: string;
@@ -43,17 +45,6 @@ export interface CorpusDocUpdate {
   type?: string;
 }
 
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, init);
-  if (!res.ok) {
-    const text = await res.text().catch(() => res.statusText);
-    throw new Error(`${res.status}: ${text}`);
-  }
-  // 204 No Content
-  if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
-}
-
 export function listDocuments(page = 1, pageSize = 20): Promise<PaginatedDocs> {
   return apiFetch(`/api/documents?page=${page}&page_size=${pageSize}`);
 }
@@ -86,4 +77,3 @@ export function deleteDocument(slug: string): Promise<void> {
     method: "DELETE",
   });
 }
-

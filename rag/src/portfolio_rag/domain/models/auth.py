@@ -35,6 +35,10 @@ class SwitchOrgRequest(BaseModel):
     org_id: str
 
 
+class OnboardingRequest(BaseModel):
+    use_case: str
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -44,6 +48,7 @@ class UserRead(BaseModel):
     id: str
     email: str
     email_verified: bool
+    onboarding_completed_at: Optional[datetime] = None
     created_at: datetime
 
 

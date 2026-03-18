@@ -22,5 +22,7 @@ class User(SQLModel, table=True):
     email: str = Field(sa_column=Column(sa.String, unique=True, nullable=False, index=True))
     password_hash: Optional[str] = Field(default=None, sa_column=Column(sa.String, nullable=True))
     email_verified: bool = Field(default=False)
+    onboarding_completed_at: Optional[datetime] = Field(default=None, sa_column=Column(sa.DateTime(timezone=True), nullable=True))
+    use_case: Optional[str] = Field(default=None, sa_column=Column(sa.String, nullable=True))
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

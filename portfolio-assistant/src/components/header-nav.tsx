@@ -3,14 +3,18 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { useAuth } from "./auth-provider";
+import { OrgSwitcher } from "./org-switcher";
 
 export function HeaderNav() {
   const pathname = usePathname();
+  const { user, isAuthenticated, logout } = useAuth();
 
   const isVault = pathname.startsWith("/documents");
   const isSettings = pathname.startsWith("/settings");
   const isGraph = pathname.startsWith("/graph");
   const isAdmin = pathname.startsWith("/admin");
+  const isOrgSettings = pathname.startsWith("/settings/organisation");
 
   const navLink = (active: boolean) =>
     cn(
@@ -25,8 +29,11 @@ export function HeaderNav() {
       <Link href="/documents" className={navLink(isVault)}>
         documents
       </Link>
-      <Link href="/settings" className={navLink(isSettings)}>
+      <Link href="/settings" className={navLink(isSettings && !isOrgSettings)}>
         settings
+      </Link>
+      <Link href="/settings/organisation" className={navLink(isOrgSettings)}>
+        org
       </Link>
       <Link href="/graph" className={navLink(isGraph)}>
         graph
@@ -34,6 +41,20 @@ export function HeaderNav() {
       <Link href="/admin/jobs" className={navLink(isAdmin)}>
         admin
       </Link>
+
+      {isAuthenticated && (
+        <>
+          <div className="w-px h-4 bg-border mx-1" />
+          <OrgSwitcher />
+          <button
+            onClick={logout}
+            className="px-2 py-1 rounded-md text-[11px] font-mono text-muted-foreground hover:text-foreground hover:bg-surface transition-colors"
+            title={user?.email}
+          >
+            sign out
+          </button>
+        </>
+      )}
     </nav>
   );
 }

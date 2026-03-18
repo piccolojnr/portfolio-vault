@@ -295,7 +295,7 @@ async def send_magic_link(session: AsyncSession, email: str, settings) -> None:
     )
     session.add(ml_token)
 
-    magic_link_url = f"{settings.app_url}/auth/magic?token={raw}"
+    magic_link_url = f"{settings.app_url}/auth/magic-link?token={raw}"
     await job_queue.enqueue(
         session,
         "send_magic_link_email",

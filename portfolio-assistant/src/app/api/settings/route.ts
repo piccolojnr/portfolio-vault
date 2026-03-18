@@ -1,7 +1,8 @@
 import { RAG_BACKEND_URL } from "@/lib/config";
+import { serverFetch } from "@/lib/server-fetch";
 
-export async function GET() {
-  const res = await fetch(`${RAG_BACKEND_URL}/api/v1/settings`);
+export async function GET(req: Request) {
+  const res = await serverFetch(`${RAG_BACKEND_URL}/api/v1/settings`, req);
   const data = await res.json();
   return new Response(JSON.stringify(data), {
     status: res.status,
@@ -11,7 +12,7 @@ export async function GET() {
 
 export async function PUT(req: Request) {
   const body = await req.text();
-  const res = await fetch(`${RAG_BACKEND_URL}/api/v1/settings`, {
+  const res = await serverFetch(`${RAG_BACKEND_URL}/api/v1/settings`, req, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body,

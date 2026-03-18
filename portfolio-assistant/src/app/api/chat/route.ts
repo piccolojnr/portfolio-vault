@@ -1,20 +1,5 @@
-/**
- * app/api/chat/route.ts
- * ---------------------
- * Thin SSE proxy — all chat logic has moved to the Python backend.
- *
- * POST /api/chat → POST http://python-backend/api/v1/chat/stream
- *
- * The Python backend handles:
- *   1. Fetch authoritative history from DB + trim to token budget
- *   2. Summary injection
- *   3. Intent classification
- *   4. RAG retrieval (Qdrant or LightRAG)
- *   5. LLM streaming
- *   6. Message persistence + background summarisation
- */
-
 import { RAG_BACKEND_URL } from "@/lib/config";
+import { serverFetch } from "@/lib/server-fetch";
 
 const SSE_HEADERS = {
     "Content-Type": "text/event-stream",
@@ -25,7 +10,7 @@ const SSE_HEADERS = {
 export async function POST(req: Request) {
     try {
         const body = await req.json();
-        const res = await fetch(`${RAG_BACKEND_URL}/api/v1/chat/stream`, {
+        const res = await serverFetch(`${RAG_BACKEND_URL}/api/v1/chat/stream`, req, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),

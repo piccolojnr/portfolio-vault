@@ -54,3 +54,7 @@ class UpdateRoleRequest(BaseModel):
 
 class TransferOwnershipRequest(BaseModel):
     new_owner_user_id: str
+
+
+class UpdateOrgRequest(BaseModel):
+    name: str

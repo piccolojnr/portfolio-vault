@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import {
   Sidebar,
@@ -14,11 +14,16 @@ import { HeaderNav } from "@/components/header-nav";
 import { ConversationSidebarContent } from "@/components/conversation-sidebar";
 import { useConversations } from "@/components/conversation-context";
 
-export function AppContent({ children }: { children: React.ReactNode }) {
+const BARE_PATHS = ["/onboarding"];
+
+function isBareRoute(pathname: string): boolean {
+  return BARE_PATHS.some((p) => pathname === p || pathname.startsWith(p));
+}
+
+function AppChrome({ children }: { children: React.ReactNode }) {
   const { conversations, isLoading, isFetching, deleteConversation, renameConversation } =
     useConversations();
 
-  // activeId and navigation live here, not in the data provider.
   const params = useParams();
   const router = useRouter();
   const activeId = (params?.slug as string | null) ?? null;
@@ -78,4 +83,14 @@ export function AppContent({ children }: { children: React.ReactNode }) {
       </SidebarInset>
     </SidebarProvider>
   );
+}
+
+export function AppContent({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+
+  if (isBareRoute(pathname)) {
+    return <>{children}</>;
+  }
+
+  return <AppChrome>{children}</AppChrome>;
 }

@@ -4,6 +4,8 @@
  * Typed API client for conversation endpoints.
  */
 
+import { apiFetch } from "./api";
+
 export interface MessageMeta {
   intent: "conversational" | "retrieval" | "document" | "refinement";
   rag_retrieved: boolean;
@@ -51,15 +53,6 @@ export interface MessagesPage {
 // need to read or invalidate the cache rather than duplicating the literal.
 export const CONV_QUERY_KEY = ["conversations"] as const;
 
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, init);
-  if (!res.ok) {
-    const text = await res.text().catch(() => res.statusText);
-    throw new Error(`${res.status}: ${text}`);
-  }
-  return res.json() as Promise<T>;
-}
-
 export function listConversations(): Promise<ConversationSummary[]> {
   return apiFetch("/api/conversations");
 }
@@ -84,9 +77,7 @@ export function patchConversation(
 }
 
 export function deleteConversation(id: string): Promise<void> {
-  return fetch(`/api/conversations/${id}`, { method: "DELETE" }).then(
-    () => undefined,
-  );
+  return apiFetch(`/api/conversations/${id}`, { method: "DELETE" });
 }
 
 export function updateConversationSummary(
@@ -94,14 +85,14 @@ export function updateConversationSummary(
   summary: string,
   summarisedUpToMessageId: string,
 ): Promise<void> {
-  return fetch(`/api/conversations/${convId}/summary`, {
+  return apiFetch(`/api/conversations/${convId}/summary`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       summary,
       summarised_up_to_message_id: summarisedUpToMessageId,
     }),
-  }).then(() => undefined);
+  });
 }
 
 export function getMessagesBefore(
