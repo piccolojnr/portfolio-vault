@@ -31,5 +31,14 @@ class Document(SQLModel, table=True):
         default_factory=dict,
         sa_column=Column("metadata", JSONB, nullable=False),
     )
+    org_id: Optional[UUID] = Field(
+        default=None,
+        sa_column=Column(
+            sa.UUID(as_uuid=True),
+            sa.ForeignKey("organisations.id"),
+            nullable=True,
+            index=True,
+        ),
+    )
     updated_at: datetime = Field(default_factory=utcnow)
     created_at: datetime = Field(default_factory=utcnow)

@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
+from typing import Optional
 from sqlalchemy import Column, DateTime, Integer, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlmodel import Field, SQLModel
@@ -58,4 +59,8 @@ class Job(SQLModel, table=True):
     finished_at: datetime | None = Field(
         default=None,
         sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    org_id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(UUID(as_uuid=True), nullable=True, index=True),
     )

@@ -5,8 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import networkx as nx
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
+from portfolio_rag.app.core.dependencies import get_current_user
 from portfolio_rag.app.core.limiter import limiter
 
 router = APIRouter(prefix="/graph", tags=["graph"])
@@ -18,7 +19,11 @@ _RAG_DIR = Path(__file__).resolve().parents[5]
 
 @router.get("/{corpus_id}")
 @limiter.limit("30/minute")
-async def get_graph(request: Request, corpus_id: str):
+async def get_graph(
+    request: Request,
+    corpus_id: str,
+    current_user: dict = Depends(get_current_user),
+):
     """Return nodes and links for the named corpus knowledge graph."""
     graph_path = (
         _RAG_DIR / "data" / "graphs" / corpus_id / "graph_chunk_entity_relation.graphml"

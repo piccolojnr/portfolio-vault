@@ -111,6 +111,8 @@ async def handle_summarise_conversation(payload: dict) -> None:
             prompt, settings.openai_api_key, settings.summarizer_openai_model
         )
 
+    org_id_str = payload.get("org_id")
+
     engine, factory = await open_db_engine(settings.database_url)
     try:
         async with factory() as session:
@@ -122,6 +124,7 @@ async def handle_summarise_conversation(payload: dict) -> None:
             )
             # Log AI call in the same transaction
             from portfolio_rag.domain.services.ai_calls import log_call
+            import uuid as _uuid
             await log_call(
                 session, "summarise",
                 model=usage["model"],
@@ -129,6 +132,7 @@ async def handle_summarise_conversation(payload: dict) -> None:
                 input_tokens=usage.get("input_tokens"),
                 output_tokens=usage.get("output_tokens"),
                 conversation_id=conv_id,
+                org_id=_uuid.UUID(org_id_str) if org_id_str else None,
             )
             await session.commit()
     finally:

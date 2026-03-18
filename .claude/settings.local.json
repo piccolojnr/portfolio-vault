@@ -16,7 +16,8 @@
       "Read(//c/Users/USER/portfolio-vault/.claude/worktrees/agent-a93a4482/$BASE/**)",
       "Bash(grep:*)",
       "Bash(python3 -c \"import json,sys; data=json.load\\(sys.stdin\\); print\\(data[0][''''text'''']\\)\")",
-      "Bash(.venv/Scripts/pip install:*)"
+      "Bash(.venv/Scripts/pip install:*)",
+      "Bash(find /c/Users/USER/portfolio-vault/rag/src/portfolio_rag -type d -not -path */.*)"
     ]
   }
 }

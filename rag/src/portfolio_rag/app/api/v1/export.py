@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
+
+from portfolio_rag.app.core.dependencies import get_current_user
 
 router = APIRouter(prefix="/export", tags=["export"])
 
@@ -23,7 +25,10 @@ class ExportRequest(BaseModel):
 
 
 @router.post("/docx")
-async def export_docx(body: ExportRequest):
+async def export_docx(
+    body: ExportRequest,
+    current_user: dict = Depends(get_current_user),
+):
     try:
         from portfolio_rag.domain.services.export import markdown_to_docx
         data = markdown_to_docx(body.content)
@@ -47,7 +52,10 @@ async def export_docx(body: ExportRequest):
 
 
 @router.post("/pdf")
-async def export_pdf(body: ExportRequest):
+async def export_pdf(
+    body: ExportRequest,
+    current_user: dict = Depends(get_current_user),
+):
     try:
         from portfolio_rag.domain.services.export import markdown_to_pdf
         data = markdown_to_pdf(body.content)

@@ -20,7 +20,7 @@ from fastapi.responses import StreamingResponse
 
 from portfolio_rag.app.core.config import Settings
 from portfolio_rag.app.core.db import get_db_conn
-from portfolio_rag.app.core.dependencies import get_live_settings
+from portfolio_rag.app.core.dependencies import get_current_user, get_live_settings
 from portfolio_rag.app.core.limiter import limiter
 from portfolio_rag.domain.models.chat import ChatStreamRequest
 from portfolio_rag.domain.services import chat as svc
@@ -41,7 +41,10 @@ async def chat_stream(
     request: Request,
     live_settings: Settings = Depends(get_live_settings),
     session=Depends(get_db_conn),
+    current_user: dict = Depends(get_current_user),
 ):
+    from uuid import UUID
+    org_id = UUID(current_user["org_id"])
     stream = await svc.build_event_stream(
         message=body.message,
         history=[m.model_dump() for m in body.history],
@@ -51,5 +54,6 @@ async def chat_stream(
         live_settings=live_settings,
         lightrag_mode=body.lightrag_mode,
         intent_override=body.intent_override,
+        org_id=org_id,
     )
     return StreamingResponse(stream, headers=SSE_HEADERS)

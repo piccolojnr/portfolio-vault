@@ -38,6 +38,10 @@ class AiCall(SQLModel, table=True):
         default=None,
         sa_column=Column(UUID(as_uuid=True), nullable=True),
     )
+    org_id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(UUID(as_uuid=True), nullable=True, index=True),
+    )
     created_at: datetime = Field(
         default_factory=utcnow,
         sa_column=Column(DateTime(timezone=True), nullable=False),

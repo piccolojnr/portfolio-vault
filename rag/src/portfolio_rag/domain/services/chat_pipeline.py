@@ -121,6 +121,7 @@ async def _persist_messages(
     db_session_factory,
     sources: list[dict] | None = None,
     settings=None,
+    org_id=None,
 ) -> dict | None:
     """Persists user + assistant messages. Returns saved assistant message metadata.
 
@@ -160,6 +161,7 @@ async def _stream_llm(
     settings,
     db_session_factory,
     chunks: list[dict] | None = None,
+    org_id=None,
 ) -> AsyncGenerator[str, None]:
     """
     Stream from whichever LLM is configured, accumulate, persist, emit [DONE].
@@ -237,7 +239,7 @@ async def _stream_llm(
     if conv_id and db_session_factory:
         saved = await _persist_messages(
             conv_id, user_message, accumulated, doc_type, meta, db_session_factory,
-            sources=sources, settings=settings,
+            sources=sources, settings=settings, org_id=org_id,
         )
         yield _sse({
             "saved": {
@@ -261,6 +263,7 @@ async def _stream_llm(
                     input_tokens=usage_dict["input_tokens"],
                     output_tokens=usage_dict["output_tokens"],
                     conversation_id=conv_id,
+                    org_id=org_id,
                 )
                 await _session.commit()
         except Exception:
@@ -307,11 +310,12 @@ async def _handle_conversational(
     conv_id: str | None,
     settings,
     db_session_factory,
+    org_id=None,
 ) -> AsyncGenerator[str, None]:
     logger.info("[chat] conversational — skipping RAG")
     meta = {"intent": "conversational", "rag_retrieved": False, "chunks_count": 0}
     messages = [*history, {"role": "user", "content": message}]
-    async for event in _stream_llm(messages, message, conv_id, meta, settings, db_session_factory, chunks=None):
+    async for event in _stream_llm(messages, message, conv_id, meta, settings, db_session_factory, chunks=None, org_id=org_id):
         yield event
 
 
@@ -322,6 +326,7 @@ async def _handle_retrieval(
     settings,
     db_session_factory,
     prefetched_chunks: list[dict] | None = None,
+    org_id=None,
 ) -> AsyncGenerator[str, None]:
     chunks = prefetched_chunks if prefetched_chunks is not None else await _retrieve(message, settings)
     logger.info("[chat] retrieval — %d chunks", len(chunks))
@@ -329,7 +334,7 @@ async def _handle_retrieval(
     augmented = f"Relevant context from my portfolio vault:\n\n{context}\n\n---\n\n{message}"
     messages = [*history, {"role": "user", "content": augmented}]
     meta = {"intent": "retrieval", "rag_retrieved": True, "chunks_count": len(chunks)}
-    async for event in _stream_llm(messages, message, conv_id, meta, settings, db_session_factory, chunks=chunks):
+    async for event in _stream_llm(messages, message, conv_id, meta, settings, db_session_factory, chunks=chunks, org_id=org_id):
         yield event
 
 
@@ -340,6 +345,7 @@ async def _handle_document(
     settings,
     db_session_factory,
     prefetched_chunks: list[dict] | None = None,
+    org_id=None,
 ) -> AsyncGenerator[str, None]:
     chunks = prefetched_chunks if prefetched_chunks is not None else await _retrieve(message, settings)
     logger.info("[chat] document — %d chunks", len(chunks))
@@ -347,7 +353,7 @@ async def _handle_document(
     augmented = f"Relevant context from my portfolio vault:\n\n{context}\n\n---\n\n{message}"
     messages = [*history, {"role": "user", "content": augmented}]
     meta = {"intent": "document", "rag_retrieved": True, "chunks_count": len(chunks)}
-    async for event in _stream_llm(messages, message, conv_id, meta, settings, db_session_factory, chunks=chunks):
+    async for event in _stream_llm(messages, message, conv_id, meta, settings, db_session_factory, chunks=chunks, org_id=org_id):
         yield event
 
 
@@ -359,6 +365,7 @@ async def _handle_refinement(
     settings,
     db_session_factory,
     prefetched_chunks: list[dict] | None = None,
+    org_id=None,
 ) -> AsyncGenerator[str, None]:
     prior_doc = _extract_last_document(history)
     context_block = (
@@ -383,7 +390,7 @@ async def _handle_refinement(
     )
     messages = [*history, {"role": "user", "content": user_content}]
     meta = {"intent": "refinement", "rag_retrieved": needs_rag, "chunks_count": chunks_count}
-    async for event in _stream_llm(messages, message, conv_id, meta, settings, db_session_factory, chunks=rag_chunks if needs_rag else None):
+    async for event in _stream_llm(messages, message, conv_id, meta, settings, db_session_factory, chunks=rag_chunks if needs_rag else None, org_id=org_id):
         yield event
 
 
@@ -397,6 +404,7 @@ async def stream_response(
     settings,
     db_session_factory,
     prefetched_chunks: list[dict] | None = None,
+    org_id=None,
 ) -> AsyncGenerator[str, None]:
     """
     Routes a classified message to the appropriate handler and yields SSE events.
@@ -408,16 +416,16 @@ async def stream_response(
     needs_rag = classification.needs_rag
 
     if intent == "conversational":
-        gen = _handle_conversational(message, history, conversation_id, settings, db_session_factory)
+        gen = _handle_conversational(message, history, conversation_id, settings, db_session_factory, org_id=org_id)
     elif intent == "retrieval":
-        gen = _handle_retrieval(message, history, conversation_id, settings, db_session_factory, prefetched_chunks=prefetched_chunks)
+        gen = _handle_retrieval(message, history, conversation_id, settings, db_session_factory, prefetched_chunks=prefetched_chunks, org_id=org_id)
     elif intent == "document":
-        gen = _handle_document(message, history, conversation_id, settings, db_session_factory, prefetched_chunks=prefetched_chunks)
+        gen = _handle_document(message, history, conversation_id, settings, db_session_factory, prefetched_chunks=prefetched_chunks, org_id=org_id)
     elif intent == "refinement":
-        gen = _handle_refinement(message, history, conversation_id, needs_rag, settings, db_session_factory, prefetched_chunks=prefetched_chunks)
+        gen = _handle_refinement(message, history, conversation_id, needs_rag, settings, db_session_factory, prefetched_chunks=prefetched_chunks, org_id=org_id)
     else:
         # Exhaustiveness guard — unknown intent falls back to retrieval
-        gen = _handle_retrieval(message, history, conversation_id, settings, db_session_factory, prefetched_chunks=prefetched_chunks)
+        gen = _handle_retrieval(message, history, conversation_id, settings, db_session_factory, prefetched_chunks=prefetched_chunks, org_id=org_id)
 
     async for event in gen:
         yield event

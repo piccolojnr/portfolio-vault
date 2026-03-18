@@ -33,6 +33,7 @@ async def enqueue(
     *,
     max_attempts: int = 3,
     delay_seconds: int = 0,
+    org_id: uuid.UUID | None = None,
 ) -> str:
     """Insert a new job and return its UUID string."""
     scheduled_for = _now() + timedelta(seconds=delay_seconds)
@@ -41,6 +42,7 @@ async def enqueue(
         payload=payload,
         max_attempts=max_attempts,
         scheduled_for=scheduled_for,
+        org_id=org_id,
     )
     session.add(job)
     await session.flush()
@@ -146,11 +148,21 @@ async def fail(session: AsyncSession, job_id: str, error: str, trace: str) -> No
         )
 
 
-async def get_stats(session: AsyncSession) -> dict:
-    """Return job counts grouped by status."""
-    result = await session.execute(
-        text("SELECT status, COUNT(*) AS cnt FROM jobs GROUP BY status")
-    )
+async def get_stats(
+    session: AsyncSession,
+    *,
+    org_id: uuid.UUID | None = None,
+) -> dict:
+    """Return job counts grouped by status, optionally scoped to an org."""
+    if org_id is not None:
+        result = await session.execute(
+            text("SELECT status, COUNT(*) AS cnt FROM jobs WHERE org_id = :org_id GROUP BY status"),
+            {"org_id": org_id},
+        )
+    else:
+        result = await session.execute(
+            text("SELECT status, COUNT(*) AS cnt FROM jobs GROUP BY status")
+        )
     rows = result.mappings().all()
     stats: dict[str, int] = {
         "pending": 0, "running": 0, "done": 0, "failed": 0, "retrying": 0
@@ -166,31 +178,24 @@ async def get_jobs(
     status: str | None = None,
     limit: int = 50,
     offset: int = 0,
+    org_id: uuid.UUID | None = None,
 ) -> list[dict]:
-    """Return jobs ordered by created_at DESC with optional status filter."""
+    """Return jobs ordered by created_at DESC with optional status/org filter."""
+    conditions = []
+    params: dict = {"limit": limit, "offset": offset}
+
     if status:
-        result = await session.execute(
-            text(
-                """
-                SELECT * FROM jobs
-                WHERE status = :status
-                ORDER BY created_at DESC
-                LIMIT :limit OFFSET :offset
-                """
-            ),
-            {"status": status, "limit": limit, "offset": offset},
-        )
-    else:
-        result = await session.execute(
-            text(
-                """
-                SELECT * FROM jobs
-                ORDER BY created_at DESC
-                LIMIT :limit OFFSET :offset
-                """
-            ),
-            {"limit": limit, "offset": offset},
-        )
+        conditions.append("status = :status")
+        params["status"] = status
+    if org_id is not None:
+        conditions.append("org_id = :org_id")
+        params["org_id"] = org_id
+
+    where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    result = await session.execute(
+        text(f"SELECT * FROM jobs {where} ORDER BY created_at DESC LIMIT :limit OFFSET :offset"),
+        params,
+    )
     return [dict(r) for r in result.mappings().all()]
 
 

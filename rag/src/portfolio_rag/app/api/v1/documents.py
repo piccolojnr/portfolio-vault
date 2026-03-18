@@ -3,7 +3,7 @@ Documents Router
 ================
 
 CRUD endpoints for corpus documents + reindex trigger + file upload/ingestion.
-Business logic lives in portfolio_rag.domain.services.document.
+All endpoints require authentication; data is scoped to the caller's org.
 
 Prefix: /documents (mounted under /api/v1)
 
@@ -14,11 +14,13 @@ routes so FastAPI doesn't swallow them.
 from __future__ import annotations
 
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from portfolio_rag.app.core.db import get_db_conn
+from portfolio_rag.app.core.dependencies import get_current_user
 from portfolio_rag.domain.models.document import (
     CorpusDocCreate,
     CorpusDocDetail,
@@ -29,13 +31,18 @@ from portfolio_rag.domain.models.document import (
     DuplicateCheckResponse,
     PaginatedDocs,
 )
-from portfolio_rag.domain.services import document as svc
 from portfolio_rag.domain.services import job_queue
+from portfolio_rag.infrastructure.db.scoped_repository import DocumentRepository
 from portfolio_rag.infrastructure.storage import get_storage_backend
+from portfolio_rag.domain.services import document as svc
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 DBSession = Annotated[AsyncSession, Depends(get_db_conn)]
+
+
+def _repo(session: AsyncSession, current_user: dict) -> DocumentRepository:
+    return DocumentRepository(session, UUID(current_user["org_id"]))
 
 
 # ── List / Create ──────────────────────────────────────────────────────────────
@@ -43,16 +50,21 @@ DBSession = Annotated[AsyncSession, Depends(get_db_conn)]
 @router.get("", response_model=PaginatedDocs)
 async def list_documents(
     session: DBSession,
+    current_user: dict = Depends(get_current_user),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=500),
 ):
-    return await svc.list_documents(session, page, page_size)
+    return await _repo(session, current_user).list(page, page_size)
 
 
 @router.post("", response_model=CorpusDocDetail, status_code=201)
-async def create_document(data: CorpusDocCreate, session: DBSession):
+async def create_document(
+    data: CorpusDocCreate,
+    session: DBSession,
+    current_user: dict = Depends(get_current_user),
+):
     try:
-        doc = await svc.create_document(session, data)
+        doc = await _repo(session, current_user).create(data)
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
     return _detail(doc)
@@ -61,13 +73,18 @@ async def create_document(data: CorpusDocCreate, session: DBSession):
 # ── Fixed-path routes (must come before /{slug}) ──────────────────────────────
 
 @router.post("/check-duplicates", response_model=DuplicateCheckResponse)
-async def check_duplicates_endpoint(body: DuplicateCheckRequest, session: DBSession):
-    return await svc.check_duplicates(session, body.corpus_id, body.files)
+async def check_duplicates_endpoint(
+    body: DuplicateCheckRequest,
+    session: DBSession,
+    current_user: dict = Depends(get_current_user),
+):
+    return await _repo(session, current_user).check_duplicates(body.corpus_id, body.files)
 
 
 @router.post("/upload", status_code=201)
 async def upload_document(
     session: DBSession,
+    current_user: dict = Depends(get_current_user),
     file: UploadFile = File(...),
     corpus_id: str = Form(DEFAULT_CORPUS_ID),
     file_hash: str = Form(...),
@@ -104,13 +121,13 @@ async def upload_document(
 
     # Derive slug from filename
     slug = svc._filename_to_slug(filename)
-    # Make slug unique if needed
+    # Make slug unique within org if needed
     base_slug = slug
     counter = 1
+    repo = _repo(session, current_user)
     while True:
         try:
-            doc = await svc.create_uploaded_document(
-                session,
+            doc = await repo.create_uploaded(
                 corpus_id=corpus_id,
                 slug=slug,
                 title=filename,
@@ -127,37 +144,54 @@ async def upload_document(
 
     await job_queue.enqueue(
         session, "ingest_document",
-        {"document_id": str(doc.id), "corpus_id": corpus_id},
+        {
+            "document_id": str(doc.id),
+            "corpus_id": corpus_id,
+            "org_id": str(current_user["org_id"]),
+        },
+        org_id=UUID(current_user["org_id"]),
     )
     await session.commit()
     return {"id": str(doc.id), "slug": doc.slug, "title": doc.title}
 
 
-
 # ── Parametric /{slug} routes ──────────────────────────────────────────────────
 
 @router.get("/{slug}", response_model=CorpusDocDetail)
-async def get_document(slug: str, session: DBSession):
+async def get_document(
+    slug: str,
+    session: DBSession,
+    current_user: dict = Depends(get_current_user),
+):
     try:
-        doc = await svc.get_document(session, slug)
+        doc = await _repo(session, current_user).get_by_slug(slug)
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
     return _detail(doc)
 
 
 @router.put("/{slug}", response_model=CorpusDocDetail)
-async def update_document(slug: str, patch: CorpusDocUpdate, session: DBSession):
+async def update_document(
+    slug: str,
+    patch: CorpusDocUpdate,
+    session: DBSession,
+    current_user: dict = Depends(get_current_user),
+):
     try:
-        doc = await svc.update_document(session, slug, patch)
+        doc = await _repo(session, current_user).update(slug, patch)
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
     return _detail(doc)
 
 
 @router.delete("/{slug}", status_code=204)
-async def delete_document(slug: str, session: DBSession):
+async def delete_document(
+    slug: str,
+    session: DBSession,
+    current_user: dict = Depends(get_current_user),
+):
     try:
-        await svc.delete_document(session, slug)
+        await _repo(session, current_user).delete(slug)
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -165,9 +199,13 @@ async def delete_document(slug: str, session: DBSession):
 # ── Parametric /{doc_id}/... routes ───────────────────────────────────────────
 
 @router.get("/{doc_id}/status", response_model=DocumentStatusResponse)
-async def get_document_status(doc_id: str, session: DBSession):
+async def get_document_status(
+    doc_id: str,
+    session: DBSession,
+    current_user: dict = Depends(get_current_user),
+):
     try:
-        doc = await svc.get_document_by_id(session, doc_id)
+        doc = await _repo(session, current_user).get_by_id(doc_id)
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
     meta = doc.doc_metadata or {}
@@ -180,9 +218,13 @@ async def get_document_status(doc_id: str, session: DBSession):
 
 
 @router.post("/{doc_id}/reingest", status_code=202)
-async def reingest_document(doc_id: str, session: DBSession):
+async def reingest_document(
+    doc_id: str,
+    session: DBSession,
+    current_user: dict = Depends(get_current_user),
+):
     try:
-        doc = await svc.get_document_by_id(session, doc_id)
+        doc = await _repo(session, current_user).get_by_id(doc_id)
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -193,7 +235,12 @@ async def reingest_document(doc_id: str, session: DBSession):
 
     await job_queue.enqueue(
         session, "reingest_document",
-        {"document_id": doc_id, "corpus_id": doc.corpus_id or "portfolio_vault"},
+        {
+            "document_id": doc_id,
+            "corpus_id": doc.corpus_id or "portfolio_vault",
+            "org_id": str(current_user["org_id"]),
+        },
+        org_id=UUID(current_user["org_id"]),
     )
     await session.commit()
     return {"status": "queued"}

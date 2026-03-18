@@ -23,6 +23,7 @@ import asyncio
 from types import SimpleNamespace
 from typing import AsyncGenerator
 from uuid import UUID
+import uuid as _uuid_mod
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,6 +46,7 @@ async def build_event_stream(
     live_settings: Settings,
     lightrag_mode: str | None = None,
     intent_override: str | None = None,
+    org_id: "_uuid_mod.UUID | None" = None,
 ) -> AsyncGenerator[str, None]:
     """
     Prepare and return the SSE generator for a single chat turn.
@@ -136,6 +138,7 @@ async def build_event_stream(
             chat_settings,
             db_session_factory,
             prefetched_chunks=prefetched_chunks,
+            org_id=org_id,
         ):
             yield event
 
@@ -153,9 +156,13 @@ async def build_event_stream(
                 ],
                 "existing_summary": summary_trigger["existing_summary"] or "",
                 "newest_trimmed_id": str(summary_trigger["newest_trimmed_id"]),
+                "org_id": str(org_id) if org_id else None,
             }
             async with db_session_factory() as _session:
-                await job_queue.enqueue(_session, "summarise_conversation", payload)
+                await job_queue.enqueue(
+                    _session, "summarise_conversation", payload,
+                    org_id=org_id,
+                )
                 await _session.commit()
 
     return _generate()

@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from portfolio_rag.app.core.config import Settings
-from portfolio_rag.app.core.dependencies import get_live_settings
+from portfolio_rag.app.core.dependencies import get_current_user, get_live_settings
 from portfolio_rag.domain.models.rag import QueryRequest, RetrieveResponse, RetrievedChunk
 from portfolio_rag.domain.services.retrieval import retrieve
 
@@ -13,6 +13,7 @@ router = APIRouter(tags=["rag"])
 async def retrieve_endpoint(
     request: QueryRequest,
     settings: Settings = Depends(get_live_settings),
+    current_user: dict = Depends(get_current_user),
 ):
     try:
         chunks = retrieve(request.question, settings=settings, n=request.n_results)

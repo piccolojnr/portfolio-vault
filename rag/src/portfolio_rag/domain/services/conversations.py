@@ -9,6 +9,7 @@ Auto-title runs as a FastAPI BackgroundTask with its own DB session.
 from __future__ import annotations
 
 import asyncio
+import uuid
 from datetime import datetime
 from uuid import UUID
 
@@ -22,11 +23,14 @@ from portfolio_rag.domain.models.conversation import ConversationDetail, Convers
 
 # ── Conversation CRUD ──────────────────────────────────────────────────────────
 
-async def list_conversations(session: AsyncSession) -> list[ConversationSummary]:
+async def list_conversations(
+    session: AsyncSession, *, org_id: "uuid.UUID | None" = None
+) -> list[ConversationSummary]:
+    q = select(Conversation)
+    if org_id is not None:
+        q = q.where(Conversation.org_id == org_id)
     rows = (
-        await session.execute(
-            select(Conversation).order_by(Conversation.updated_at.desc())
-        )
+        await session.execute(q.order_by(Conversation.updated_at.desc()))
     ).scalars().all()
     return [ConversationSummary.model_validate(c) for c in rows]
 
@@ -69,8 +73,10 @@ async def get_conversation(
     )
 
 
-async def create_conversation(session: AsyncSession) -> Conversation:
-    conv = Conversation()
+async def create_conversation(
+    session: AsyncSession, *, org_id: "uuid.UUID | None" = None
+) -> Conversation:
+    conv = Conversation(org_id=org_id)
     session.add(conv)
     await session.commit()
     await session.refresh(conv)

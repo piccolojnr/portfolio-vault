@@ -69,6 +69,7 @@ async def log_call(
     job_id: str | None = None,
     conversation_id: str | None = None,
     doc_id: str | None = None,
+    org_id: uuid.UUID | None = None,
 ) -> None:
     """Insert an ai_calls row.  Caller is responsible for committing."""
     from portfolio_rag.infrastructure.db.models.ai_call import AiCall
@@ -85,6 +86,7 @@ async def log_call(
         job_id=uuid.UUID(job_id) if job_id else None,
         conversation_id=uuid.UUID(conversation_id) if conversation_id else None,
         doc_id=uuid.UUID(doc_id) if doc_id else None,
+        org_id=org_id,
     )
     session.add(row)
     await session.flush()

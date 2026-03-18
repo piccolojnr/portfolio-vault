@@ -3,6 +3,7 @@ Conversations Router
 ====================
 
 CRUD for conversations and messages under /api/v1/conversations.
+All endpoints require authentication; data is scoped to the caller's org.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from uuid import UUID
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 
 from portfolio_rag.app.core.db import get_db_conn
-from portfolio_rag.app.core.dependencies import get_live_settings
+from portfolio_rag.app.core.dependencies import get_current_user, get_live_settings
 from portfolio_rag.domain.models.conversation import (
     ConversationDetail,
     ConversationPatch,
@@ -25,25 +26,40 @@ from portfolio_rag.domain.models.conversation import (
     SummaryUpdate,
 )
 from portfolio_rag.domain.services import conversations as svc
+from portfolio_rag.infrastructure.db.scoped_repository import ConversationRepository
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
 
+def _repo(session, current_user: dict) -> ConversationRepository:
+    return ConversationRepository(session, UUID(current_user["org_id"]))
+
+
 @router.post("", response_model=ConversationSummary, status_code=201)
-async def create_conversation(session=Depends(get_db_conn)):
-    conv = await svc.create_conversation(session)
+async def create_conversation(
+    session=Depends(get_db_conn),
+    current_user: dict = Depends(get_current_user),
+):
+    conv = await _repo(session, current_user).create()
     return ConversationSummary.model_validate(conv)
 
 
 @router.get("", response_model=list[ConversationSummary])
-async def list_conversations(session=Depends(get_db_conn)):
-    return await svc.list_conversations(session)
+async def list_conversations(
+    session=Depends(get_db_conn),
+    current_user: dict = Depends(get_current_user),
+):
+    return await _repo(session, current_user).list()
 
 
 @router.get("/{conv_id}", response_model=ConversationDetail)
-async def get_conversation(conv_id: UUID, session=Depends(get_db_conn)):
+async def get_conversation(
+    conv_id: UUID,
+    session=Depends(get_db_conn),
+    current_user: dict = Depends(get_current_user),
+):
     try:
-        return await svc.get_conversation(session, conv_id)
+        return await _repo(session, current_user).get(conv_id)
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -53,18 +69,23 @@ async def patch_conversation(
     conv_id: UUID,
     body: ConversationPatch,
     session=Depends(get_db_conn),
+    current_user: dict = Depends(get_current_user),
 ):
     try:
-        conv = await svc.patch_conversation(session, conv_id, body.title)
+        conv = await _repo(session, current_user).patch(conv_id, body.title)
         return ConversationSummary.model_validate(conv)
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.delete("/{conv_id}", status_code=204)
-async def delete_conversation(conv_id: UUID, session=Depends(get_db_conn)):
+async def delete_conversation(
+    conv_id: UUID,
+    session=Depends(get_db_conn),
+    current_user: dict = Depends(get_current_user),
+):
     try:
-        await svc.delete_conversation(session, conv_id)
+        await _repo(session, current_user).delete(conv_id)
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -74,8 +95,12 @@ async def update_summary(
     conv_id: UUID,
     body: SummaryUpdate,
     session=Depends(get_db_conn),
+    current_user: dict = Depends(get_current_user),
 ):
+    # Summary updates come from background workers that already verified ownership
+    # at message-add time. Re-verify here for defence in depth.
     try:
+        await _repo(session, current_user).get(conv_id)  # ownership check
         await svc.update_summary(
             session, conv_id, body.summary, body.summarised_up_to_message_id
         )
@@ -89,10 +114,11 @@ async def get_messages(
     cursor: Optional[datetime] = None,
     limit: int = 20,
     session=Depends(get_db_conn),
+    current_user: dict = Depends(get_current_user),
 ):
     try:
-        msgs, has_more = await svc.get_messages_page(
-            session, conv_id, limit=limit, cursor=cursor
+        msgs, has_more = await _repo(session, current_user).get_messages_page(
+            conv_id, limit=limit, cursor=cursor
         )
         return MessagesPage(
             messages=[MessageRead.model_validate(m) for m in msgs],
@@ -109,18 +135,20 @@ async def add_message(
     background_tasks: BackgroundTasks,
     request: Request,
     session=Depends(get_db_conn),
+    current_user: dict = Depends(get_current_user),
     settings=Depends(get_live_settings),
 ):
+    repo = _repo(session, current_user)
     try:
-        msg = await svc.add_message(
-            session, conv_id, body.role, body.content, body.doc_type, body.meta
+        msg = await repo.add_message(
+            conv_id, body.role, body.content, body.doc_type, body.meta
         )
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
     # Trigger auto-title after first assistant message if conversation is untitled
     if body.role == "assistant":
-        should_title = await svc.needs_title(session, conv_id)
+        should_title = await repo.needs_title(conv_id)
         if should_title:
             question = await svc.get_first_user_message(session, conv_id)
             if question:

@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from portfolio_rag.app.core.config import Settings
 from portfolio_rag.app.core.db import get_db_conn
-from portfolio_rag.app.core.dependencies import get_live_settings
+from portfolio_rag.app.core.dependencies import get_current_user, get_live_settings
 from portfolio_rag.domain.models.rag import QueryRequest, QueryResponse
 from portfolio_rag.domain.services import query as svc
 from portfolio_rag.domain.services.ai_calls import log_call
@@ -34,6 +34,7 @@ async def query_endpoint(
     request: QueryRequest,
     session: DBSession,
     settings: Settings = Depends(get_live_settings),
+    current_user: dict = Depends(get_current_user),
 ):
     try:
         response, usage = await svc.run_query(request.question, request.n_results, settings)
@@ -45,6 +46,7 @@ async def query_endpoint(
     # Log AI call best-effort — never fail the response over a logging error
     if usage:
         try:
+            from uuid import UUID as _UUID
             await log_call(
                 session, "query",
                 model=usage.get("model", ""),
@@ -52,6 +54,7 @@ async def query_endpoint(
                 input_tokens=usage.get("input_tokens"),
                 output_tokens=usage.get("output_tokens"),
                 cost_usd=usage.get("cost_usd"),
+                org_id=_UUID(current_user["org_id"]) if current_user.get("org_id") else None,
             )
             await session.commit()
         except Exception:

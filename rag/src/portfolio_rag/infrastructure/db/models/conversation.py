@@ -1,7 +1,9 @@
 """Conversation + Message SQLModel tables."""
 
 from datetime import datetime
+from typing import Optional
 from uuid import UUID, uuid4
+import sqlalchemy as sa
 from sqlalchemy import Column, DateTime, JSON
 from sqlmodel import Field, SQLModel
 
@@ -23,6 +25,15 @@ class Conversation(SQLModel, table=True):
     summary: str | None = None
     summarised_up_to_message_id: UUID | None = Field(
         default=None, foreign_key="messages.id"
+    )
+    org_id: Optional[UUID] = Field(
+        default=None,
+        sa_column=Column(
+            sa.UUID(as_uuid=True),
+            sa.ForeignKey("organisations.id"),
+            nullable=True,
+            index=True,
+        ),
     )
 
 
