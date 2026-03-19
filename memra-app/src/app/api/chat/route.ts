@@ -16,11 +16,23 @@ export async function POST(req: Request) {
             body: JSON.stringify(body),
         });
         if (!res.ok) {
-            const text = await res.text();
-            return new Response(JSON.stringify({ error: text }), {
+          const text = await res.text();
+          // If backend returned a structured paywall payload, preserve it.
+          try {
+            const parsed = JSON.parse(text);
+            if (parsed && typeof parsed === "object" && parsed.code) {
+              return new Response(text, {
                 status: res.status,
                 headers: { "Content-Type": "application/json" },
-            });
+              });
+            }
+          } catch {
+            // fall through
+          }
+          return new Response(JSON.stringify({ error: text }), {
+            status: res.status,
+            headers: { "Content-Type": "application/json" },
+          });
         }
         return new Response(res.body, { headers: SSE_HEADERS });
     } catch (err) {

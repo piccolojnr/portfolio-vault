@@ -5,6 +5,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { AuthProvider } from "@/components/providers/auth-provider";
 import { Toaster } from "sonner";
+import { PaywallProvider } from "@/components/providers/paywall-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -48,8 +49,10 @@ export default function RootLayout({
       >
         <QueryProvider>
           <AuthProvider>
-            {children}
-            <Toaster position="bottom-right" />
+            <PaywallProvider>
+              {children}
+              <Toaster position="bottom-right" />
+            </PaywallProvider>
           </AuthProvider>
         </QueryProvider>
       </body>

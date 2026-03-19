@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from memra.app.core.db import get_db_conn
 from memra.app.core.dependencies import get_current_user, require_role
+from memra.app.core.billing import enforce_plan_limits
 from memra.domain.models.document import (
     CorpusDocCreate,
     CorpusDocDetail,
@@ -64,6 +65,7 @@ async def create_document(
     data: CorpusDocCreate,
     session: DBSession,
     current_user: dict = Depends(require_role("owner", "admin")),
+    _guard=Depends(enforce_plan_limits(check_documents=True)),
 ):
     try:
         doc = await _repo(session, current_user).create(data)
@@ -101,6 +103,7 @@ async def upload_document(
     current_user: dict = Depends(require_role("owner", "admin")),
     file: UploadFile = File(...),
     file_hash: str = Form(...),
+    _guard=Depends(enforce_plan_limits(check_documents=True)),
 ):
     import hashlib
 
@@ -261,6 +264,7 @@ async def reingest_document(
     doc_id: str,
     session: DBSession,
     current_user: dict = Depends(get_current_user),
+    _guard=Depends(enforce_plan_limits(check_documents=False)),
 ):
     try:
         doc = await _repo(session, current_user).get_by_id(doc_id)

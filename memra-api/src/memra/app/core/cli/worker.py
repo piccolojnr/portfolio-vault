@@ -42,12 +42,14 @@ async def _run_worker() -> None:
         handle_send_verify_email,
         handle_send_welcome_email,
         handle_summarise_conversation,
+        handle_billing_reconciliation,
     )
 
     handlers = {
         "ingest_document": handle_ingest_document,
         "reingest_document": handle_reingest_document,
         "summarise_conversation": handle_summarise_conversation,
+        "billing_reconciliation": handle_billing_reconciliation,
         "send_magic_link_email": handle_send_magic_link_email,
         "send_verify_email": handle_send_verify_email,
         "send_welcome_email": handle_send_welcome_email,
@@ -62,12 +64,31 @@ async def _run_worker() -> None:
     logging.info("worker started worker_id=%s", WORKER_ID)
 
     try:
+        last_reconcile_at = 0.0
         while True:
             async with factory() as session:
                 job = await job_queue.dequeue(session, WORKER_ID)
                 await session.commit()
 
             if job is None:
+                # Enqueue reconciliation periodically (best-effort; idempotent handler).
+                now_ts = time.time()
+                if now_ts - last_reconcile_at >= 86_400:  # 24 hours
+                    try:
+                        async with factory() as session:
+                            await job_queue.enqueue(
+                                session,
+                                "billing_reconciliation",
+                                {},
+                                max_attempts=3,
+                                delay_seconds=0,
+                                org_id=None,
+                            )
+                            await session.commit()
+                        last_reconcile_at = now_ts
+                    except Exception:
+                        # Don't prevent the worker loop if reconciliation enqueue fails.
+                        last_reconcile_at = now_ts
                 await asyncio.sleep(POLL_INTERVAL_SECONDS)
                 continue
 

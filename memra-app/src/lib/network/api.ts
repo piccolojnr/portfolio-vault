@@ -30,6 +30,21 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
+    // If this is a paywall response, dispatch it so the global modal can open.
+    if (typeof window !== "undefined" && (res.status === 402 || res.status === 403)) {
+      try {
+        const parsed = JSON.parse(text) as Partial<{ code: string; limit: number; used: number; plan: string; upgrade_url: string; error: string }>;
+        if (parsed && parsed.code && parsed.upgrade_url) {
+          window.dispatchEvent(
+            new CustomEvent("paywall:show", {
+              detail: parsed,
+            }),
+          );
+        }
+      } catch {
+        // ignore parsing failures — existing codepath will still throw
+      }
+    }
     throw new Error(`${res.status}: ${text}`);
   }
 

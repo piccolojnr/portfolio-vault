@@ -30,6 +30,9 @@ from memra.infrastructure.db.models.platform_setting import PlatformSetting
 from memra.infrastructure.db.models.model_plan_restriction import ModelPlanRestriction
 from memra.infrastructure.db.models.admin_refresh_token import AdminRefreshToken
 from memra.infrastructure.db.models.admin_audit_log import AdminAuditLog
+from memra.infrastructure.db.models.subscription import Subscription
+from memra.infrastructure.db.models.payment_event import PaymentEvent
+from memra.infrastructure.db.models.plan_limit import PlanLimit
 
 __all__ = [
     "Document", "PipelineRun", "AppSetting", "AiCall", "utcnow",
@@ -38,4 +41,5 @@ __all__ = [
     "Organisation", "OrganisationMember", "OrganisationInvite", "OrganisationSetting",
     "PlatformAdmin", "PlatformSetting", "ModelPlanRestriction",
     "AdminRefreshToken", "AdminAuditLog",
+    "Subscription", "PaymentEvent", "PlanLimit",
 ]

@@ -32,6 +32,7 @@ import {
   Settings,
   HeartPulse,
   LogOut,
+  CreditCard,
 } from "lucide-react";
 
 interface AdminUser {
@@ -48,6 +49,7 @@ const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/users", label: "Users", icon: Users },
   { href: "/orgs", label: "Organisations", icon: Building2 },
+  { href: "/billing", label: "Billing", icon: CreditCard },
   { href: "/logs", label: "API Logs", icon: ScrollText },
   { href: "/jobs", label: "Jobs", icon: Layers },
   { href: "/settings", label: "Settings", icon: Settings },

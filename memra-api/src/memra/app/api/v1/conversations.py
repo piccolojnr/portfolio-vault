@@ -16,6 +16,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 
 from memra.app.core.db import get_db_conn
 from memra.app.core.dependencies import get_current_user, get_live_settings
+from memra.app.core.billing import enforce_plan_limits
 from memra.domain.models.conversation import (
     ConversationDetail,
     ConversationPatch,
@@ -141,6 +142,7 @@ async def add_message(
     session=Depends(get_db_conn),
     current_user: dict = Depends(get_current_user),
     settings=Depends(get_live_settings),
+    _guard=Depends(enforce_plan_limits(check_documents=False, check_members=False)),
 ):
     repo = _repo(session, current_user)
     try:

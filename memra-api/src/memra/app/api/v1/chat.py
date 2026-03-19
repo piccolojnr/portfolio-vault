@@ -21,6 +21,7 @@ from fastapi.responses import StreamingResponse
 from memra.app.core.config import Settings
 from memra.app.core.db import get_db_conn
 from memra.app.core.dependencies import get_current_user, get_live_settings
+from memra.app.core.billing import enforce_plan_limits
 from memra.app.core.limiter import limiter
 from memra.domain.models.chat import ChatStreamRequest
 from memra.domain.services import chat as svc
@@ -43,6 +44,7 @@ async def chat_stream(
     live_settings: Settings = Depends(get_live_settings),
     session=Depends(get_db_conn),
     current_user: dict = Depends(get_current_user),
+    _guard=Depends(enforce_plan_limits(check_documents=False, check_members=False)),
 ):
     from uuid import UUID
     org_id = UUID(current_user["org_id"])

@@ -163,7 +163,22 @@ export function ChatInterface({ slug }: { slug?: string }) {
           signal: abortRef.current.signal,
         });
 
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+          const text = await res.text().catch(() => "");
+          try {
+            const parsed = JSON.parse(text);
+            if (parsed && typeof parsed === "object" && parsed.code && parsed.upgrade_url) {
+              window.dispatchEvent(
+                new CustomEvent("paywall:show", {
+                  detail: parsed,
+                }),
+              );
+            }
+          } catch {
+            // ignore parsing failures
+          }
+          throw new Error(`HTTP ${res.status}`);
+        }
         if (!res.body) throw new Error("No response body");
 
         let accumulated = "";

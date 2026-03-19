@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 import { adminFetch } from "@/lib/platform-admin/api";
 import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
 import {
   Sheet,
   SheetContent,
@@ -112,6 +113,7 @@ const SORT_OPTIONS = [
 ] as const;
 
 export default function OrgsPage() {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [plan, setPlan] = useState("all");
   const [sort, setSort] = useState("cost");
@@ -390,6 +392,18 @@ export default function OrgsPage() {
             <SheetDescription>
               {detail?.org?.name ?? "Loading..."}
             </SheetDescription>
+            {detail?.org?.id ? (
+              <div className="mt-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => router.push(`/orgs/${detail.org.id}`)}
+                >
+                  View details
+                </Button>
+              </div>
+            ) : null}
           </SheetHeader>
           <div className="space-y-5 mt-4 px-4 pb-4">
             {detailLoading ? (
