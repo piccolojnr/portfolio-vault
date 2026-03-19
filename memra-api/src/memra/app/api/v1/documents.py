@@ -13,6 +13,7 @@ routes so FastAPI doesn't swallow them.
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -34,6 +35,8 @@ from memra.domain.services import job_queue, org_service
 from memra.infrastructure.db.scoped_repository import DocumentRepository
 from memra.infrastructure.storage import get_storage_backend
 from memra.domain.services import document as svc
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -203,10 +206,33 @@ async def delete_document(
     session: DBSession,
     current_user: dict = Depends(require_role("owner", "admin")),
 ):
+    repo = _repo(session, current_user)
+
+    # Capture file_path before the DB record is gone.
     try:
-        await _repo(session, current_user).delete(slug)
+        doc = await repo.get_by_slug(slug)
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+    file_path: str | None = getattr(doc, "file_path", None)
+
+    # Delete DB record — primary operation, always runs.
+    await session.delete(doc)
+    await session.commit()
+
+    # Best-effort storage cleanup — failure logs a warning, does not raise.
+    if file_path:
+        try:
+            storage = get_storage_backend()
+            await storage.delete(file_path)
+        except Exception:
+            logger.warning(
+                "Storage cleanup failed for deleted document %r (file_path=%r). "
+                "File may need manual removal.",
+                slug,
+                file_path,
+                exc_info=True,
+            )
 
 
 # ── Parametric /{doc_id}/... routes ───────────────────────────────────────────
