@@ -23,7 +23,7 @@ class PaymentEvent(SQLModel, table=True):
 
     paystack_event: str = Field(sa_column=sa.Column(sa.Text, nullable=False))
     paystack_reference: str = Field(
-        sa_column=sa.Column(sa.Text, nullable=False, unique=True), index=True
+        sa_column=sa.Column(sa.Text, nullable=False, unique=True)
     )
     org_id: Optional[uuid.UUID] = Field(
         default=None,
