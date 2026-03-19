@@ -28,11 +28,13 @@ import {
   Users,
   Building2,
   ScrollText,
+  ShieldCheck,
   Layers,
   Settings,
   HeartPulse,
   LogOut,
   CreditCard,
+  Webhook,
 } from "lucide-react";
 
 interface AdminUser {
@@ -50,7 +52,9 @@ const NAV_ITEMS = [
   { href: "/users", label: "Users", icon: Users },
   { href: "/orgs", label: "Organisations", icon: Building2 },
   { href: "/billing", label: "Billing", icon: CreditCard },
+  { href: "/webhooks", label: "Webhooks", icon: Webhook },
   { href: "/logs", label: "API Logs", icon: ScrollText },
+  { href: "/audit", label: "Admin Audit", icon: ShieldCheck },
   { href: "/jobs", label: "Jobs", icon: Layers },
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/health", label: "System Health", icon: HeartPulse },

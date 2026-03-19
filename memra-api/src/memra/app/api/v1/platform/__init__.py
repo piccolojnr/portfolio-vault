@@ -15,6 +15,7 @@ from memra.app.api.v1.platform import (
     users,
     orgs,
     logs,
+    audit_logs,
     analytics,
     jobs,
     billing_admin,
@@ -28,6 +29,7 @@ router.include_router(models.router)
 router.include_router(users.router)
 router.include_router(orgs.router)
 router.include_router(logs.router)
+router.include_router(audit_logs.router)
 router.include_router(analytics.router)
 router.include_router(jobs.router)
 router.include_router(billing_admin.router)
