@@ -4,24 +4,7 @@ import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminFetch } from "@/lib/platform-admin/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 
 interface PlatformSetting {
   key: string;
@@ -43,13 +26,45 @@ interface ModelConfig {
   created_at: string | null;
 }
 
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <h2 className="text-[13px] font-semibold text-foreground font-mono border-b border-border/40 pb-2 mb-4">
+      {children}
+    </h2>
+  );
+}
+
+function FieldRow({
+  label,
+  children,
+  hint,
+}: {
+  label: string;
+  children: React.ReactNode;
+  hint?: string;
+}) {
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 py-2.5">
+      <label className="w-44 shrink-0 text-[12px] font-mono text-muted-foreground">
+        {label}
+      </label>
+      <div className="flex-1 min-w-0">{children}</div>
+      {hint && (
+        <p className="text-[10px] text-muted-foreground/50 font-mono sm:w-32 sm:text-right shrink-0">
+          {hint}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function formatDaysAgo(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "never";
   const d = new Date(iso);
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
-  if (days === 0) return "Today";
+  if (days === 0) return "today";
   if (days === 1) return "1 day ago";
   return `${days} days ago`;
 }
@@ -96,94 +111,68 @@ function SettingRow({ s }: { s: PlatformSetting }) {
     setEditing(true);
   };
 
-  const sourceBadge = s.source === "environment" ? (
-    <Badge variant="outline" className="text-[9px] ml-1.5">env</Badge>
-  ) : s.source === "database" ? (
-    <Badge variant="secondary" className="text-[9px] ml-1.5">db</Badge>
-  ) : null;
+  const sourceLabel = s.source === "environment" ? "env" : s.source === "database" ? "db" : null;
 
   return (
-    <div className="rounded-lg border border-border p-4 space-y-2">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <p className="text-sm font-medium text-foreground">{s.key}</p>
-          {sourceBadge}
-          {s.is_secret && (
-            <Badge variant="outline" className="text-[9px] text-amber-400 border-amber-400/30">
-              secret
-            </Badge>
-          )}
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          {editing ? (
-            <>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setEditing(false)}
-                className="h-7 text-xs"
-              >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => saveMutation.mutate(editValue)}
-                disabled={saveMutation.isPending}
-                className="h-7 text-xs"
-              >
-                {saveMutation.isPending ? "Saving..." : "Save"}
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={startEditing}
-                className="h-7 text-xs"
-              >
-                Edit
-              </Button>
-              {s.is_secret && s.has_value && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={reveal}
-                  className="h-7 text-xs"
-                >
-                  Reveal
-                </Button>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-      {s.description && (
-        <p className="text-xs text-muted-foreground">{s.description}</p>
-      )}
-      <div>
-        {editing ? (
-          <Input
+    <FieldRow
+      label={s.key}
+      hint={`updated ${formatDaysAgo(s.updated_at)}${sourceLabel ? ` · ${sourceLabel}` : ""}`}
+    >
+      {editing ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <input
             type={s.is_secret ? "password" : "text"}
             value={editValue}
             onChange={(e) => setEditValue(e.target.value)}
             placeholder={s.is_secret && s.has_value ? "••••••••" : ""}
-            className="h-8 text-sm max-w-md"
+            autoFocus
+            className="flex-1 min-w-0 basis-full sm:basis-auto bg-surface border border-border rounded-md px-3 py-1.5 text-[12px] font-mono focus:outline-none focus:ring-1 focus:ring-primary/40"
           />
-        ) : (
-          <span
-            className={`text-sm font-mono ${
-              revealedValue !== null ? "text-amber-400" : "text-muted-foreground"
-            }`}
+          <Button
+            size="sm"
+            onClick={() => saveMutation.mutate(editValue)}
+            disabled={saveMutation.isPending}
+            className="h-7 px-3 text-[11px] font-mono"
           >
-            {displayValue || "—"}
-          </span>
-        )}
-      </div>
-      <p className="text-[10px] text-muted-foreground/60">
-        Last updated: {formatDaysAgo(s.updated_at)}
-      </p>
-    </div>
+            {saveMutation.isPending ? "…" : "save"}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setEditing(false)}
+            className="h-7 px-2 text-[11px] font-mono"
+          >
+            cancel
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3">
+          {s.has_value ? (
+            <span className={`text-[11px] font-mono ${revealedValue !== null ? "text-amber-400" : s.is_secret ? "text-green-400" : "text-foreground"}`}>
+              {s.is_secret ? (revealedValue ?? "● set") : (displayValue || "—")}
+            </span>
+          ) : (
+            <span className="text-[11px] font-mono text-muted-foreground/50">
+              ○ not set
+            </span>
+          )}
+          <button
+            onClick={startEditing}
+            className="text-[11px] font-mono text-muted-foreground/60 hover:text-foreground transition-colors underline underline-offset-2"
+          >
+            {s.has_value ? "update" : "set"}
+          </button>
+          {s.is_secret && s.has_value && (
+            <button
+              onClick={reveal}
+              className="text-[11px] font-mono text-muted-foreground/40 hover:text-foreground transition-colors"
+            >
+              reveal
+            </button>
+          )}
+        </div>
+      )}
+    </FieldRow>
   );
 }
 
@@ -206,34 +195,40 @@ function ModelRow({ m }: { m: ModelConfig }) {
     },
   });
 
+  const providerColor = m.provider === "anthropic"
+    ? "bg-orange-500/10 text-orange-400"
+    : "bg-emerald-500/10 text-emerald-400";
+
+  const typeColor: Record<string, string> = {
+    chat: "bg-primary/15 text-primary border-primary/20",
+    embed: "bg-teal-500/10 text-teal-400 border-teal-500/20",
+    classify: "bg-violet-500/10 text-violet-400 border-violet-500/20",
+  };
+
   return (
-    <div className="rounded-lg border border-border p-4 flex items-center justify-between gap-4">
+    <div className="flex items-center justify-between py-2.5 gap-4">
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <p className="text-sm font-medium">{m.model_name}</p>
-          <Badge variant="outline" className="text-[10px] font-mono">
+          <span className="text-[12px] font-mono text-foreground">{m.model_name}</span>
+          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${providerColor}`}>
             {m.provider}
-          </Badge>
-          <Badge variant="secondary" className="text-[10px]">
+          </span>
+          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-mono font-medium ${typeColor[m.model_type] ?? "bg-muted/30 text-muted-foreground border-border/30"}`}>
             {m.model_type}
-          </Badge>
+          </span>
         </div>
-        <p className="text-xs text-muted-foreground font-mono mt-0.5">{m.model_id}</p>
+        <p className="text-[10px] font-mono text-muted-foreground/50 mt-0.5">{m.model_id}</p>
       </div>
       <div className="flex items-center gap-3 shrink-0">
-        <Select
+        <select
           value={m.min_plan}
-          onValueChange={(v) => updateMutation.mutate({ min_plan: v ?? undefined })}
+          onChange={(e) => updateMutation.mutate({ min_plan: e.target.value })}
+          className="bg-surface border border-border rounded-md px-2 py-1 text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-primary/40 appearance-none cursor-pointer"
         >
-          <SelectTrigger className="h-7 w-24 text-xs" size="sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="free">free</SelectItem>
-            <SelectItem value="pro">pro</SelectItem>
-            <SelectItem value="enterprise">enterprise</SelectItem>
-          </SelectContent>
-        </Select>
+          <option value="free">free</option>
+          <option value="pro">pro</option>
+          <option value="enterprise">enterprise</option>
+        </select>
         <Switch
           checked={m.enabled}
           onCheckedChange={(v) => updateMutation.mutate({ enabled: v })}
@@ -247,14 +242,13 @@ function ModelRow({ m }: { m: ModelConfig }) {
 export default function SettingsPage() {
   const queryClient = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
-  const [newModel, setNewModel] = useState<ModelConfig>({
+  const [newModel, setNewModel] = useState({
     model_id: "",
     model_name: "",
     model_type: "chat",
     provider: "anthropic",
     min_plan: "free",
     enabled: false,
-    created_at: null,
   });
 
   const settingsQuery = useQuery({
@@ -278,191 +272,153 @@ export default function SettingsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["platform", "models"] });
       setAddOpen(false);
-      setNewModel({
-        model_id: "",
-        model_name: "",
-        model_type: "chat",
-        provider: "anthropic",
-        min_plan: "free",
-        enabled: false,
-        created_at: null,
-      });
+      setNewModel({ model_id: "", model_name: "", model_type: "chat", provider: "anthropic", min_plan: "free", enabled: false });
     },
   });
 
-  const handleAddModel = () => {
-    if (!newModel.model_id.trim() || !newModel.model_name.trim()) return;
-    createMutation.mutate(newModel);
-  };
+  const secretSettings = settingsQuery.data?.filter((s) => s.is_secret) ?? [];
+  const nonSecretSettings = settingsQuery.data?.filter((s) => !s.is_secret) ?? [];
 
   return (
-    <div className="p-6 space-y-8">
-      <div>
-        <h1 className="text-lg font-semibold text-foreground">Settings</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Platform configuration, API keys, and model management
-        </p>
-      </div>
-
-      {/* Platform Settings */}
-      <div className="space-y-3">
-        <h2 className="text-sm font-medium text-foreground">Platform Settings</h2>
-        {settingsQuery.isLoading ? (
-          <div className="space-y-3">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="h-24 animate-pulse rounded-lg bg-muted/20" />
-            ))}
+    <div className="h-full flex flex-col bg-bg text-foreground overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="max-w-2xl mx-auto w-full px-4 py-6 space-y-8">
+          {/* Header */}
+          <div>
+            <h1 className="text-lg font-semibold tracking-tight text-foreground">
+              Settings
+            </h1>
+            <p className="mt-0.5 text-[13px] text-muted-foreground">
+              Platform-wide API keys, configuration, and model management.
+            </p>
           </div>
-        ) : !settingsQuery.data?.length ? (
-          <p className="text-sm text-muted-foreground">No settings configured</p>
-        ) : (
-          <div className="space-y-3">
-            {settingsQuery.data.map((s) => (
-              <SettingRow key={s.key} s={s} />
-            ))}
-          </div>
-        )}
-      </div>
 
-      {/* Model Configuration */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-medium text-foreground">Model Configuration</h2>
-          <Dialog open={addOpen} onOpenChange={setAddOpen}>
-            <DialogTrigger render={
-              <Button size="sm" variant="outline" className="h-8 text-xs">
-                Add Model
-              </Button>
-            } />
-            <DialogContent className="sm:max-w-sm">
-              <DialogHeader>
-                <DialogTitle>Add Model</DialogTitle>
-              </DialogHeader>
-              <div className="grid gap-3 py-2">
-                <div>
-                  <label className="text-xs text-muted-foreground block mb-1">
-                    Model ID
-                  </label>
-                  <Input
-                    value={newModel.model_id}
-                    onChange={(e) =>
-                      setNewModel((p) => ({ ...p, model_id: e.target.value }))
-                    }
-                    placeholder="e.g. gpt-4"
-                    className="h-8 text-sm"
-                  />
+          {/* API Keys */}
+          {settingsQuery.isLoading ? (
+            <div className="space-y-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="h-32 animate-pulse rounded-xl bg-muted/20" />
+              ))}
+            </div>
+          ) : (
+            <>
+              {secretSettings.length > 0 && (
+                <section className="rounded-xl border border-border bg-surface/40 p-5">
+                  <SectionHeading>API Keys</SectionHeading>
+                  <div className="divide-y divide-border/30">
+                    {secretSettings.map((s) => (
+                      <SettingRow key={s.key} s={s} />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {nonSecretSettings.length > 0 && (
+                <section className="rounded-xl border border-border bg-surface/40 p-5">
+                  <SectionHeading>Configuration</SectionHeading>
+                  <div className="divide-y divide-border/30">
+                    {nonSecretSettings.map((s) => (
+                      <SettingRow key={s.key} s={s} />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {!settingsQuery.data?.length && (
+                <p className="text-sm text-muted-foreground/50 py-4">
+                  No settings configured.
+                </p>
+              )}
+            </>
+          )}
+
+          {/* Model Configuration */}
+          <section className="rounded-xl border border-border bg-surface/40 p-5">
+            <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-2">
+              <h2 className="text-[13px] font-semibold text-foreground font-mono">
+                Model Configuration
+              </h2>
+              <button
+                onClick={() => setAddOpen(!addOpen)}
+                className="text-[11px] font-mono text-muted-foreground/60 hover:text-foreground transition-colors underline underline-offset-2"
+              >
+                {addOpen ? "cancel" : "+ add model"}
+              </button>
+            </div>
+
+            {addOpen && (
+              <div className="mb-4 p-4 rounded-lg bg-muted/10 border border-border/30 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] text-muted-foreground font-mono block mb-1">Model ID</label>
+                    <input
+                      value={newModel.model_id}
+                      onChange={(e) => setNewModel((p) => ({ ...p, model_id: e.target.value }))}
+                      placeholder="e.g. gpt-4"
+                      className="w-full bg-surface border border-border rounded-md px-3 py-1.5 text-[12px] font-mono focus:outline-none focus:ring-1 focus:ring-primary/40 placeholder:text-muted-foreground/30"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground font-mono block mb-1">Model Name</label>
+                    <input
+                      value={newModel.model_name}
+                      onChange={(e) => setNewModel((p) => ({ ...p, model_name: e.target.value }))}
+                      placeholder="e.g. GPT-4"
+                      className="w-full bg-surface border border-border rounded-md px-3 py-1.5 text-[12px] font-mono focus:outline-none focus:ring-1 focus:ring-primary/40 placeholder:text-muted-foreground/30"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground font-mono block mb-1">Type</label>
+                    <select
+                      value={newModel.model_type}
+                      onChange={(e) => setNewModel((p) => ({ ...p, model_type: e.target.value }))}
+                      className="w-full bg-surface border border-border rounded-md px-3 py-1.5 text-[12px] font-mono focus:outline-none focus:ring-1 focus:ring-primary/40 appearance-none cursor-pointer"
+                    >
+                      <option value="chat">chat</option>
+                      <option value="embed">embed</option>
+                      <option value="classify">classify</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground font-mono block mb-1">Provider</label>
+                    <select
+                      value={newModel.provider}
+                      onChange={(e) => setNewModel((p) => ({ ...p, provider: e.target.value }))}
+                      className="w-full bg-surface border border-border rounded-md px-3 py-1.5 text-[12px] font-mono focus:outline-none focus:ring-1 focus:ring-primary/40 appearance-none cursor-pointer"
+                    >
+                      <option value="anthropic">anthropic</option>
+                      <option value="openai">openai</option>
+                    </select>
+                  </div>
                 </div>
-                <div>
-                  <label className="text-xs text-muted-foreground block mb-1">
-                    Model Name
-                  </label>
-                  <Input
-                    value={newModel.model_name}
-                    onChange={(e) =>
-                      setNewModel((p) => ({ ...p, model_name: e.target.value }))
-                    }
-                    placeholder="e.g. GPT-4"
-                    className="h-8 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground block mb-1">
-                    Model Type
-                  </label>
-                  <Select
-                    value={newModel.model_type}
-                    onValueChange={(v) =>
-                      setNewModel((p) => ({ ...p, model_type: v ?? "" }))
-                    }
-                  >
-                    <SelectTrigger className="h-8 text-sm" size="sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="chat">chat</SelectItem>
-                      <SelectItem value="embed">embed</SelectItem>
-                      <SelectItem value="classify">classify</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground block mb-1">
-                    Provider
-                  </label>
-                  <Select
-                    value={newModel.provider}
-                    onValueChange={(v) =>
-                      setNewModel((p) => ({ ...p, provider: v ?? "" }))
-                    }
-                  >
-                    <SelectTrigger className="h-8 text-sm" size="sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="anthropic">anthropic</SelectItem>
-                      <SelectItem value="openai">openai</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground block mb-1">
-                    Min Plan
-                  </label>
-                  <Select
-                    value={newModel.min_plan}
-                    onValueChange={(v) =>
-                      setNewModel((p) => ({ ...p, min_plan: v ?? "free" }))
-                    }
-                  >
-                    <SelectTrigger className="h-8 text-sm" size="sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="free">free</SelectItem>
-                      <SelectItem value="pro">pro</SelectItem>
-                      <SelectItem value="enterprise">enterprise</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                <Button
+                  size="sm"
+                  onClick={() => createMutation.mutate(newModel)}
+                  disabled={createMutation.isPending || !newModel.model_id.trim() || !newModel.model_name.trim()}
+                  className="h-7 px-3 text-[11px] font-mono"
+                >
+                  {createMutation.isPending ? "adding…" : "add model"}
+                </Button>
               </div>
-              <DialogFooter>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setAddOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handleAddModel}
-                  disabled={
-                    createMutation.isPending ||
-                    !newModel.model_id.trim() ||
-                    !newModel.model_name.trim()
-                  }
-                >
-                  {createMutation.isPending ? "Adding..." : "Add"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+            )}
+
+            {modelsQuery.isLoading ? (
+              <div className="space-y-2">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="h-10 rounded-lg bg-surface/40 animate-pulse" />
+                ))}
+              </div>
+            ) : !modelsQuery.data?.length ? (
+              <p className="text-sm text-muted-foreground/50 py-4">No models configured.</p>
+            ) : (
+              <div className="divide-y divide-border/30">
+                {modelsQuery.data.map((m) => (
+                  <ModelRow key={m.model_id} m={m} />
+                ))}
+              </div>
+            )}
+          </section>
         </div>
-        {modelsQuery.isLoading ? (
-          <div className="space-y-3">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-20 animate-pulse rounded-lg bg-muted/20" />
-            ))}
-          </div>
-        ) : !modelsQuery.data?.length ? (
-          <p className="text-sm text-muted-foreground">No models configured</p>
-        ) : (
-          <div className="space-y-3">
-            {modelsQuery.data.map((m) => (
-              <ModelRow key={m.model_id} m={m} />
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );

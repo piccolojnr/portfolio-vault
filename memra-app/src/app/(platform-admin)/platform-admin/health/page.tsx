@@ -2,16 +2,6 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { adminFetch } from "@/lib/platform-admin/api";
-import { Badge } from "@/components/ui/badge";
-import {
-  Activity,
-  Database,
-  HardDrive,
-  Cpu,
-  Mail,
-  Cloud,
-  Globe,
-} from "lucide-react";
 
 interface ComponentHealth {
   status: string;
@@ -36,13 +26,13 @@ interface FrontendHealth {
 }
 
 const COMPONENTS = [
-  { key: "frontend", label: "Frontend", icon: Globe },
-  { key: "api_server", label: "API Server", icon: Activity },
-  { key: "database", label: "Database", icon: Database },
-  { key: "qdrant", label: "Qdrant", icon: Cpu },
-  { key: "worker", label: "Worker", icon: HardDrive },
-  { key: "email", label: "Email", icon: Mail },
-  { key: "storage", label: "Storage", icon: Cloud },
+  { key: "frontend", label: "Frontend" },
+  { key: "api_server", label: "API Server" },
+  { key: "database", label: "Database" },
+  { key: "qdrant", label: "Qdrant" },
+  { key: "worker", label: "Worker" },
+  { key: "email", label: "Email" },
+  { key: "storage", label: "Storage" },
 ] as const;
 
 function formatUptime(seconds: number): string {
@@ -56,58 +46,48 @@ function formatUptime(seconds: number): string {
   return parts.join(" ");
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const variant =
-    status === "ok"
-      ? "default"
-      : status === "stale"
-        ? "secondary"
-        : "destructive";
-
-  return (
-    <Badge variant={variant} className="text-[10px] font-mono capitalize">
-      {status}
-    </Badge>
-  );
-}
-
 function StatusCard({
   label,
-  icon: Icon,
   status,
   ms,
   detail,
 }: {
   label: string;
-  icon: React.ElementType;
   status: string;
   ms: number;
   detail?: string;
 }) {
-  const dotColor =
-    status === "ok"
-      ? "bg-emerald-500"
-      : status === "stale"
-        ? "bg-amber-500"
-        : "bg-red-500";
+  const isOk = status === "ok";
+  const isStale = status === "stale";
+  const isError = status === "error" || status === "offline";
+
+  const borderColor = isError
+    ? "border-red-500/30 bg-red-500/5"
+    : isStale
+      ? "border-yellow-500/30 bg-yellow-500/5"
+      : "border-border/40 bg-surface/30";
+
+  const dotColor = isOk
+    ? "text-green-400"
+    : isStale
+      ? "text-yellow-400"
+      : "text-red-400";
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <Icon size={16} className="text-muted-foreground" />
-          <span className="text-sm font-medium text-card-foreground">{label}</span>
-        </div>
-        <span className={`inline-block size-2.5 rounded-full shrink-0 ${dotColor}`} />
-      </div>
+    <div className={`px-4 py-3 rounded-xl border ${borderColor}`}>
       <div className="flex items-center justify-between">
-        <StatusBadge status={status} />
-        <span className="text-xs font-mono text-muted-foreground">
-          {ms > 0 ? `${ms}ms` : "—"}
+        <span className="text-[12px] font-mono text-foreground">{label}</span>
+        <span className={`text-[10px] font-mono ${dotColor}`}>
+          {isOk ? "●" : isStale ? "◐" : "○"} {status}
         </span>
       </div>
+      <div className="text-[11px] font-mono text-muted-foreground mt-1">
+        {ms > 0 ? `${ms}ms` : "—"}
+      </div>
       {detail && (
-        <p className="text-[11px] text-muted-foreground mt-2">{detail}</p>
+        <div className="text-[10px] text-muted-foreground/50 mt-0.5 font-mono">
+          {detail}
+        </div>
       )}
     </div>
   );
@@ -158,64 +138,77 @@ export default function HealthPage() {
   const allHealthy = degraded.length === 0 && data && frontend;
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold text-foreground">System Health</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Real-time status of all system components
-          </p>
-        </div>
-        {data && (
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-            <span>Uptime: <span className="font-mono">{formatUptime(data.uptime_seconds)}</span></span>
-            <span>Version: <span className="font-mono">{data.version}</span></span>
-            {frontend?.runtime && (
-              <span>Runtime: <span className="font-mono capitalize">{frontend.runtime}</span></span>
-            )}
+    <div className="h-full flex flex-col overflow-hidden">
+      <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-lg font-semibold tracking-tight text-foreground">
+              System Health
+            </h1>
+            <p className="mt-0.5 text-[13px] text-muted-foreground">
+              Real-time status of all system components
+            </p>
           </div>
-        )}
-      </div>
-
-      {healthQuery.isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 7 }).map((_, i) => (
-            <div key={i} className="h-28 animate-pulse rounded-lg bg-muted/20" />
-          ))}
+          {data && (
+            <div className="flex items-center gap-4 text-[11px] font-mono text-muted-foreground">
+              <span>uptime: {formatUptime(data.uptime_seconds)}</span>
+              <span>version: {data.version}</span>
+              {frontend?.runtime && (
+                <span>runtime: {frontend.runtime}</span>
+              )}
+            </div>
+          )}
         </div>
-      ) : (
-        <>
-          {degraded.length > 0 && (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-              System degraded — {degraded.map((c) => c.label).join(", ")}{" "}
-              {degraded.length === 1 ? "is" : "are"} unavailable
-            </div>
-          )}
 
-          {allHealthy && (
-            <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-400">
-              All systems operational
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {COMPONENTS.map((c) => (
-              <StatusCard
-                key={c.key}
-                label={c.label}
-                icon={c.icon}
-                status={getStatus(c.key)}
-                ms={getMs(c.key)}
-                detail={
-                  c.key === "frontend" && frontend?.runtime
-                    ? `Running on ${frontend.runtime}`
-                    : undefined
-                }
-              />
+        {healthQuery.isLoading ? (
+          <div className="grid grid-cols-4 gap-3">
+            {Array.from({ length: 7 }).map((_, i) => (
+              <div key={i} className="h-20 animate-pulse rounded-xl bg-surface/40" />
             ))}
           </div>
-        </>
-      )}
+        ) : (
+          <>
+            {degraded.length > 0 && (
+              <div className="flex items-start gap-3 px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-xl">
+                <span className="text-red-400 mt-0.5 shrink-0">!</span>
+                <div>
+                  <p className="text-sm font-medium text-red-300">
+                    System degraded
+                  </p>
+                  <p className="text-[11px] text-red-300/70 mt-0.5">
+                    {degraded.map((c) => c.label).join(", ")}{" "}
+                    {degraded.length === 1 ? "is" : "are"} unavailable.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {allHealthy && (
+              <div className="flex items-start gap-3 px-4 py-3 bg-green-500/10 border border-green-500/30 rounded-xl">
+                <span className="text-green-400 mt-0.5 shrink-0">●</span>
+                <p className="text-sm text-green-300">All systems operational</p>
+              </div>
+            )}
+
+            <div className="grid grid-cols-4 gap-3">
+              {COMPONENTS.map((c) => (
+                <StatusCard
+                  key={c.key}
+                  label={c.label}
+                  status={getStatus(c.key)}
+                  ms={getMs(c.key)}
+                  detail={
+                    c.key === "frontend" && frontend?.runtime
+                      ? frontend.runtime
+                      : undefined
+                  }
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
