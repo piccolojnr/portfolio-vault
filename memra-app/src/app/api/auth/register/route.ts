@@ -1,3 +1,4 @@
+import { IS_PRODUCTION } from "@/lib/env";
 import { RAG_BACKEND_URL } from "@/lib/network";
 import { NextResponse } from "next/server";
 
@@ -17,14 +18,13 @@ export async function POST(req: Request) {
   const data = await res.json();
   const { access_token } = data;
 
-  const isProduction = process.env.NODE_ENV === "production";
   const response = NextResponse.json({ access_token }, { status: 201 });
 
   response.cookies.set("access_token", access_token, {
     httpOnly: false,
     sameSite: "lax",
     path: "/",
-    secure: isProduction,
+    secure: IS_PRODUCTION,
     maxAge: 60 * 60,
   });
 
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
         httpOnly: true,
         sameSite: "lax",
         path: "/",
-        secure: isProduction,
+        secure: IS_PRODUCTION,
         maxAge: maxAgeMatch ? parseInt(maxAgeMatch[1]) : 60 * 60 * 24 * 30,
       });
     }

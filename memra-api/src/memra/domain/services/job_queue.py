@@ -165,7 +165,7 @@ async def get_stats(
         )
     rows = result.mappings().all()
     stats: dict[str, int] = {
-        "pending": 0, "running": 0, "done": 0, "failed": 0, "retrying": 0
+        "pending": 0, "running": 0, "done": 0, "failed": 0, "retrying": 0, "cancelled": 0,
     }
     for row in rows:
         stats[row["status"]] = row["cnt"]
@@ -212,6 +212,26 @@ async def retry(session: AsyncSession, job_id: str) -> None:
               scheduled_for = now()
             WHERE id = :id
             """
+        ),
+        {"id": uuid.UUID(job_id)},
+    )
+
+
+async def cancel(session: AsyncSession, job_id: str) -> None:
+    """Cancel a pending or running job."""
+    result = await session.execute(
+        text("SELECT status FROM jobs WHERE id = :id"),
+        {"id": uuid.UUID(job_id)},
+    )
+    row = result.mappings().first()
+    if row is None:
+        raise ValueError("Job not found")
+    if row["status"] not in ("pending", "running", "retrying"):
+        raise ValueError(f"Cannot cancel job with status '{row['status']}'")
+
+    await session.execute(
+        text(
+            "UPDATE jobs SET status = 'cancelled', finished_at = now() WHERE id = :id"
         ),
         {"id": uuid.UUID(job_id)},
     )

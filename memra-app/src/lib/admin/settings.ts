@@ -4,7 +4,7 @@
  * Typed API client for the settings page.
  */
 
-import { apiFetch } from "./api";
+import { apiFetch } from "@/lib/network/api";
 
 export interface SettingsRead {
   openai_api_key_set: boolean;

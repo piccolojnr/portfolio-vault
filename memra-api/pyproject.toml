@@ -40,4 +40,4 @@ dependencies = [
 ]
 
 [project.scripts]
-rag = "memra.app.core.cli:main"
+memra = "memra.app.core.cli:main"

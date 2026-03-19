@@ -11,7 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { DocumentMessage } from "@/components/chat/document-message";
 import { ConversationMemoryPanel } from "@/components/chat/conversation-memory-panel";
 import { createConversation, CONV_QUERY_KEY, type MessageMeta, type SourceRef } from "@/lib/conversations";
-import { useConversations } from "./conversation-context";
+import { useConversations } from "@/components/providers/conversation-context";
 import { readSSEStream } from "@/lib/conversations";
 import { type VirtualItem } from "@tanstack/react-virtual";
 import { useConversation, type Message } from "@/hooks/use-conversation";

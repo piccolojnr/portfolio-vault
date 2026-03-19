@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiFetch } from "./api";
+import { apiFetch } from "@/lib/network/api";
 
 export interface CorpusRead {
   id: string;

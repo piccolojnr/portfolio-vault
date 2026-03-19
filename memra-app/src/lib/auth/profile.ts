@@ -4,7 +4,7 @@
  * Helpers for reading and updating the current user's profile.
  */
 
-import { apiFetch } from "@/lib/network";
+import { apiFetch } from "@/lib/network/api";
 
 export interface MeResponse {
   user: {

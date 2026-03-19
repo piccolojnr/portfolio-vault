@@ -1,5 +1,5 @@
-import { RAG_BACKEND_URL } from "@/lib/network";
-import { serverFetch } from "@/lib/network";
+import { IS_PRODUCTION } from "@/lib/env";
+import { RAG_BACKEND_URL, serverFetch } from "@/lib/network";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
@@ -41,7 +41,7 @@ export async function PATCH(req: NextRequest) {
   if (newToken) {
     response.cookies.set("access_token", newToken, {
       httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
+      secure: IS_PRODUCTION,
       sameSite: "lax",
       path: "/",
       maxAge: 60 * 15, // 15 minutes (matches JWT expiry)

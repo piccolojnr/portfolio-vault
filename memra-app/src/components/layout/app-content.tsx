@@ -1,5 +1,6 @@
 "use client";
 
+import { APP_NAME } from "@/lib/env";
 import Image from "next/image";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import {
@@ -61,7 +62,7 @@ function AppChrome({ children }: { children: React.ReactNode }) {
           {/* Title — hidden on small screens to save space */}
           <div className="hidden sm:flex items-baseline gap-2 min-w-0">
             <span className="text-sm font-semibold tracking-tight text-foreground truncate">
-              {process.env.NEXT_PUBLIC_APP_NAME ?? "Assistant"}
+              {APP_NAME}
             </span>
           </div>
 

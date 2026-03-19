@@ -25,6 +25,7 @@ from memra.app.api.v1 import (
     documents, storage,
     settings, conversations, export, chat, graph, admin, auth, orgs,
 )
+from memra.app.api.v1.platform import router as platform_router
 from memra.app.core.config import get_settings
 from memra.app.core.db import open_db_engine
 from memra.app.core.limiter import limiter
@@ -104,6 +105,7 @@ def create_app() -> FastAPI:
     v1.include_router(admin.router)
     v1.include_router(auth.router)
     v1.include_router(orgs.router)
+    v1.include_router(platform_router)
     app.include_router(v1)
 
     @app.get("/")

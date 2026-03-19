@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { useAuth } from "./auth-provider";
+import { useAuth } from "@/components/providers/auth-provider";
 import { OrgSwitcher } from "./org-switcher";
 
 export function HeaderNav() {

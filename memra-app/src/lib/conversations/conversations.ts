@@ -4,7 +4,7 @@
  * Typed API client for conversation endpoints.
  */
 
-import { apiFetch } from "./api";
+import { apiFetch } from "@/lib/network/api";
 
 export interface MessageMeta {
   intent: "conversational" | "retrieval" | "document" | "refinement";

@@ -22,11 +22,11 @@ async def get_live_settings(request: Request) -> Settings:
     """
     Return Settings with DB overrides applied.
 
-    Reads the `settings` table and overlays any configured values on top of
-    the base env-file settings. Falls back gracefully to env settings if the
-    DB is unavailable.
+    Priority: platform_settings (cached) > org-level settings table > env vars.
+    Falls back gracefully to env settings if the DB is unavailable.
     """
     from memra.domain.services import settings_db
+    from memra.domain.services import platform_settings_service
 
     base = get_settings()
     factory = request.app.state.db_session_factory
@@ -34,8 +34,15 @@ async def get_live_settings(request: Request) -> Settings:
         return base
     try:
         async with factory() as session:
-            overrides = await settings_db.load_overrides(session, base.secret_key)
-            result = base.model_copy(update=overrides) if overrides else base
+            # Layer 1: platform_settings overrides (cached, 5-min TTL)
+            platform_overrides = await platform_settings_service.build_settings_overrides(
+                session, base.secret_key
+            )
+            # Layer 2: org-level settings overrides
+            org_overrides = await settings_db.load_overrides(session, base.secret_key)
+            # Merge: platform first, then org on top (org can override platform)
+            combined = {**platform_overrides, **org_overrides} if org_overrides else platform_overrides
+            result = base.model_copy(update=combined) if combined else base
             # Overlay org-level system_prompt
             try:
                 from memra.app.core.security import verify_access_token

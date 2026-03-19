@@ -26,6 +26,11 @@ from memra.infrastructure.db.models.org import (
     OrganisationInvite,
     OrganisationSetting,
 )
+from memra.infrastructure.db.models.platform_admin import PlatformAdmin
+from memra.infrastructure.db.models.platform_setting import PlatformSetting
+from memra.infrastructure.db.models.model_plan_restriction import ModelPlanRestriction
+from memra.infrastructure.db.models.admin_refresh_token import AdminRefreshToken
+from memra.infrastructure.db.models.admin_audit_log import AdminAuditLog
 
 __all__ = [
     "Document", "PipelineRun", "AppSetting", "AiCall", "utcnow",
@@ -33,4 +38,6 @@ __all__ = [
     "User", "RefreshToken", "MagicLinkToken", "PasswordResetToken",
     "Organisation", "OrganisationMember", "OrganisationInvite", "OrganisationSetting",
     "Corpus",
+    "PlatformAdmin", "PlatformSetting", "ModelPlanRestriction",
+    "AdminRefreshToken", "AdminAuditLog",
 ]

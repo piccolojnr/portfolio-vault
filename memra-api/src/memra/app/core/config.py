@@ -60,6 +60,10 @@ class Settings(BaseSettings):
     jwt_access_expiry_minutes: int = 15
     jwt_refresh_expiry_days: int = 30
 
+    # Platform admin JWT (falls back to jwt_secret if empty)
+    admin_jwt_secret: str = ""
+    admin_jwt_refresh_expiry_days: int = 7
+
     # Email
     email_backend: str = "mailpit"       # "console" | "mailpit" | "resend"
     email_from: str = "noreply@example.com"

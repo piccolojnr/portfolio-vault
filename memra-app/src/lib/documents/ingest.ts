@@ -5,8 +5,8 @@
  * uploading, and status polling.
  */
 
-import { apiFetch } from "./api";
-import { getAccessToken } from "./auth";
+import { apiFetch } from "@/lib/network/api";
+import { getAccessToken } from "@/lib/auth";
 
 export async function hashFile(file: File): Promise<string> {
   const buffer = await file.arrayBuffer();

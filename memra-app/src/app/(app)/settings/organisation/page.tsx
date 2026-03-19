@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/providers/auth-provider";
-import { apiFetch } from "@/lib/network";
+import { apiFetch } from "@/lib/network/api";
 import { useActiveCorpus, useOrgCorpora, useSetActiveCorpus } from "@/lib/documents";
 import { Button } from "@/components/ui/button";
 
@@ -17,7 +17,7 @@ interface Member {
 // apiFetch throws: "Error: STATUS: JSON_BODY" where JSON_BODY may have {detail: "..."}
 function apiDetail(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
-  const match = msg.match(/\d{3}: (.+)$/s);
+  const match = msg.match(/\d{3}: (.+)$/u);
   if (match) {
     try {
       const parsed = JSON.parse(match[1]);
@@ -255,7 +255,7 @@ export default function OrgSettingsPage() {
 
   const isOwner = org.role === "owner";
   const canManage = isOwner || org.role === "admin";
-  const corpora = corporaData?.corpora ?? [];
+  const corpora = corporaData || [];
 
   return (
     <div className="h-full flex flex-col bg-bg text-foreground overflow-hidden">

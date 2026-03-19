@@ -6,7 +6,7 @@
  * and redirects to /login if refresh also fails.
  */
 
-import { getAccessToken, refreshAccessToken } from "./auth";
+import { getAccessToken, refreshAccessToken } from "@/lib/auth";
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const makeRequest = async (token: string | null): Promise<Response> => {

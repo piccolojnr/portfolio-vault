@@ -25,5 +25,6 @@ class User(SQLModel, table=True):
     onboarding_completed_at: Optional[datetime] = Field(default=None, sa_column=Column(sa.DateTime(timezone=True), nullable=True))
     use_case: Optional[str] = Field(default=None, sa_column=Column(sa.String, nullable=True))
     display_name: Optional[str] = Field(default=None, sa_column=Column(sa.String(128), nullable=True))
+    disabled: bool = Field(default=False)
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

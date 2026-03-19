@@ -1,4 +1,4 @@
-import { apiFetch } from "./api";
+import { apiFetch } from "@/lib/network/api";
 
 export interface AiCall {
   id: string;

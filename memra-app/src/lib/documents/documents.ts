@@ -5,7 +5,8 @@
  * All calls go through Next.js proxy routes (/api/documents/...).
  */
 
-import { apiFetch } from "./api";
+import { apiFetch } from "@/lib/network/api";
+
 
 export interface CorpusDocSummary {
   id: string;

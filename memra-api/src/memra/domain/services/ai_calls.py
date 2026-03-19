@@ -70,6 +70,8 @@ async def log_call(
     conversation_id: str | None = None,
     doc_id: str | None = None,
     org_id: uuid.UUID | None = None,
+    user_id: uuid.UUID | None = None,
+    duration_ms: int | None = None,
 ) -> None:
     """Insert an ai_calls row.  Caller is responsible for committing."""
     from memra.infrastructure.db.models.ai_call import AiCall
@@ -87,6 +89,8 @@ async def log_call(
         conversation_id=uuid.UUID(conversation_id) if conversation_id else None,
         doc_id=uuid.UUID(doc_id) if doc_id else None,
         org_id=org_id,
+        user_id=user_id,
+        duration_ms=duration_ms,
     )
     session.add(row)
     await session.flush()
