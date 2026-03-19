@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminFetch } from "@/lib/platform-admin/api";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
   AlertDialogTrigger,
@@ -52,44 +51,120 @@ interface JobsResponse {
 
 type TabStatus = "all" | "pending" | "running" | "failed";
 
-function formatRelative(iso: string | null): string {
+function formatDate(iso: string | null): string {
   if (!iso) return "—";
-  const d = new Date(iso);
-  const now = new Date();
-  const sec = Math.floor((now.getTime() - d.getTime()) / 1000);
-  if (sec < 60) return `${sec}s ago`;
-  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
-  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
-  return `${Math.floor(sec / 86400)}d ago`;
+  return new Date(iso).toLocaleString();
 }
 
 function formatDuration(startedAt: string | null, finishedAt: string | null): string {
   if (!startedAt) return "—";
   const end = finishedAt ? new Date(finishedAt) : new Date();
   const ms = end.getTime() - new Date(startedAt).getTime();
-  return `${ms}ms`;
+  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
 }
 
-function truncate(str: string | null, len: number): string {
-  if (!str) return "—";
-  return str.length <= len ? str : str.slice(0, len) + "…";
-}
-
-const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  pending: "secondary",
-  running: "default",
-  done: "default",
-  failed: "destructive",
-  cancelled: "outline",
-  retrying: "secondary",
+const STATUS_LABELS: Record<string, string> = {
+  pending: "Queued",
+  running: "Processing",
+  done: "Ready",
+  retrying: "Retrying",
+  failed: "Failed",
+  cancelled: "Cancelled",
 };
+
+function StatusBadge({ status }: { status: string }) {
+  const cls: Record<string, string> = {
+    pending: "bg-muted/40 text-muted-foreground",
+    running: "bg-yellow-500/20 text-yellow-400",
+    done: "bg-green-500/20 text-green-400",
+    failed: "bg-red-500/20 text-red-400",
+    cancelled: "bg-muted/20 text-muted-foreground",
+    retrying: "bg-orange-500/20 text-orange-400",
+  };
+  return (
+    <span
+      className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${cls[status] ?? "bg-muted/20 text-muted-foreground"}`}
+    >
+      {STATUS_LABELS[status] ?? status}
+    </span>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  warn,
+}: {
+  label: string;
+  value: number;
+  warn?: boolean;
+}) {
+  return (
+    <div
+      className={`px-4 py-3 rounded-xl border ${warn && value > 0 ? "border-red-500/30 bg-red-500/5" : "border-border/40 bg-surface/30"}`}
+    >
+      <div
+        className={`text-xl font-mono font-semibold ${warn && value > 0 ? "text-red-400" : "text-foreground"}`}
+      >
+        {value}
+      </div>
+      <div className="text-[11px] text-muted-foreground mt-0.5">{label}</div>
+    </div>
+  );
+}
+
+function PayloadModal({ job, onClose }: { job: Job; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      onClick={onClose}
+    >
+      <div
+        className="bg-bg border border-border/60 rounded-2xl p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <span className="text-sm font-semibold">{job.type}</span>
+            <span className="ml-2 text-[11px] font-mono text-muted-foreground">
+              {job.id}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            ✕
+          </button>
+        </div>
+        <p className="text-[11px] text-muted-foreground uppercase tracking-wider mb-1">
+          Payload
+        </p>
+        <pre className="text-[12px] font-mono bg-muted/20 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-all">
+          {JSON.stringify(job.payload, null, 2)}
+        </pre>
+        {job.error_trace && (
+          <>
+            <p className="text-[11px] text-muted-foreground uppercase tracking-wider mt-4 mb-1">
+              Error Trace
+            </p>
+            <pre className="text-[11px] font-mono bg-red-500/10 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap text-red-300 break-all">
+              {job.error_trace}
+            </pre>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function PlatformAdminJobsPage() {
   const qc = useQueryClient();
   const [tab, setTab] = useState<TabStatus>("all");
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [expandedErrorId, setExpandedErrorId] = useState<string | null>(null);
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
 
   const statusFilter = tab === "all" ? undefined : tab;
 
@@ -152,6 +227,9 @@ export default function PlatformAdminJobsPage() {
     selectedIds.forEach((id) => retryMutation.mutate(id));
   };
 
+  const navLink = (active: boolean) =>
+    `px-3 py-1 rounded-md text-[12px] font-mono transition-colors ${active ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-surface"}`;
+
   const tabs: { key: TabStatus; label: string }[] = [
     { key: "all", label: "All" },
     { key: "pending", label: "Pending" },
@@ -160,125 +238,116 @@ export default function PlatformAdminJobsPage() {
   ];
 
   return (
-    <div className="p-6 space-y-5">
-      <div>
-        <h1 className="text-lg font-semibold text-foreground">Job Queue</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Monitor and manage background processing jobs
-        </p>
-      </div>
-
-      {stats && (
-        <div className="flex flex-wrap gap-2">
-          {Object.entries(stats).map(([key, val]) => (
-            <div
-              key={key}
-              className="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5"
-            >
-              <span className="text-xs text-muted-foreground capitalize">{key}:</span>
-              <span className="text-xs font-mono font-medium">{val}</span>
-            </div>
-          ))}
+    <div className="h-full flex flex-col overflow-hidden bg-bg">
+      <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+        <div>
+          <h1 className="text-lg font-semibold text-foreground">Job Queue</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Monitor and manage background processing jobs
+          </p>
         </div>
-      )}
 
-      <div className="flex items-center gap-1">
-        {tabs.map(({ key, label }) => (
-          <Button
-            key={key}
-            variant={tab === key ? "default" : "outline"}
-            size="sm"
-            onClick={() => {
-              setTab(key);
-              setPage(1);
-            }}
-            className="h-8 text-xs"
-          >
-            {label}
-          </Button>
-        ))}
-      </div>
+        {stats && (
+          <div className="grid grid-cols-6 gap-3">
+            <StatCard label="Pending" value={stats.pending} />
+            <StatCard label="Running" value={stats.running} />
+            <StatCard label="Retrying" value={stats.retrying} />
+            <StatCard label="Failed" value={stats.failed} warn />
+            <StatCard label="Cancelled" value={stats.cancelled} />
+            <StatCard label="Done" value={stats.done} />
+          </div>
+        )}
 
-      {tab === "failed" && hasSelection && (
-        <AlertDialog>
-          <AlertDialogTrigger
-            render={
-              <Button size="sm" variant="outline" className="text-xs">
-                Retry Selected ({selectedIds.size})
-              </Button>
-            }
-          />
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Retry {selectedIds.size} failed jobs?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will re-queue the selected failed jobs for another attempt.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={bulkRetry}>
-                Retry Jobs
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
+        <div className="flex items-center gap-1">
+          {tabs.map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              className={navLink(tab === key)}
+              onClick={() => {
+                setTab(key);
+                setPage(1);
+              }}
+            >
+              {label}
+            </button>
+          ))}
+          {tab === "failed" && hasSelection && (
+            <AlertDialog>
+              <AlertDialogTrigger
+                render={
+                  <Button size="sm" variant="outline" className="text-xs ml-2">
+                    Retry Selected ({selectedIds.size})
+                  </Button>
+                }
+              />
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Retry {selectedIds.size} failed jobs?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will re-queue the selected failed jobs for another attempt.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={bulkRetry}>
+                    Retry Jobs
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+        </div>
 
-      <div className="rounded-lg border border-border overflow-hidden">
         {isLoading ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">
-            Loading...
+          <div className="space-y-2 pt-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-10 rounded-lg bg-surface/40 animate-pulse"
+              />
+            ))}
           </div>
         ) : !jobs.length ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">
-            No jobs found
-          </div>
+          <p className="text-sm text-muted-foreground/50 py-4">
+            No jobs found.
+          </p>
         ) : (
-          <table className="w-full text-xs border-collapse">
-            <thead>
-              <tr className="border-b border-border bg-muted/30">
-                {tab === "failed" && (
-                  <th className="w-8 py-2 px-2" />
-                )}
-                <th className="text-left py-2 px-2 text-muted-foreground font-medium">
-                  Type
-                </th>
-                <th className="text-left py-2 px-2 text-muted-foreground font-medium">
-                  Status
-                </th>
-                <th className="text-left py-2 px-2 text-muted-foreground font-medium">
-                  Org
-                </th>
-                <th className="text-left py-2 px-2 text-muted-foreground font-medium">
-                  Created
-                </th>
-                <th className="text-left py-2 px-2 text-muted-foreground font-medium">
-                  Started
-                </th>
-                <th className="text-left py-2 px-2 text-muted-foreground font-medium">
-                  Duration
-                </th>
-                <th className="text-left py-2 px-2 text-muted-foreground font-medium">
-                  Attempts
-                </th>
-                <th className="text-left py-2 px-2 text-muted-foreground font-medium">
-                  Error
-                </th>
-                <th className="text-left py-2 px-2 text-muted-foreground font-medium">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {jobs.map((job) => (
-                <>
+          <div className="rounded-xl border border-border/60 overflow-hidden">
+            <table className="w-full text-sm border-collapse">
+              <thead className="border-b border-border/40 bg-muted/10">
+                <tr>
+                  {tab === "failed" && (
+                    <th className="w-8 px-3 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider text-left" />
+                  )}
+                  {[
+                    "Type",
+                    "Status",
+                    "Org",
+                    "Created",
+                    "Started",
+                    "Duration",
+                    "Attempts",
+                    "Error",
+                    "",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      className="px-3 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider text-left whitespace-nowrap"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {jobs.map((job) => (
                   <tr
                     key={job.id}
-                    className="border-b border-border/50 hover:bg-muted/20"
+                    className={`border-t border-border/20 hover:bg-surface/30 transition-colors ${job.status === "failed" ? "bg-red-500/5" : ""}`}
                   >
                     {tab === "failed" && (
-                      <td className="py-1.5 px-2">
+                      <td className="px-3 py-2.5">
                         <input
                           type="checkbox"
                           checked={selectedIds.has(job.id)}
@@ -287,51 +356,55 @@ export default function PlatformAdminJobsPage() {
                         />
                       </td>
                     )}
-                    <td className="py-1.5 px-2 font-mono">{job.type}</td>
-                    <td className="py-1.5 px-2">
-                      <Badge
-                        variant={STATUS_VARIANT[job.status] ?? "outline"}
-                        className="text-[10px] font-mono"
-                      >
-                        {job.status}
-                      </Badge>
+                    <td className="px-3 py-2.5 text-[12px] font-mono whitespace-nowrap">
+                      {job.type}
                     </td>
-                    <td className="py-1.5 px-2 max-w-[120px] truncate">
+                    <td className="px-3 py-2.5 whitespace-nowrap">
+                      <StatusBadge status={job.status} />
+                    </td>
+                    <td className="px-3 py-2.5 text-[11px] font-mono text-muted-foreground max-w-[120px] truncate">
                       {job.org_name ?? job.org_id ?? "—"}
                     </td>
-                    <td className="py-1.5 px-2 text-muted-foreground" title={job.created_at}>
-                      {formatRelative(job.created_at)}
+                    <td className="px-3 py-2.5 text-[11px] font-mono text-muted-foreground whitespace-nowrap" title={job.created_at}>
+                      {formatDate(job.created_at)}
                     </td>
-                    <td className="py-1.5 px-2 text-muted-foreground">
-                      {formatRelative(job.started_at)}
+                    <td className="px-3 py-2.5 text-[11px] font-mono text-muted-foreground whitespace-nowrap">
+                      {formatDate(job.started_at)}
                     </td>
-                    <td className="py-1.5 px-2 font-mono text-muted-foreground">
+                    <td className="px-3 py-2.5 text-[11px] font-mono text-muted-foreground whitespace-nowrap">
                       {formatDuration(job.started_at, job.finished_at)}
                     </td>
-                    <td className="py-1.5 px-2 font-mono text-muted-foreground">
+                    <td className="px-3 py-2.5 text-[11px] font-mono text-muted-foreground text-center">
                       {job.attempts}/{job.max_attempts}
                     </td>
                     <td
-                      className="py-1.5 px-2 text-destructive max-w-[200px] cursor-pointer"
-                      onClick={() =>
-                        setExpandedErrorId(expandedErrorId === job.id ? null : job.id)
-                      }
-                      title={job.error ?? undefined}
+                      className="px-3 py-2.5 text-[11px] text-red-400/80 max-w-40 truncate"
+                      title={job.error ?? ""}
                     >
-                      {truncate(job.error, 80)}
+                      {job.error
+                        ? job.error.length > 60
+                          ? job.error.slice(0, 60) + "…"
+                          : job.error
+                        : "—"}
                     </td>
-                    <td className="py-1.5 px-2">
-                      <div className="flex gap-2">
+                    <td className="px-3 py-2.5 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          className="text-[11px] text-muted-foreground hover:text-foreground"
+                          onClick={() => setSelectedJob(job)}
+                        >
+                          View
+                        </button>
                         {job.status === "failed" && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => retryMutation.mutate(job.id)}
+                          <button
+                            type="button"
+                            className="text-[11px] text-primary hover:underline disabled:opacity-40"
                             disabled={retryMutation.isPending}
-                            className="h-6 text-[11px] text-emerald-400 hover:text-emerald-300"
+                            onClick={() => retryMutation.mutate(job.id)}
                           >
                             Retry
-                          </Button>
+                          </button>
                         )}
                         {(job.status === "pending" ||
                           job.status === "running" ||
@@ -343,7 +416,7 @@ export default function PlatformAdminJobsPage() {
                                   variant="ghost"
                                   size="sm"
                                   disabled={cancelMutation.isPending}
-                                  className="h-6 text-[11px] text-destructive hover:text-destructive"
+                                  className="h-auto p-0 text-[11px] text-destructive hover:text-destructive"
                                 >
                                   Cancel
                                 </Button>
@@ -372,47 +445,39 @@ export default function PlatformAdminJobsPage() {
                       </div>
                     </td>
                   </tr>
-                  {expandedErrorId === job.id && job.error_trace && (
-                    <tr key={`${job.id}-trace`}>
-                      <td
-                        colSpan={tab === "failed" ? 10 : 9}
-                        className="py-2 px-2 bg-muted/20 border-b border-border/50"
-                      >
-                        <pre className="text-[10px] font-mono text-destructive/80 whitespace-pre-wrap break-all overflow-x-auto max-h-48 overflow-y-auto">
-                          {job.error_trace}
-                        </pre>
-                      </td>
-                    </tr>
-                  )}
-                </>
-              ))}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {data && totalPages > 1 && (
+          <div className="flex items-center gap-2 justify-center py-4">
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
+            >
+              ← Prev
+            </button>
+            <span className="text-[11px] font-mono text-muted-foreground/50">
+              {page} / {totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => p + 1)}
+              className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
+            >
+              Next →
+            </button>
+          </div>
         )}
       </div>
 
-      {data && totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page <= 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-          >
-            Prev
-          </Button>
-          <span className="text-xs font-mono text-muted-foreground">
-            {page} / {totalPages}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page >= totalPages}
-            onClick={() => setPage((p) => p + 1)}
-          >
-            Next
-          </Button>
-        </div>
+      {selectedJob && (
+        <PayloadModal job={selectedJob} onClose={() => setSelectedJob(null)} />
       )}
     </div>
   );

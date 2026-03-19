@@ -4,11 +4,9 @@ import { useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { adminFetch } from "@/lib/platform-admin/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 
 const CALL_TYPES = [
+  "all",
   "chat",
   "embed",
   "classify",
@@ -16,6 +14,7 @@ const CALL_TYPES = [
   "entity_extract",
   "query",
 ] as const;
+type CallTypeFilter = (typeof CALL_TYPES)[number];
 
 interface LogRow {
   id: string;
@@ -69,21 +68,54 @@ function buildLogsUrl(params: {
   return `/api/platform/logs?${sp.toString()}`;
 }
 
+function TypePill({ type }: { type: string }) {
+  const colors: Record<string, string> = {
+    chat: "bg-primary/15 text-primary border-primary/20",
+    embed: "bg-teal-500/10 text-teal-400 border-teal-500/20",
+    classify: "bg-violet-500/10 text-violet-400 border-violet-500/20",
+    summarise: "bg-violet-500/10 text-violet-400 border-violet-500/20",
+    entity_extract: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+    query: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  };
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-mono font-medium whitespace-nowrap ${colors[type] ?? "bg-muted/30 text-muted-foreground border-border/30"}`}
+    >
+      {type}
+    </span>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="px-4 py-3 rounded-xl border border-border/40 bg-surface/30">
+      <div className="text-lg font-mono font-semibold text-foreground">
+        {value}
+      </div>
+      <div className="text-[11px] text-muted-foreground mt-0.5">{label}</div>
+    </div>
+  );
+}
+
 export default function PlatformAdminLogsPage() {
   const now = new Date();
   const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const [callTypes, setCallTypes] = useState<string[]>([]);
+  const [typeFilter, setTypeFilter] = useState<CallTypeFilter>("all");
   const [from, setFrom] = useState(yesterday.toISOString().slice(0, 16));
   const [to, setTo] = useState(now.toISOString().slice(0, 16));
   const [orgId, setOrgId] = useState("");
   const [page, setPage] = useState(1);
   const [autoRefresh, setAutoRefresh] = useState(false);
 
-  const toggleCallType = (t: string) => {
-    setCallTypes((prev) =>
-      prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]
-    );
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const callTypes =
+    typeFilter === "all" ? [] : [typeFilter];
 
   const url = buildLogsUrl({
     callTypes,
@@ -141,166 +173,189 @@ export default function PlatformAdminLogsPage() {
   const totalPages = data ? Math.ceil(data.total / data.limit) : 0;
 
   return (
-    <div className="p-6 space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold text-foreground">API Call Logs</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Browse and export API call history
-          </p>
+    <div className="h-full flex flex-col overflow-hidden bg-bg">
+      <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+        {/* Header */}
+        <div className="flex items-center justify-between shrink-0">
+          <h1 className="text-lg font-semibold tracking-tight text-foreground">
+            API Call Logs
+          </h1>
+          <Button variant="outline" size="sm" onClick={handleExportCsv}>
+            Export CSV
+          </Button>
         </div>
-        <Button variant="outline" size="sm" onClick={handleExportCsv}>
-          Export CSV
-        </Button>
-      </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-4 p-4 rounded-lg border border-border bg-card">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground uppercase">Type:</span>
-          {CALL_TYPES.map((t) => (
-            <label key={t} className="flex items-center gap-1.5 text-xs">
-              <Checkbox
-                checked={callTypes.includes(t)}
-                onCheckedChange={() => toggleCallType(t)}
-              />
-              {t}
-            </label>
-          ))}
+        {/* Stat cards */}
+        <div className="grid grid-cols-4 gap-3">
+          <StatCard
+            label="Total Cost"
+            value={data ? `$${parseFloat(data.total_cost ?? "0").toFixed(2)}` : "—"}
+          />
+          <StatCard
+            label="Total Calls"
+            value={data ? String(data.total) : "—"}
+          />
+          <div
+            className="px-4 py-3 rounded-xl border border-border/40 bg-surface/30 cursor-pointer select-none"
+            onClick={() => setAutoRefresh((r) => !r)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setAutoRefresh((r) => !r);
+              }
+            }}
+          >
+            <div className="text-lg font-mono font-semibold text-foreground">
+              {autoRefresh ? "ON" : "OFF"}
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">
+              Auto-refresh
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">From</span>
-          <Input
+
+        {/* Filter area */}
+        <div className="shrink-0 flex flex-wrap items-center gap-3">
+          {CALL_TYPES.map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => {
+                setTypeFilter(t);
+                setPage(1);
+              }}
+              className={`px-3 py-1 rounded-md text-[12px] font-mono transition-colors ${typeFilter === t ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-surface"}`}
+            >
+              {t}
+            </button>
+          ))}
+          <input
             type="datetime-local"
             value={from}
             onChange={(e) => setFrom(e.target.value)}
-            className="h-7 text-xs font-mono w-auto"
+            className="bg-surface/40 border border-border/60 rounded-lg px-3 py-1.5 text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-primary/50"
           />
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">To</span>
-          <Input
+          <input
             type="datetime-local"
             value={to}
             onChange={(e) => setTo(e.target.value)}
-            className="h-7 text-xs font-mono w-auto"
+            className="bg-surface/40 border border-border/60 rounded-lg px-3 py-1.5 text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-primary/50"
           />
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Org ID</span>
-          <Input
+          <input
             type="text"
             value={orgId}
             onChange={(e) => setOrgId(e.target.value)}
-            placeholder="optional"
-            className="h-7 text-xs font-mono w-40"
+            placeholder="Org ID (optional)"
+            className="bg-surface/40 border border-border/60 rounded-lg px-3 py-1.5 text-[11px] font-mono w-40 focus:outline-none focus:ring-1 focus:ring-primary/50"
           />
         </div>
-        <Button
-          variant={autoRefresh ? "default" : "outline"}
-          size="sm"
-          className="h-7 text-xs"
-          onClick={() => setAutoRefresh((r) => !r)}
-        >
-          {autoRefresh ? "Auto-refresh ON" : "Auto-refresh OFF"}
-        </Button>
-      </div>
 
-      {data && (
-        <p className="text-sm font-mono text-muted-foreground">
-          Total cost: <span className="font-medium text-foreground">${parseFloat(data.total_cost ?? "0").toFixed(2)}</span>
-        </p>
-      )}
-
-      <div className="rounded-lg border border-border overflow-hidden">
+        {/* Table */}
         {isLoading ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">
-            Loading...
+          <div className="space-y-2">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-10 rounded-lg bg-surface/40 animate-pulse"
+              />
+            ))}
           </div>
         ) : !data?.logs?.length ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">
+          <div className="py-8 text-center text-sm text-muted-foreground">
             No logs found
           </div>
         ) : (
-          <table className="w-full text-xs border-collapse">
-            <thead>
-              <tr className="border-b border-border bg-muted/30">
-                <th className="text-left py-2 px-2 text-muted-foreground font-medium">Time</th>
-                <th className="text-left py-2 px-2 text-muted-foreground font-medium">Org</th>
-                <th className="text-left py-2 px-2 text-muted-foreground font-medium">User</th>
-                <th className="text-left py-2 px-2 text-muted-foreground font-medium">Type</th>
-                <th className="text-left py-2 px-2 text-muted-foreground font-medium">Model</th>
-                <th className="text-right py-2 px-2 text-muted-foreground font-medium">In Tokens</th>
-                <th className="text-right py-2 px-2 text-muted-foreground font-medium">Out Tokens</th>
-                <th className="text-right py-2 px-2 text-muted-foreground font-medium">Cost</th>
-                <th className="text-right py-2 px-2 text-muted-foreground font-medium">Duration</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.logs.map((row) => (
-                <tr
-                  key={row.id}
-                  className="border-b border-border/50 hover:bg-muted/20"
-                >
-                  <td className="py-1.5 px-2" title={row.created_at}>
-                    {formatRelative(row.created_at)}
-                  </td>
-                  <td className="py-1.5 px-2 max-w-[120px] truncate">
-                    {row.org_name ?? row.org_id ?? "—"}
-                  </td>
-                  <td className="py-1.5 px-2 max-w-[140px] truncate">
-                    {row.user_email ?? "—"}
-                  </td>
-                  <td className="py-1.5 px-2">
-                    <Badge variant="secondary" className="text-[10px] font-mono">
-                      {row.call_type}
-                    </Badge>
-                  </td>
-                  <td className="py-1.5 px-2 font-mono text-muted-foreground">
-                    {row.model ?? "—"}
-                  </td>
-                  <td className="py-1.5 px-2 text-right font-mono text-muted-foreground">
-                    {row.input_tokens ?? "—"}
-                  </td>
-                  <td className="py-1.5 px-2 text-right font-mono text-muted-foreground">
-                    {row.output_tokens ?? "—"}
-                  </td>
-                  <td className="py-1.5 px-2 text-right font-mono text-muted-foreground">
-                    ${(parseFloat(row.cost_usd ?? "0") ?? 0).toFixed(4)}
-                  </td>
-                  <td className="py-1.5 px-2 text-right font-mono text-muted-foreground">
-                    {row.duration_ms != null ? `${row.duration_ms}ms` : "—"}
-                  </td>
+          <div className="rounded-xl border border-border/60 overflow-hidden">
+            <table className="w-full text-sm border-collapse">
+              <thead className="bg-muted/10">
+                <tr>
+                  {[
+                    "Time",
+                    "Org",
+                    "User",
+                    "Type",
+                    "Model",
+                    "In Tokens",
+                    "Out Tokens",
+                    "Cost",
+                    "Duration",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      className="px-3 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider text-left"
+                    >
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {data.logs.map((row) => (
+                  <tr
+                    key={row.id}
+                    className="border-t border-border/20 hover:bg-surface/30 transition-colors"
+                  >
+                    <td className="px-3 py-2.5 text-[11px] font-mono" title={row.created_at}>
+                      {formatRelative(row.created_at)}
+                    </td>
+                    <td className="px-3 py-2.5 text-[11px] font-mono max-w-[120px] truncate">
+                      {row.org_name ?? row.org_id ?? "—"}
+                    </td>
+                    <td className="px-3 py-2.5 text-[11px] font-mono max-w-[140px] truncate">
+                      {row.user_email ?? "—"}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <TypePill type={row.call_type} />
+                    </td>
+                    <td className="px-3 py-2.5 text-[11px] font-mono text-muted-foreground">
+                      {row.model ?? "—"}
+                    </td>
+                    <td className="px-3 py-2.5 text-[11px] font-mono text-right text-muted-foreground">
+                      {row.input_tokens ?? "—"}
+                    </td>
+                    <td className="px-3 py-2.5 text-[11px] font-mono text-right text-muted-foreground">
+                      {row.output_tokens ?? "—"}
+                    </td>
+                    <td className="px-3 py-2.5 text-[11px] font-mono text-right">
+                      ${(parseFloat(row.cost_usd ?? "0") ?? 0).toFixed(4)}
+                    </td>
+                    <td className="px-3 py-2.5 text-[11px] font-mono text-right text-muted-foreground">
+                      {row.duration_ms != null ? `${row.duration_ms}ms` : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Pagination */}
+        {data && totalPages > 1 && (
+          <div className="flex items-center gap-2 justify-center py-4">
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
+            >
+              ← Prev
+            </button>
+            <span className="text-[11px] font-mono text-muted-foreground/50">
+              {page} / {totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => p + 1)}
+              className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
+            >
+              Next →
+            </button>
+          </div>
         )}
       </div>
-
-      {data && totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page <= 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-          >
-            Prev
-          </Button>
-          <span className="text-xs font-mono text-muted-foreground">
-            {page} / {totalPages}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page >= totalPages}
-            onClick={() => setPage((p) => p + 1)}
-          >
-            Next
-          </Button>
-        </div>
-      )}
     </div>
   );
 }

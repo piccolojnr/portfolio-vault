@@ -150,7 +150,7 @@ export default function PlatformAdminLayout({
                       ? pathname === href
                       : pathname.startsWith(href);
                     return (
-                      <SidebarMenuItem key={href}>
+                      <SidebarMenuItem key={href} className="mb-1">
                         <SidebarMenuButton
                           render={<Link href={href} />}
                           isActive={active}
@@ -195,12 +195,14 @@ export default function PlatformAdminLayout({
           </SidebarFooter>
         </Sidebar>
         <SidebarInset className="overflow-hidden">
-          <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
-            <SidebarTrigger />
-            <Separator orientation="vertical" className="mx-1 my-auto h-4" />
-            <span className="text-sm font-medium text-foreground">Memra Admin</span>
+          <header className="shrink-0 flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 border-b border-border bg-bg/90 backdrop-blur-md z-20">
+            <SidebarTrigger className="shrink-0 text-muted-foreground hover:text-foreground" />
+            <Separator orientation="vertical" className="h-4 shrink-0" />
+            <span className="text-sm font-semibold tracking-tight text-foreground">
+              Platform Admin
+            </span>
           </header>
-          <div className="flex-1 overflow-auto min-h-0">{children}</div>
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col">{children}</div>
         </SidebarInset>
       </SidebarProvider>
     </AdminContext.Provider>

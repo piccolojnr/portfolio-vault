@@ -16,7 +16,7 @@ export const JWT_SECRET = process.env.JWT_SECRET ?? "";
 export const ADMIN_JWT_SECRET =
   process.env.ADMIN_JWT_SECRET || JWT_SECRET;
 
-export const ADMIN_DOMAIN = process.env.ADMIN_DOMAIN ?? "";
+export const ADMIN_DOMAIN = process.env.ADMIN_DOMAIN ?? "admin.memra.local";
 
 export const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
