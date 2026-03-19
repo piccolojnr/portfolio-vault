@@ -1,0 +1,72 @@
+{
+  "doc-0b9224c433c7a1dffba033eb8ed5c941": {
+    "status": "processed",
+    "chunks_count": 1,
+    "chunks_list": [
+      "chunk-0b9224c433c7a1dffba033eb8ed5c941"
+    ],
+    "content_summary": "fastapi>=0.115\nuvicorn[standard]>=0.34\npydantic>=2.0\npydantic-settings>=2.7\nanthropic>=0.50\nopenai>=1.0\nqdrant-client>=1.13\nsqlmodel>=0.0.21\nasyncpg>=0.30\ncryptography>=42\npython-docx>=1.1\nmarkdown>=3.5\n# weasyprint is excluded — it requires system l...",
+    "content_length": 420,
+    "created_at": "2026-03-18T19:46:17.427850+00:00",
+    "updated_at": "2026-03-18T19:47:03.301363+00:00",
+    "file_path": "82ac66a6-7ad1-4828-936f-0374dc2f36fc",
+    "track_id": "insert_20260318_194617_314f148c",
+    "metadata": {
+      "processing_start_time": 1773863177,
+      "processing_end_time": 1773863223
+    }
+  },
+  "doc-2fb98de795d0354247f08445e41d517d": {
+    "status": "processed",
+    "chunks_count": 2,
+    "chunks_list": [
+      "chunk-b4aa97eb500d161464a14c94ae6047c2",
+      "chunk-dcd6b1fd8f26bb84cb9d480ce1372752"
+    ],
+    "content_summary": "# Chat Performance — Implementation Notes\n\n## Implemented\n\n### 1. Parallelize intent classification + retrieval\n**File:** `domain/services/chat.py`\n\nIntent classification and RAG retrieval now run concurrently with `asyncio.create_task`.\nThe retrieva...",
+    "content_length": 4965,
+    "created_at": "2026-03-18T19:53:46.534791+00:00",
+    "updated_at": "2026-03-18T19:56:06.832490+00:00",
+    "file_path": "6caacd2a-0372-40bf-bd0c-0c529eaaee62",
+    "track_id": "insert_20260318_195346_97b99326",
+    "metadata": {
+      "processing_start_time": 1773863653,
+      "processing_end_time": 1773863766
+    }
+  },
+  "doc-bbf9b6b9c8aeb3781d597c5c7eef709f": {
+    "status": "processed",
+    "chunks_count": 3,
+    "chunks_list": [
+      "chunk-69b74b852f9cabc07d214d1a2ef1a1b7",
+      "chunk-d8787c2876f2fa9c466edf1494e57b95",
+      "chunk-9b2357e61536898e16b9f8b1b5949ab3"
+    ],
+    "content_summary": "# Portfolio Vault RAG — Python Server\n\nFastAPI backend that turns markdown vault documents into a searchable, conversational knowledge base using vector embeddings and an LLM.\n\n## Stack\n\n| Layer | Technology |\n|---|---|\n| API | FastAPI + uvicorn |\n| ...",
+    "content_length": 10101,
+    "created_at": "2026-03-18T19:54:13.615855+00:00",
+    "updated_at": "2026-03-18T19:58:06.355487+00:00",
+    "file_path": "b603e4fb-1b99-49a2-b06a-0160ff173be3",
+    "track_id": "insert_20260318_195413_8aec37b9",
+    "metadata": {
+      "processing_start_time": 1773863656,
+      "processing_end_time": 1773863886
+    }
+  },
+  "dup-99107e289fc40612d38cf895d32cd36a": {
+    "status": "failed",
+    "content_summary": "[DUPLICATE] Original document: doc-2fb98de795d0354247f08445e41d517d",
+    "content_length": 4965,
+    "created_at": "2026-03-18T19:58:49.433123+00:00",
+    "updated_at": "2026-03-18T19:58:49.433123+00:00",
+    "file_path": "6caacd2a-0372-40bf-bd0c-0c529eaaee62",
+    "track_id": "insert_20260318_195849_ed2be829",
+    "error_msg": "Content already exists. Original doc_id: doc-2fb98de795d0354247f08445e41d517d, Status: DocStatus.PROCESSED",
+    "metadata": {
+      "is_duplicate": true,
+      "original_doc_id": "doc-2fb98de795d0354247f08445e41d517d",
+      "original_track_id": "insert_20260318_195346_97b99326"
+    },
+    "chunks_list": []
+  }
+}

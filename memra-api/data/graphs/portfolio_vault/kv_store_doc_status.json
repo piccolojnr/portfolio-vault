@@ -1,0 +1,38 @@
+{
+  "doc-2fb98de795d0354247f08445e41d517d": {
+    "status": "processed",
+    "chunks_count": 2,
+    "chunks_list": [
+      "chunk-b4aa97eb500d161464a14c94ae6047c2",
+      "chunk-dcd6b1fd8f26bb84cb9d480ce1372752"
+    ],
+    "content_summary": "# Chat Performance — Implementation Notes\n\n## Implemented\n\n### 1. Parallelize intent classification + retrieval\n**File:** `domain/services/chat.py`\n\nIntent classification and RAG retrieval now run concurrently with `asyncio.create_task`.\nThe retrieva...",
+    "content_length": 4965,
+    "created_at": "2026-03-18T15:15:08.721077+00:00",
+    "updated_at": "2026-03-18T15:16:34.758787+00:00",
+    "file_path": "d3ff01e3-398a-4879-916a-a7085be7b28d",
+    "track_id": "insert_20260318_151508_1bddf69e",
+    "metadata": {
+      "processing_start_time": 1773846908,
+      "processing_end_time": 1773846994
+    }
+  },
+  "doc-bbf9b6b9c8aeb3781d597c5c7eef709f": {
+    "status": "processing",
+    "chunks_count": 3,
+    "chunks_list": [
+      "chunk-69b74b852f9cabc07d214d1a2ef1a1b7",
+      "chunk-d8787c2876f2fa9c466edf1494e57b95",
+      "chunk-9b2357e61536898e16b9f8b1b5949ab3"
+    ],
+    "content_summary": "# Portfolio Vault RAG — Python Server\n\nFastAPI backend that turns markdown vault documents into a searchable, conversational knowledge base using vector embeddings and an LLM.\n\n## Stack\n\n| Layer | Technology |\n|---|---|\n| API | FastAPI + uvicorn |\n| ...",
+    "content_length": 10101,
+    "created_at": "2026-03-18T15:16:35.183351+00:00",
+    "updated_at": "2026-03-18T15:16:35.205885+00:00",
+    "file_path": "903ebc1f-ec54-43fc-afec-9fcc97abfd64",
+    "track_id": "insert_20260318_151635_274f074c",
+    "metadata": {
+      "processing_start_time": 1773846995
+    }
+  }
+}
