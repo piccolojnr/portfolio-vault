@@ -114,7 +114,7 @@ export default function ProfilePage() {
     return (
       <div className="h-full flex flex-col bg-bg text-foreground overflow-hidden">
         <div className="flex-1 min-h-0 overflow-y-auto">
-          <div className="max-w-2xl mx-auto w-full px-4 py-6 space-y-8">
+          <div className="max-w-5xl mx-auto w-full px-4 py-6 space-y-8">
             {[...Array(3)].map((_, i) => (
               <div key={i} className="h-32 animate-pulse rounded-xl bg-muted/20" />
             ))}
@@ -135,7 +135,7 @@ export default function ProfilePage() {
   return (
     <div className="h-full flex flex-col bg-bg text-foreground overflow-hidden">
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="max-w-2xl mx-auto w-full px-4 py-6 space-y-8">
+        <div className="max-w-5xl mx-auto w-full px-4 py-6 space-y-8">
 
           {/* Header */}
           <div>

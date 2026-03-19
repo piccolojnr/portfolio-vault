@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from memra.app.core.db import get_db_conn
 from memra.app.core.dependencies import get_current_user, get_live_settings, require_role
+from memra.app.core.billing import enforce_plan_limits
 from memra.domain.models.org import (
     CorpusRead,
     InviteMemberRequest,
@@ -203,6 +204,7 @@ async def create_invite(
     session: DBSession,
     current_user: dict = Depends(require_role("owner", "admin")),
     settings=Depends(get_live_settings),
+    _guard=Depends(enforce_plan_limits(check_members=True, check_documents=False)),
 ):
     oid = _parse_org_id(org_id)
     _assert_org_scope(current_user, oid)

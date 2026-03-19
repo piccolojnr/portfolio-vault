@@ -18,6 +18,7 @@ export function HeaderNav() {
     // pathname.startsWith("/admin") && pathname !== "/admin/settings";
   const isOrgSettings = pathname.startsWith("/settings/organisation");
   const isProfile = pathname.startsWith("/settings/profile");
+  const isBilling = pathname.startsWith("/settings/billing");
 
   const navLink = (active: boolean) =>
     cn(
@@ -47,6 +48,11 @@ export function HeaderNav() {
       {canManage && (
         <Link href="/settings/organisation" className={navLink(isOrgSettings)}>
           org
+        </Link>
+      )}
+      {canManage && (
+        <Link href="/settings/billing" className={navLink(isBilling)}>
+          billing
         </Link>
       )}
       {/* users should not see this */}

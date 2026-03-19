@@ -32,6 +32,7 @@ import {
   Settings,
   HeartPulse,
   LogOut,
+  CreditCard,
 } from "lucide-react";
 
 interface AdminUser {
@@ -48,6 +49,7 @@ const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/users", label: "Users", icon: Users },
   { href: "/orgs", label: "Organisations", icon: Building2 },
+  { href: "/billing", label: "Billing", icon: CreditCard },
   { href: "/logs", label: "API Logs", icon: ScrollText },
   { href: "/jobs", label: "Jobs", icon: Layers },
   { href: "/settings", label: "Settings", icon: Settings },
@@ -126,7 +128,7 @@ export default function PlatformAdminLayout({
 
   return (
     <AdminContext.Provider value={admin}>
-      <SidebarProvider className="overflow-hidden">
+      <SidebarProvider className="h-svh overflow-hidden">
         <Sidebar variant="sidebar" collapsible="icon">
           <SidebarHeader className="px-3 py-4">
             <span className="text-sm font-semibold tracking-wide text-sidebar-foreground group-data-[collapsible=icon]:hidden">
@@ -185,7 +187,7 @@ export default function PlatformAdminLayout({
             </SidebarMenu>
           </SidebarFooter>
         </Sidebar>
-        <SidebarInset className="overflow-hidden">
+        <SidebarInset className="min-h-0 overflow-hidden">
           <header className="shrink-0 flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 border-b border-border bg-bg/90 backdrop-blur-md z-20">
             <SidebarTrigger className="shrink-0 text-muted-foreground hover:text-foreground" />
             <Separator orientation="vertical" className="" />

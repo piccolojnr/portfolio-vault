@@ -36,9 +36,18 @@ _KEY_TO_ENV = {
     "email_from": "email_from",
     "resend_api_key": "resend_api_key",
     "storage_provider": "storage_provider",
+    "paystack_secret_key": "paystack_secret_key",
+    "paystack_public_key": "paystack_public_key",
+    "paystack_pro_plan_code": "paystack_pro_plan_code",
+    "paystack_enterprise_plan_code": "paystack_enterprise_plan_code",
 }
 
-_SECRET_KEYS = {"openai_api_key", "anthropic_api_key", "resend_api_key"}
+_SECRET_KEYS = {
+    "openai_api_key",
+    "anthropic_api_key",
+    "resend_api_key",
+    "paystack_secret_key",
+}
 
 
 def invalidate_cache() -> None:

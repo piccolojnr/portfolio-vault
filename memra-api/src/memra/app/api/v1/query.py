@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from memra.app.core.config import Settings
 from memra.app.core.db import get_db_conn
 from memra.app.core.dependencies import get_current_user, get_live_settings
+from memra.app.core.billing import enforce_plan_limits
 from memra.domain.models.rag import QueryRequest, QueryResponse
 from memra.domain.services import query as svc
 from memra.domain.services.ai_calls import log_call
@@ -28,6 +29,7 @@ async def query_endpoint(
     session: DBSession,
     settings: Settings = Depends(get_live_settings),
     current_user: dict = Depends(get_current_user),
+    _guard=Depends(enforce_plan_limits(check_documents=False, check_members=False)),
 ):
     try:
         response, usage = await svc.run_query(request.question, request.n_results, settings)

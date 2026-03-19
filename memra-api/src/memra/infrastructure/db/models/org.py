@@ -22,6 +22,16 @@ class Organisation(SQLModel, table=True):
     name: str = Field(sa_column=Column(sa.String, nullable=False))
     slug: str = Field(sa_column=Column(sa.String, unique=True, nullable=False, index=True))
     plan: str = Field(default="free")
+    # Paystack: used to link this org to Paystack customer/subscription objects.
+    paystack_customer_code: Optional[str] = Field(
+        default=None,
+        sa_column=Column(sa.String, nullable=True),
+    )
+    # Arbitrates between admin-assigned plans and Paystack webhook-driven plans.
+    plan_source: str = Field(
+        default="self_service",
+        sa_column=Column(sa.String, nullable=False, server_default="self_service"),
+    )
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
     # Nullable FK to corpora.id — set after corpus creation to avoid circular dep at DDL time

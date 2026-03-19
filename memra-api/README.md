@@ -1,4 +1,4 @@
-﻿# Memra — Python Server
+# Memra — Python Server
 
 FastAPI backend that turns markdown vault documents into a searchable, conversational knowledge base using vector embeddings and an LLM.
 
@@ -115,6 +115,30 @@ COST_LIMIT_USD=0.0
 # Qdrant collection name
 QDRANT_COLLECTION=default
 ```
+
+### Environment variables reference (backend)
+
+Minimum required in `memra-api/.env`:
+
+- `DATABASE_URL`
+- `SECRET_KEY`
+- `JWT_SECRET`
+
+Commonly configured:
+
+- `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
+- `QDRANT_URL`, `QDRANT_API_KEY`
+- `ADMIN_JWT_SECRET`
+- `APP_URL`, `APP_NAME`
+
+Billing/Paystack keys are intentionally **not** runtime env vars in this implementation.
+They are persisted in `platform_settings` (encrypted for secrets) and edited from the
+Platform Admin settings UI:
+
+- `paystack_secret_key` (secret)
+- `paystack_public_key`
+- `paystack_pro_plan_code`
+- `paystack_enterprise_plan_code`
 
 ### 3. First-time database setup
 

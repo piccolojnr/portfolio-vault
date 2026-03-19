@@ -20,6 +20,7 @@ from memra.app.core.db import get_db_conn
 from memra.app.core.platform_auth import get_platform_admin
 from memra.domain.services import audit
 from memra.domain.services import platform_settings_service as pss
+from memra.domain.services.paystack_service import PaystackService
 
 router = APIRouter(prefix="/settings", tags=["platform-admin-settings"])
 
@@ -32,7 +33,7 @@ class UpdateSettingRequest(BaseModel):
 
 
 @router.get("")
-async def list_settings(session: DBSession, admin: Admin):
+async def list_settings(session: DBSession, _admin: Admin):
     settings = get_settings()
     return await pss.get_all_masked(session, fallback_settings=settings)
 
@@ -51,7 +52,7 @@ async def update_setting(
             session, key, body.value, settings.secret_key, admin_id=admin["sub"]
         )
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown")
     await audit.log_action(
@@ -91,3 +92,14 @@ async def reveal_secret(
     )
     await session.commit()
     return {"key": key, "value": value}
+
+
+@router.get("/paystack/preflight")
+async def paystack_preflight(
+    session: DBSession,
+    _admin: Admin,
+):
+    settings = get_settings()
+    svc = PaystackService(session=session, settings=settings)
+    result = await svc.preflight_check()
+    return result

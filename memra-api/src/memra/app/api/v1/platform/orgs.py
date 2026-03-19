@@ -16,10 +16,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
 
 from memra.app.core.db import get_db_conn
 from memra.app.core.platform_auth import get_platform_admin
 from memra.domain.services import audit
+from memra.infrastructure.db.models.subscription import Subscription
+from memra.infrastructure.db.models.payment_event import PaymentEvent
 
 router = APIRouter(prefix="/orgs", tags=["platform-admin-orgs"])
 
@@ -170,7 +173,16 @@ async def change_plan(
 
     oid = UUID(org_id)
     result = await session.execute(
-        text("UPDATE organisations SET plan = :plan, updated_at = now() WHERE id = :id RETURNING id"),
+        text(
+            """
+            UPDATE organisations
+            SET plan = :plan,
+                plan_source = 'admin_override',
+                updated_at = now()
+            WHERE id = :id
+            RETURNING id
+            """
+        ),
         {"plan": body.plan, "id": oid},
     )
     if result.rowcount == 0:
@@ -184,6 +196,64 @@ async def change_plan(
     )
     await session.commit()
     return {"status": "updated", "plan": body.plan}
+
+
+@router.get("/{org_id}/billing")
+async def get_org_billing(org_id: str, session: DBSession, admin: Admin):
+    oid = UUID(org_id)
+
+    org = (await session.execute(text("SELECT * FROM organisations WHERE id = :id"), {"id": oid})).mappings().first()
+    if org is None:
+        raise HTTPException(status_code=404, detail="Organisation not found")
+
+    subscription = (await session.execute(
+        select(Subscription).where(Subscription.org_id == oid)
+    )).scalars().first()
+
+    payment_events = (await session.execute(
+        select(PaymentEvent)
+        .where(PaymentEvent.org_id == oid)
+        .order_by(PaymentEvent.created_at.desc())
+        .limit(20)
+    )).scalars().all()
+
+    return {
+        "org": {
+            "id": str(org["id"]),
+            "plan": org["plan"],
+            "plan_source": org.get("plan_source") if isinstance(org, dict) else None,
+        },
+        "subscription": (
+            {
+                "status": subscription.status,
+                "paystack_subscription_code": subscription.paystack_subscription_code,
+                "paystack_customer_code": subscription.paystack_customer_code,
+                "paystack_plan_code": subscription.paystack_plan_code,
+                "current_period_start": subscription.current_period_start.isoformat()
+                if subscription and subscription.current_period_start
+                else None,
+                "current_period_end": subscription.current_period_end.isoformat()
+                if subscription and subscription.current_period_end
+                else None,
+                "cancelled_at": subscription.cancelled_at.isoformat()
+                if subscription and subscription.cancelled_at
+                else None,
+            }
+            if subscription
+            else None
+        ),
+        "payment_events": [
+            {
+                "id": str(e.id),
+                "paystack_event": e.paystack_event,
+                "paystack_reference": e.paystack_reference,
+                "processed": e.processed,
+                "error": e.error,
+                "created_at": e.created_at.isoformat() if e.created_at else None,
+            }
+            for e in payment_events
+        ],
+    }
 
 
 def _ser(row: dict) -> dict:

@@ -149,6 +149,123 @@ async def handle_summarise_conversation(payload: dict) -> None:
     logger.info("[handler] summarise_conversation conv_id=%s", conv_id)
 
 
+async def handle_billing_reconciliation(payload: dict) -> None:
+    """Daily billing reconciliation.
+
+    Downgrades self-service orgs when Paystack webhooks are missing/delayed:
+      - non_renewing whose current_period_end has passed → free + subscription.cancelled
+      - attention whose grace window (current_period_end + 3 days) has passed → free + subscription.cancelled
+
+    Admin overrides (organisations.plan_source='admin_override') are never downgraded.
+    """
+    from datetime import datetime, timezone
+
+    from sqlalchemy import text
+
+    from memra.app.core.config import get_settings
+    from memra.app.core.db import open_db_engine
+
+    _ = payload  # reserved for future extensions
+    settings = get_settings()
+    if not settings.database_url:
+        return
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    engine, factory = await open_db_engine(settings.database_url)
+
+    try:
+        async with factory() as session:
+            # Non-renewing → free
+            await session.execute(
+                text(
+                    """
+                    UPDATE organisations o
+                    SET plan = 'free',
+                        plan_source = 'self_service',
+                        updated_at = now()
+                    WHERE o.plan_source = 'self_service'
+                      AND EXISTS (
+                        SELECT 1
+                        FROM subscriptions s
+                        WHERE s.org_id = o.id
+                          AND s.status = 'non_renewing'
+                          AND s.current_period_end IS NOT NULL
+                          AND s.current_period_end < :now
+                      )
+                    """
+                ),
+                {"now": now},
+            )
+
+            await session.execute(
+                text(
+                    """
+                    UPDATE subscriptions s
+                    SET status = 'cancelled',
+                        cancelled_at = :now,
+                        updated_at = now()
+                    WHERE s.status = 'non_renewing'
+                      AND s.current_period_end IS NOT NULL
+                      AND s.current_period_end < :now
+                      AND EXISTS (
+                        SELECT 1
+                        FROM organisations o
+                        WHERE o.id = s.org_id
+                          AND o.plan_source = 'self_service'
+                      )
+                    """
+                ),
+                {"now": now},
+            )
+
+            # Attention → free (after grace)
+            await session.execute(
+                text(
+                    """
+                    UPDATE organisations o
+                    SET plan = 'free',
+                        plan_source = 'self_service',
+                        updated_at = now()
+                    WHERE o.plan_source = 'self_service'
+                      AND EXISTS (
+                        SELECT 1
+                        FROM subscriptions s
+                        WHERE s.org_id = o.id
+                          AND s.status = 'attention'
+                          AND s.current_period_end IS NOT NULL
+                          AND (s.current_period_end + interval '3 days') < :now
+                      )
+                    """
+                ),
+                {"now": now},
+            )
+
+            await session.execute(
+                text(
+                    """
+                    UPDATE subscriptions s
+                    SET status = 'cancelled',
+                        cancelled_at = :now,
+                        updated_at = now()
+                    WHERE s.status = 'attention'
+                      AND s.current_period_end IS NOT NULL
+                      AND (s.current_period_end + interval '3 days') < :now
+                      AND EXISTS (
+                        SELECT 1
+                        FROM organisations o
+                        WHERE o.id = s.org_id
+                          AND o.plan_source = 'self_service'
+                      )
+                    """
+                ),
+                {"now": now},
+            )
+
+            await session.commit()
+    finally:
+        await engine.dispose()
+
+
 # ── Email job handlers ─────────────────────────────────────────────────────────
 
 async def handle_send_magic_link_email(payload: dict) -> None:

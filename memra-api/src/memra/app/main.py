@@ -24,11 +24,14 @@ from memra.app.api.v1 import (
     health, retrieve, query,
     documents, storage,
     settings, conversations, export, chat, graph, admin, auth, orgs,
+    webhooks,
+    billing,
 )
 from memra.app.api.v1.platform import router as platform_router
 from memra.app.core.config import get_settings
 from memra.app.core.db import open_db_engine
 from memra.app.core.limiter import limiter
+from memra.app.core.billing import PaywallError, paywall_error_handler
 
 
 def _print_startup_banner(db_connected: bool = False) -> None:
@@ -82,6 +85,7 @@ def create_app() -> FastAPI:
 
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    app.add_exception_handler(PaywallError, paywall_error_handler)
     app.add_middleware(SlowAPIMiddleware)
     app.add_middleware(
         CORSMiddleware,
@@ -106,6 +110,8 @@ def create_app() -> FastAPI:
     v1.include_router(auth.router)
     v1.include_router(orgs.router)
     v1.include_router(platform_router)
+    v1.include_router(webhooks.router)
+    v1.include_router(billing.router)
     app.include_router(v1)
 
     @app.get("/")

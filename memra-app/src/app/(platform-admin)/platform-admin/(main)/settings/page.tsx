@@ -26,11 +26,35 @@ interface ModelConfig {
   created_at: string | null;
 }
 
+interface PlanLimitRow {
+  plan_tier: string;
+  monthly_token_limit: number | null;
+  max_documents: number | null;
+  max_corpora: number | null;
+  max_members: number | null;
+  overage_rate_per_500k_tokens: number;
+}
+
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
     <h2 className="text-[13px] font-semibold text-foreground font-mono border-b border-border/40 pb-2 mb-4">
       {children}
     </h2>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number;
+}) {
+  return (
+    <div className="px-4 py-3 rounded-xl border border-border/40 bg-surface/30">
+      <div className="text-lg font-mono font-semibold text-foreground">{value}</div>
+      <div className="text-[11px] text-muted-foreground mt-0.5">{label}</div>
+    </div>
   );
 }
 
@@ -261,6 +285,40 @@ export default function SettingsPage() {
     queryFn: () => adminFetch<ModelConfig[]>("/api/platform/models"),
   });
 
+  const planLimitsQuery = useQuery({
+    queryKey: ["platform", "plan-limits"],
+    queryFn: () => adminFetch<PlanLimitRow[]>("/api/platform/plan-limits"),
+  });
+
+  const [planEdits, setPlanEdits] = useState<Record<string, Partial<PlanLimitRow>>>({});
+
+  const planLimitsUpdateMutation = useMutation({
+    mutationFn: async () => {
+      const rows = (planLimitsQuery.data ?? []).map((r) => ({
+        ...r,
+        ...(planEdits[r.plan_tier] ?? {}),
+      }));
+      await adminFetch("/api/platform/plan-limits", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          rows.map((r) => ({
+            plan_tier: r.plan_tier,
+            monthly_token_limit: r.monthly_token_limit,
+            max_documents: r.max_documents,
+            max_corpora: r.max_corpora,
+            max_members: r.max_members,
+            overage_rate_per_500k_tokens: r.overage_rate_per_500k_tokens,
+          })),
+        ),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["platform", "plan-limits"] });
+      setPlanEdits({});
+    },
+  });
+
   const createMutation = useMutation({
     mutationFn: async (body: typeof newModel) => {
       await adminFetch("/api/platform/models", {
@@ -278,11 +336,12 @@ export default function SettingsPage() {
 
   const secretSettings = settingsQuery.data?.filter((s) => s.is_secret) ?? [];
   const nonSecretSettings = settingsQuery.data?.filter((s) => !s.is_secret) ?? [];
+  const enabledModels = (modelsQuery.data ?? []).filter((m) => m.enabled).length;
 
   return (
     <div className="h-full flex flex-col bg-bg text-foreground overflow-hidden">
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="max-w-2xl mx-auto w-full px-4 py-6 space-y-8">
+        <div className="max-w-5xl mx-auto w-full px-4 py-6 space-y-8">
           {/* Header */}
           <div>
             <h1 className="text-lg font-semibold tracking-tight text-foreground">
@@ -291,6 +350,13 @@ export default function SettingsPage() {
             <p className="mt-0.5 text-[13px] text-muted-foreground">
               Platform-wide API keys, configuration, and model management.
             </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <StatCard label="API Keys" value={secretSettings.length} />
+            <StatCard label="Config Entries" value={nonSecretSettings.length} />
+            <StatCard label="Models Enabled" value={enabledModels} />
+            <StatCard label="Plan Tiers" value={planLimitsQuery.data?.length ?? 0} />
           </div>
 
           {/* API Keys */}
@@ -303,7 +369,7 @@ export default function SettingsPage() {
           ) : (
             <>
               {secretSettings.length > 0 && (
-                <section className="rounded-xl border border-border bg-surface/40 p-5">
+                <section className="rounded-xl border border-border/60 bg-surface/40 p-5">
                   <SectionHeading>API Keys</SectionHeading>
                   <div className="divide-y divide-border/30">
                     {secretSettings.map((s) => (
@@ -314,7 +380,7 @@ export default function SettingsPage() {
               )}
 
               {nonSecretSettings.length > 0 && (
-                <section className="rounded-xl border border-border bg-surface/40 p-5">
+                <section className="rounded-xl border border-border/60 bg-surface/40 p-5">
                   <SectionHeading>Configuration</SectionHeading>
                   <div className="divide-y divide-border/30">
                     {nonSecretSettings.map((s) => (
@@ -333,7 +399,7 @@ export default function SettingsPage() {
           )}
 
           {/* Model Configuration */}
-          <section className="rounded-xl border border-border bg-surface/40 p-5">
+          <section className="rounded-xl border border-border/60 bg-surface/40 p-5">
             <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-2">
               <h2 className="text-[13px] font-semibold text-foreground font-mono">
                 Model Configuration
@@ -415,6 +481,107 @@ export default function SettingsPage() {
                 {modelsQuery.data.map((m) => (
                   <ModelRow key={m.model_id} m={m} />
                 ))}
+              </div>
+            )}
+          </section>
+
+          {/* Plan limits */}
+          <section className="rounded-xl border border-border/60 bg-surface/40 p-5">
+            <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-2">
+              <h2 className="text-[13px] font-semibold text-foreground font-mono">
+                Plan limits
+              </h2>
+              <Button
+                size="sm"
+                disabled={planLimitsUpdateMutation.isPending || planLimitsQuery.isLoading}
+                onClick={() => planLimitsUpdateMutation.mutate()}
+                className="h-7 px-3 text-[11px] font-mono"
+              >
+                {planLimitsUpdateMutation.isPending ? "saving…" : "save"}
+              </Button>
+            </div>
+
+            {planLimitsQuery.isLoading ? (
+              <div className="space-y-2">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="h-10 rounded-lg bg-surface/40 animate-pulse" />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {(planLimitsQuery.data ?? []).map((r) => {
+                  const draft = { ...r, ...(planEdits[r.plan_tier] ?? {}) };
+                  const updateNum = (
+                    key: "monthly_token_limit" | "max_documents" | "max_corpora" | "max_members"
+                  ) => (value: string) => {
+                      const trimmed = value.trim();
+                      const nextVal =
+                        trimmed === "" ? null : Number(trimmed);
+                      setPlanEdits((p) => ({
+                        ...p,
+                        [r.plan_tier]: {
+                          ...(p[r.plan_tier] ?? {}),
+                          [key]: nextVal,
+                        },
+                      }));
+                    };
+                  return (
+                    <div key={r.plan_tier} className="rounded-lg border border-border/40 p-3">
+                      <div className="text-sm font-semibold font-mono mb-2">
+                        {r.plan_tier}
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[10px] text-muted-foreground font-mono block mb-1">
+                            monthly_token_limit
+                          </label>
+                          <input
+                            type="number"
+                            value={draft.monthly_token_limit ?? ""}
+                            onChange={(e) => updateNum("monthly_token_limit")(e.target.value)}
+                            className="w-full bg-surface border border-border rounded-md px-3 py-1.5 text-[12px] font-mono focus:outline-none focus:ring-1 focus:ring-primary/40"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-muted-foreground font-mono block mb-1">
+                            max_documents
+                          </label>
+                          <input
+                            type="number"
+                            value={draft.max_documents ?? ""}
+                            onChange={(e) => updateNum("max_documents")(e.target.value)}
+                            className="w-full bg-surface border border-border rounded-md px-3 py-1.5 text-[12px] font-mono focus:outline-none focus:ring-1 focus:ring-primary/40"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-muted-foreground font-mono block mb-1">
+                            max_corpora
+                          </label>
+                          <input
+                            type="number"
+                            value={draft.max_corpora ?? ""}
+                            onChange={(e) => updateNum("max_corpora")(e.target.value)}
+                            className="w-full bg-surface border border-border rounded-md px-3 py-1.5 text-[12px] font-mono focus:outline-none focus:ring-1 focus:ring-primary/40"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-muted-foreground font-mono block mb-1">
+                            max_members
+                          </label>
+                          <input
+                            type="number"
+                            value={draft.max_members ?? ""}
+                            onChange={(e) => updateNum("max_members")(e.target.value)}
+                            className="w-full bg-surface border border-border rounded-md px-3 py-1.5 text-[12px] font-mono focus:outline-none focus:ring-1 focus:ring-primary/40"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {(!planLimitsQuery.data || planLimitsQuery.data.length === 0) && (
+                  <p className="text-sm text-muted-foreground/50">No plan limits configured.</p>
+                )}
               </div>
             )}
           </section>

@@ -75,6 +75,12 @@ class Settings(BaseSettings):
     app_name: str = "Memra"
     app_url: str = "http://app.memra.local"
 
+    # Billing / Paystack (can be overridden by platform settings DB)
+    paystack_secret_key: str = ""
+    paystack_public_key: str = ""
+    paystack_pro_plan_code: str = ""
+    paystack_enterprise_plan_code: str = ""
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def use_demo(self) -> bool:

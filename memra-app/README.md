@@ -61,14 +61,26 @@ pnpm install
 
 ### 2. Configure environment
 
-Create `.env.local` in `portfolio-assistant/`:
+Create `.env.local` in `memra-app/`:
 
 ```env
-# URL of the running Python RAG server
-NEXT_PUBLIC_API_URL=http://localhost:8000
+# Backend API base URL used by Next.js API proxy routes
+RAG_BACKEND_URL=http://localhost:8000
+
+# Cookie/JWT verification secrets (server-side middleware)
+JWT_SECRET=your-org-jwt-secret
+ADMIN_JWT_SECRET=your-platform-admin-jwt-secret
+
+# Domain routing (subdomain middleware)
+APP_DOMAIN=app.memra.local
+ADMIN_DOMAIN=admin.memra.local
+
+# Optional client-side metadata
+NEXT_PUBLIC_APP_NAME=Memra
+NEXT_PUBLIC_APP_URL=http://app.memra.local
 ```
 
-If omitted, API proxy routes default to `http://localhost:8000`.
+If `RAG_BACKEND_URL` is omitted, it defaults to `http://localhost:8000`.
 
 ### 3. Run the development server
 
