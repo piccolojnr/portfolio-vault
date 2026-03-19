@@ -3,6 +3,10 @@
 import { useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { adminFetch } from "@/lib/platform-admin/api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const CALL_TYPES = [
   "chat",
@@ -108,19 +112,9 @@ export default function PlatformAdminLogsPage() {
     const res = await adminFetch<LogsResponse>(exportUrl);
     const rows = res.logs ?? [];
     const headers = [
-      "id",
-      "org_id",
-      "org_name",
-      "user_id",
-      "user_email",
-      "call_type",
-      "model",
-      "provider",
-      "input_tokens",
-      "output_tokens",
-      "cost_usd",
-      "duration_ms",
-      "created_at",
+      "id", "org_id", "org_name", "user_id", "user_email",
+      "call_type", "model", "provider", "input_tokens", "output_tokens",
+      "cost_usd", "duration_ms", "created_at",
     ];
     const escape = (v: unknown) => {
       const s = String(v ?? "");
@@ -144,166 +138,137 @@ export default function PlatformAdminLogsPage() {
     URL.revokeObjectURL(a.href);
   }, [callTypes, from, to, orgId]);
 
-  const totalPages = data
-    ? Math.ceil(data.total / data.limit)
-    : 0;
+  const totalPages = data ? Math.ceil(data.total / data.limit) : 0;
 
   return (
-    <div className="min-h-screen bg-[#0f0f0f] text-neutral-200 p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-lg font-medium text-neutral-200">API Call Logs</h1>
-        <button
-          type="button"
-          onClick={handleExportCsv}
-          className="text-[11px] px-3 py-1.5 rounded border border-neutral-700 bg-neutral-800/50 text-neutral-300 hover:bg-neutral-700/50"
-        >
+    <div className="p-6 space-y-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-semibold text-foreground">API Call Logs</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Browse and export API call history
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={handleExportCsv}>
           Export CSV
-        </button>
+        </Button>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-4 mb-4 p-3 rounded border border-neutral-800 bg-[#141414]">
+      <div className="flex flex-wrap items-center gap-4 p-4 rounded-lg border border-border bg-card">
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-neutral-500 uppercase">Type:</span>
+          <span className="text-xs text-muted-foreground uppercase">Type:</span>
           {CALL_TYPES.map((t) => (
-            <label key={t} className="flex items-center gap-1 text-[11px]">
-              <input
-                type="checkbox"
+            <label key={t} className="flex items-center gap-1.5 text-xs">
+              <Checkbox
                 checked={callTypes.includes(t)}
-                onChange={() => toggleCallType(t)}
-                className="rounded border-neutral-600 bg-neutral-800"
+                onCheckedChange={() => toggleCallType(t)}
               />
               {t}
             </label>
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-neutral-500">From</span>
-          <input
+          <span className="text-xs text-muted-foreground">From</span>
+          <Input
             type="datetime-local"
             value={from}
             onChange={(e) => setFrom(e.target.value)}
-            className="text-[11px] font-mono px-2 py-1 rounded border border-neutral-700 bg-neutral-900 text-neutral-200"
+            className="h-7 text-xs font-mono w-auto"
           />
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-neutral-500">To</span>
-          <input
+          <span className="text-xs text-muted-foreground">To</span>
+          <Input
             type="datetime-local"
             value={to}
             onChange={(e) => setTo(e.target.value)}
-            className="text-[11px] font-mono px-2 py-1 rounded border border-neutral-700 bg-neutral-900 text-neutral-200"
+            className="h-7 text-xs font-mono w-auto"
           />
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-neutral-500">Org ID</span>
-          <input
+          <span className="text-xs text-muted-foreground">Org ID</span>
+          <Input
             type="text"
             value={orgId}
             onChange={(e) => setOrgId(e.target.value)}
             placeholder="optional"
-            className="text-[11px] font-mono px-2 py-1 w-40 rounded border border-neutral-700 bg-neutral-900 text-neutral-200 placeholder-neutral-600"
+            className="h-7 text-xs font-mono w-40"
           />
         </div>
-        <button
-          type="button"
+        <Button
+          variant={autoRefresh ? "default" : "outline"}
+          size="sm"
+          className="h-7 text-xs"
           onClick={() => setAutoRefresh((r) => !r)}
-          className={`text-[11px] px-3 py-1 rounded border ${
-            autoRefresh
-              ? "border-green-600 bg-green-900/30 text-green-400"
-              : "border-neutral-700 bg-neutral-800/50 text-neutral-400"
-          }`}
         >
           {autoRefresh ? "Auto-refresh ON" : "Auto-refresh OFF"}
-        </button>
+        </Button>
       </div>
 
-      {/* Total cost */}
       {data && (
-        <p className="text-[12px] font-mono text-neutral-400 mb-3">
-          Total cost: ${data.total_cost.toFixed(2)}
+        <p className="text-sm font-mono text-muted-foreground">
+          Total cost: <span className="font-medium text-foreground">${data.total_cost.toFixed(2)}</span>
         </p>
       )}
 
-      {/* Table */}
-      <div className="rounded border border-neutral-800 overflow-hidden">
+      <div className="rounded-lg border border-border overflow-hidden">
         {isLoading ? (
-          <div className="p-8 text-center text-neutral-500 text-[12px]">
+          <div className="p-8 text-center text-sm text-muted-foreground">
             Loading...
           </div>
         ) : !data?.logs?.length ? (
-          <div className="p-8 text-center text-neutral-500 text-[12px]">
+          <div className="p-8 text-center text-sm text-muted-foreground">
             No logs found
           </div>
         ) : (
-          <table className="w-full text-[11px] border-collapse">
+          <table className="w-full text-xs border-collapse">
             <thead>
-              <tr className="border-b border-neutral-800 bg-[#141414]">
-                <th className="text-left py-2 px-2 text-neutral-500 font-medium">
-                  Time
-                </th>
-                <th className="text-left py-2 px-2 text-neutral-500 font-medium">
-                  Org
-                </th>
-                <th className="text-left py-2 px-2 text-neutral-500 font-medium">
-                  User
-                </th>
-                <th className="text-left py-2 px-2 text-neutral-500 font-medium">
-                  Type
-                </th>
-                <th className="text-left py-2 px-2 text-neutral-500 font-medium">
-                  Model
-                </th>
-                <th className="text-right py-2 px-2 text-neutral-500 font-medium">
-                  In Tokens
-                </th>
-                <th className="text-right py-2 px-2 text-neutral-500 font-medium">
-                  Out Tokens
-                </th>
-                <th className="text-right py-2 px-2 text-neutral-500 font-medium">
-                  Cost
-                </th>
-                <th className="text-right py-2 px-2 text-neutral-500 font-medium">
-                  Duration
-                </th>
+              <tr className="border-b border-border bg-muted/30">
+                <th className="text-left py-2 px-2 text-muted-foreground font-medium">Time</th>
+                <th className="text-left py-2 px-2 text-muted-foreground font-medium">Org</th>
+                <th className="text-left py-2 px-2 text-muted-foreground font-medium">User</th>
+                <th className="text-left py-2 px-2 text-muted-foreground font-medium">Type</th>
+                <th className="text-left py-2 px-2 text-muted-foreground font-medium">Model</th>
+                <th className="text-right py-2 px-2 text-muted-foreground font-medium">In Tokens</th>
+                <th className="text-right py-2 px-2 text-muted-foreground font-medium">Out Tokens</th>
+                <th className="text-right py-2 px-2 text-muted-foreground font-medium">Cost</th>
+                <th className="text-right py-2 px-2 text-muted-foreground font-medium">Duration</th>
               </tr>
             </thead>
             <tbody>
               {data.logs.map((row) => (
                 <tr
                   key={row.id}
-                  className="border-b border-neutral-800/50 hover:bg-neutral-800/30"
+                  className="border-b border-border/50 hover:bg-muted/20"
                 >
-                  <td
-                    className="py-1.5 px-2 text-neutral-300"
-                    title={row.created_at}
-                  >
+                  <td className="py-1.5 px-2" title={row.created_at}>
                     {formatRelative(row.created_at)}
                   </td>
-                  <td className="py-1.5 px-2 text-neutral-300 max-w-[120px] truncate">
+                  <td className="py-1.5 px-2 max-w-[120px] truncate">
                     {row.org_name ?? row.org_id ?? "—"}
                   </td>
-                  <td className="py-1.5 px-2 text-neutral-300 max-w-[140px] truncate">
+                  <td className="py-1.5 px-2 max-w-[140px] truncate">
                     {row.user_email ?? "—"}
                   </td>
                   <td className="py-1.5 px-2">
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-neutral-700/50 text-neutral-300">
+                    <Badge variant="secondary" className="text-[10px] font-mono">
                       {row.call_type}
-                    </span>
+                    </Badge>
                   </td>
-                  <td className="py-1.5 px-2 font-mono text-neutral-400">
+                  <td className="py-1.5 px-2 font-mono text-muted-foreground">
                     {row.model ?? "—"}
                   </td>
-                  <td className="py-1.5 px-2 text-right font-mono text-neutral-400">
+                  <td className="py-1.5 px-2 text-right font-mono text-muted-foreground">
                     {row.input_tokens ?? "—"}
                   </td>
-                  <td className="py-1.5 px-2 text-right font-mono text-neutral-400">
+                  <td className="py-1.5 px-2 text-right font-mono text-muted-foreground">
                     {row.output_tokens ?? "—"}
                   </td>
-                  <td className="py-1.5 px-2 text-right font-mono text-neutral-400">
+                  <td className="py-1.5 px-2 text-right font-mono text-muted-foreground">
                     ${(row.cost_usd ?? 0).toFixed(4)}
                   </td>
-                  <td className="py-1.5 px-2 text-right font-mono text-neutral-400">
+                  <td className="py-1.5 px-2 text-right font-mono text-muted-foreground">
                     {row.duration_ms != null ? `${row.duration_ms}ms` : "—"}
                   </td>
                 </tr>
@@ -313,28 +278,27 @@ export default function PlatformAdminLogsPage() {
         )}
       </div>
 
-      {/* Pagination */}
       {data && totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 mt-3">
-          <button
-            type="button"
+        <div className="flex items-center justify-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
             disabled={page <= 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
-            className="text-[11px] px-2 py-1 rounded border border-neutral-700 text-neutral-400 hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Prev
-          </button>
-          <span className="text-[11px] font-mono text-neutral-500">
+          </Button>
+          <span className="text-xs font-mono text-muted-foreground">
             {page} / {totalPages}
           </span>
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="sm"
             disabled={page >= totalPages}
             onClick={() => setPage((p) => p + 1)}
-            className="text-[11px] px-2 py-1 rounded border border-neutral-700 text-neutral-400 hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Next
-          </button>
+          </Button>
         </div>
       )}
     </div>

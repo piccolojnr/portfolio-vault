@@ -7,6 +7,34 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { adminFetch } from "@/lib/platform-admin/api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
@@ -68,6 +96,7 @@ export default function OrgsPage() {
   const [sort, setSort] = useState("cost");
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [pendingPlan, setPendingPlan] = useState<string | null>(null);
 
   const qc = useQueryClient();
 
@@ -105,6 +134,7 @@ export default function OrgsPage() {
     onSuccess: (_, { id }) => {
       qc.invalidateQueries({ queryKey: ["platform-orgs"] });
       qc.invalidateQueries({ queryKey: ["platform-org-detail", id] });
+      setPendingPlan(null);
     },
   });
 
@@ -113,78 +143,77 @@ export default function OrgsPage() {
   const totalPages = Math.max(1, Math.ceil(total / (data?.limit ?? 50)));
 
   return (
-    <div className="min-h-full bg-[#0f0f0f] text-neutral-200">
-      <div className="border-b border-neutral-800 px-6 py-4">
-        <h1 className="text-[15px] font-semibold">Organisations</h1>
+    <div className="flex flex-col h-full">
+      <div className="border-b border-border px-6 py-4">
+        <h1 className="text-lg font-semibold text-foreground">Organisations</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          View and manage organisations, plans, and usage
+        </p>
       </div>
 
-      <div className="p-6 space-y-4">
+      <div className="flex-1 overflow-auto p-6 space-y-4">
         <div className="flex flex-wrap items-center gap-3">
-          <input
+          <Input
             type="text"
-            placeholder="Search"
+            placeholder="Search..."
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
               setPage(1);
             }}
-            className="h-8 w-48 rounded border border-neutral-800 bg-[#141414] px-2.5 text-[12px] text-neutral-200 placeholder:text-neutral-500 focus:outline-none focus:ring-1 focus:ring-neutral-600"
+            className="h-8 w-56"
           />
-          <select
-            value={plan}
-            onChange={(e) => {
-              setPlan(e.target.value);
-              setPage(1);
-            }}
-            className="h-8 rounded border border-neutral-800 bg-[#141414] px-2.5 text-[12px] text-neutral-200 focus:outline-none focus:ring-1 focus:ring-neutral-600"
-          >
-            <option value="all">All plans</option>
-            <option value="free">Free</option>
-            <option value="pro">Pro</option>
-            <option value="enterprise">Enterprise</option>
-          </select>
-          <select
-            value={sort}
-            onChange={(e) => {
-              setSort(e.target.value);
-              setPage(1);
-            }}
-            className="h-8 rounded border border-neutral-800 bg-[#141414] px-2.5 text-[12px] text-neutral-200 focus:outline-none focus:ring-1 focus:ring-neutral-600"
-          >
-            <option value="cost">Sort by cost</option>
-            <option value="members">Sort by members</option>
-            <option value="created">Sort by created</option>
-          </select>
+          <Select value={plan} onValueChange={(v) => { setPlan(v ?? "all"); setPage(1); }}>
+            <SelectTrigger className="h-8 w-32" size="sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All plans</SelectItem>
+              <SelectItem value="free">Free</SelectItem>
+              <SelectItem value="pro">Pro</SelectItem>
+              <SelectItem value="enterprise">Enterprise</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={sort} onValueChange={(v) => { setSort(v ?? "cost"); setPage(1); }}>
+            <SelectTrigger className="h-8 w-36" size="sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="cost">Sort by cost</SelectItem>
+              <SelectItem value="members">Sort by members</SelectItem>
+              <SelectItem value="created">Sort by created</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
-        <div className="rounded-lg border border-neutral-800 bg-[#141414] overflow-hidden">
+        <div className="rounded-lg border border-border overflow-hidden">
           {isLoading ? (
-            <div className="py-12 text-center text-[12px] text-neutral-500">
+            <div className="py-12 text-center text-sm text-muted-foreground">
               Loading...
             </div>
           ) : (
             <table className="w-full">
               <thead>
-                <tr className="border-b border-neutral-800">
-                  <th className="px-4 py-2.5 text-left text-[13px] font-medium text-neutral-400">
+                <tr className="border-b border-border bg-muted/30">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
                     Name
                   </th>
-                  <th className="px-4 py-2.5 text-left text-[13px] font-medium text-neutral-400">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
                     Plan
                   </th>
-                  <th className="px-4 py-2.5 text-left text-[13px] font-medium text-neutral-400">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
                     Members
                   </th>
-                  <th className="px-4 py-2.5 text-left text-[13px] font-medium text-neutral-400">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
                     Corpora
                   </th>
-                  <th className="px-4 py-2.5 text-left text-[13px] font-medium text-neutral-400">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
                     Tokens
                   </th>
-                  <th className="px-4 py-2.5 text-left text-[13px] font-medium text-neutral-400">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
                     Cost
                   </th>
-                  <th className="px-4 py-2.5 text-left text-[13px] font-medium text-neutral-400">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
                     Created
                   </th>
                 </tr>
@@ -194,26 +223,26 @@ export default function OrgsPage() {
                   <tr
                     key={o.id}
                     onClick={() => setSelectedId(o.id)}
-                    className="border-b border-neutral-800/50 hover:bg-neutral-800/30 cursor-pointer transition-colors"
+                    className="border-b border-border/50 hover:bg-muted/20 cursor-pointer transition-colors"
                   >
-                    <td className="px-4 py-2 text-[12px]">
+                    <td className="px-4 py-2 text-sm">
                       <span className="font-medium">{o.name}</span>
-                      <span className="text-neutral-500 ml-1">({o.slug})</span>
+                      <span className="text-muted-foreground ml-1 text-xs">({o.slug})</span>
                     </td>
                     <td className="px-4 py-2">
-                      <span className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium bg-neutral-800 text-neutral-300">
+                      <Badge variant="secondary" className="text-[10px]">
                         {o.plan}
-                      </span>
+                      </Badge>
                     </td>
-                    <td className="px-4 py-2 text-[12px]">{o.member_count}</td>
-                    <td className="px-4 py-2 text-[12px]">{o.corpus_count}</td>
-                    <td className="px-4 py-2 font-mono text-[12px]">
+                    <td className="px-4 py-2 text-sm">{o.member_count}</td>
+                    <td className="px-4 py-2 text-sm">{o.corpus_count}</td>
+                    <td className="px-4 py-2 font-mono text-sm">
                       {formatNumber(o.tokens_used_this_month ?? 0)}
                     </td>
-                    <td className="px-4 py-2 font-mono text-[12px]">
+                    <td className="px-4 py-2 font-mono text-sm">
                       ${(parseFloat(o.cost_usd_this_month) ?? 0).toFixed(2)}
                     </td>
-                    <td className="px-4 py-2 text-[12px]">
+                    <td className="px-4 py-2 text-sm text-muted-foreground">
                       {formatDate(o.created_at)}
                     </td>
                   </tr>
@@ -223,158 +252,185 @@ export default function OrgsPage() {
           )}
         </div>
 
-        <div className="flex items-center justify-between text-[12px] text-neutral-500">
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
           <span>
-            Page {page} of {totalPages}
+            Page {page} of {totalPages} ({total} orgs)
           </span>
           <div className="flex gap-2">
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page <= 1}
-              className="rounded border border-neutral-800 px-2.5 py-1 hover:bg-neutral-800/50 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Prev
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page >= totalPages}
-              className="rounded border border-neutral-800 px-2.5 py-1 hover:bg-neutral-800/50 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Next
-            </button>
+            </Button>
           </div>
         </div>
       </div>
 
-      {selectedId && (
-        <div className="fixed inset-0 z-50 flex justify-end">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setSelectedId(null)}
-          />
-          <div className="relative z-10 w-96 flex flex-col bg-[#141414] border-l border-neutral-800 shadow-xl">
-            <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
-              <span className="text-[13px] font-medium">Org details</span>
-              <button
-                onClick={() => setSelectedId(null)}
-                className="text-neutral-400 hover:text-neutral-200 text-[12px]"
-              >
-                Close
-              </button>
-            </div>
-            <div className="flex-1 overflow-auto p-4 space-y-4">
-              {detailLoading ? (
-                <div className="text-[12px] text-neutral-500">Loading...</div>
-              ) : detail ? (
-                <>
-                  <div className="rounded-lg border border-neutral-800 p-3 space-y-1.5">
-                    <p className="text-[12px] text-neutral-500">Name</p>
-                    <p className="text-[12px]">{detail.org.name}</p>
-                    <p className="text-[12px] text-neutral-500">Slug</p>
-                    <p className="font-mono text-[12px]">{detail.org.slug}</p>
-                    <p className="text-[12px] text-neutral-500">ID</p>
-                    <p className="font-mono text-[11px] text-neutral-400 break-all">
+      <Sheet open={!!selectedId} onOpenChange={(open) => !open && setSelectedId(null)}>
+        <SheetContent side="right" className="w-[400px] sm:max-w-[400px] overflow-auto">
+          <SheetHeader>
+            <SheetTitle>Organisation Details</SheetTitle>
+            <SheetDescription>
+              {detail?.org?.name ?? "Loading..."}
+            </SheetDescription>
+          </SheetHeader>
+          <div className="space-y-5 mt-4 px-4 pb-4">
+            {detailLoading ? (
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="h-16 animate-pulse rounded-lg bg-muted/20" />
+                ))}
+              </div>
+            ) : detail ? (
+              <>
+                <div className="rounded-lg border border-border p-3 space-y-2">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Name</p>
+                    <p className="text-sm">{detail.org.name}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Slug</p>
+                    <p className="font-mono text-sm">{detail.org.slug}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">ID</p>
+                    <p className="font-mono text-xs text-muted-foreground break-all">
                       {detail.org.id}
                     </p>
-                    <p className="text-[12px] text-neutral-500">Created</p>
-                    <p className="text-[12px]">
-                      {formatDate(detail.org.created_at)}
-                    </p>
                   </div>
-
                   <div>
-                    <p className="text-[12px] font-medium text-neutral-400 mb-2">
-                      Members
-                    </p>
-                    <div className="space-y-1.5">
-                      {detail.members.length === 0 ? (
-                        <p className="text-[12px] text-neutral-500">
-                          No members
-                        </p>
-                      ) : (
-                        detail.members.map((m) => (
-                          <div
-                            key={m.user_id}
-                            className="rounded border border-neutral-800 p-2 text-[12px]"
-                          >
-                            <span className="font-medium">{m.email}</span>
-                            <span className="inline-flex rounded-full px-1.5 py-0.5 text-[10px] bg-neutral-800 ml-1">
-                              {m.role}
-                            </span>
-                          </div>
-                        ))
-                      )}
-                    </div>
+                    <p className="text-xs text-muted-foreground">Created</p>
+                    <p className="text-sm">{formatDate(detail.org.created_at)}</p>
                   </div>
+                </div>
 
-                  <div>
-                    <p className="text-[12px] font-medium text-neutral-400 mb-2">
-                      Usage this month
-                    </p>
-                    <div className="space-y-2">
-                      {detail.usage_this_month.length === 0 ? (
-                        <p className="text-[12px] text-neutral-500">
-                          No usage
-                        </p>
-                      ) : (
-                        detail.usage_this_month.map((u) => {
-                          const total =
-                            (u.input_tokens || 0) + (u.output_tokens || 0);
-                          const maxTotal = Math.max(
-                            ...detail.usage_this_month.map(
-                              (x) =>
-                                (x.input_tokens || 0) + (x.output_tokens || 0),
-                            ),
-                            1,
-                          );
-                          const pct = (total / maxTotal) * 100;
-                          return (
-                            <div key={u.call_type} className="space-y-0.5">
-                              <div className="flex justify-between text-[11px]">
-                                <span>{u.call_type}</span>
-                                <span className="font-mono">
-                                  {formatNumber(total)} tokens
-                                </span>
-                              </div>
-                              <div className="h-1.5 rounded-full bg-neutral-800 overflow-hidden">
-                                <div
-                                  className="h-full bg-neutral-600 rounded-full"
-                                  style={{ width: `${pct}%` }}
-                                />
-                              </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground mb-2">
+                    Members
+                  </p>
+                  <div className="space-y-1.5">
+                    {detail.members.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No members</p>
+                    ) : (
+                      detail.members.map((m) => (
+                        <div
+                          key={m.user_id}
+                          className="rounded-lg border border-border p-2.5 text-sm"
+                        >
+                          <span className="font-medium">{m.email}</span>
+                          <Badge variant="outline" className="text-[10px] ml-1.5">
+                            {m.role}
+                          </Badge>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium text-foreground mb-2">
+                    Usage This Month
+                  </p>
+                  <div className="space-y-2">
+                    {detail.usage_this_month.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No usage</p>
+                    ) : (
+                      detail.usage_this_month.map((u) => {
+                        const total = (u.input_tokens || 0) + (u.output_tokens || 0);
+                        const maxTotal = Math.max(
+                          ...detail.usage_this_month.map(
+                            (x) => (x.input_tokens || 0) + (x.output_tokens || 0),
+                          ),
+                          1,
+                        );
+                        const pct = (total / maxTotal) * 100;
+                        return (
+                          <div key={u.call_type} className="space-y-1">
+                            <div className="flex justify-between text-xs">
+                              <span>{u.call_type}</span>
+                              <span className="font-mono text-muted-foreground">
+                                {formatNumber(total)} tokens
+                              </span>
                             </div>
-                          );
-                        })
-                      )}
-                    </div>
+                            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                              <div
+                                className="h-full bg-primary rounded-full"
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
+                </div>
 
-                  <div>
-                    <p className="text-[12px] font-medium text-neutral-400 mb-2">
-                      Change plan
-                    </p>
-                    <select
-                      value={detail.org.plan}
-                      onChange={(e) => {
-                        const newPlan = e.target.value;
-                        if (newPlan !== detail.org.plan) {
-                          planMutate.mutate({ id: selectedId, plan: newPlan });
-                        }
-                      }}
-                      disabled={planMutate.isPending}
-                      className="w-full h-8 rounded border border-neutral-800 bg-[#0f0f0f] px-2.5 text-[12px] text-neutral-200 focus:outline-none focus:ring-1 focus:ring-neutral-600 disabled:opacity-50"
-                    >
-                      <option value="free">Free</option>
-                      <option value="pro">Pro</option>
-                      <option value="enterprise">Enterprise</option>
-                    </select>
-                  </div>
-                </>
-              ) : null}
-            </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground mb-2">
+                    Change Plan
+                  </p>
+                  <Select
+                    value={detail.org.plan}
+                    onValueChange={(v) => {
+                      if (v && v !== detail.org.plan) {
+                        setPendingPlan(v);
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-full" size="sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="free">Free</SelectItem>
+                      <SelectItem value="pro">Pro</SelectItem>
+                      <SelectItem value="enterprise">Enterprise</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {pendingPlan && pendingPlan !== detail.org.plan && (
+                  <AlertDialog open onOpenChange={(open) => !open && setPendingPlan(null)}>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Change organisation plan?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will change <strong>{detail.org.name}</strong>&apos;s plan
+                          from <strong>{detail.org.plan}</strong> to{" "}
+                          <strong>{pendingPlan}</strong>. This may affect feature access
+                          and billing for all members.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setPendingPlan(null)}>
+                          Cancel
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => {
+                            planMutate.mutate({ id: selectedId!, plan: pendingPlan });
+                          }}
+                        >
+                          Change Plan
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+              </>
+            ) : null}
           </div>
-        </div>
-      )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

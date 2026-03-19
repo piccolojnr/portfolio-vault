@@ -33,7 +33,8 @@ class UpdateSettingRequest(BaseModel):
 
 @router.get("")
 async def list_settings(session: DBSession, admin: Admin):
-    return await pss.get_all_masked(session)
+    settings = get_settings()
+    return await pss.get_all_masked(session, fallback_settings=settings)
 
 
 @router.put("/{key}")

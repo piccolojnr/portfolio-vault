@@ -3,12 +3,26 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, createContext, useContext } from "react";
-import { cn } from "@/lib/utils";
 import {
   setAdminAccessToken,
   getAdminAccessToken,
   clearAdminTokens,
 } from "@/lib/platform-admin";
+import {
+  SidebarProvider,
+  Sidebar,
+  SidebarContent,
+  SidebarHeader,
+  SidebarFooter,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarInset,
+  SidebarTrigger,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarSeparator,
+} from "@/components/ui/sidebar";
 import {
   LayoutDashboard,
   Users,
@@ -51,7 +65,6 @@ export default function PlatformAdminLayout({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Hydrate admin token from cookie
     const cookies = document.cookie.split(";").reduce(
       (acc, c) => {
         const [k, v] = c.trim().split("=");
@@ -66,7 +79,6 @@ export default function PlatformAdminLayout({
       setAdminAccessToken(token);
     }
 
-    // Fetch admin profile
     const fetchMe = async () => {
       try {
         const t = getAdminAccessToken();
@@ -104,7 +116,6 @@ export default function PlatformAdminLayout({
     router.push("/platform-admin/login");
   };
 
-  // Login / change-password pages render without sidebar
   if (
     pathname === "/platform-admin/login" ||
     pathname === "/platform-admin/change-password"
@@ -114,7 +125,7 @@ export default function PlatformAdminLayout({
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#0f0f0f] text-neutral-400">
+      <div className="flex h-screen items-center justify-center bg-background text-muted-foreground">
         Loading...
       </div>
     );
@@ -122,63 +133,74 @@ export default function PlatformAdminLayout({
 
   return (
     <AdminContext.Provider value={admin}>
-      <div className="flex h-screen bg-[#0f0f0f] text-neutral-200">
-        {/* Sidebar */}
-        <aside className="flex w-56 shrink-0 flex-col border-r border-neutral-800 bg-[#0a0a0a]">
-          <div className="px-4 py-5">
-            <span className="text-sm font-semibold tracking-wide text-neutral-300">
+      <SidebarProvider>
+        <Sidebar variant="sidebar" collapsible="icon">
+          <SidebarHeader className="px-3 py-4">
+            <span className="text-sm font-semibold tracking-wide text-sidebar-foreground group-data-[collapsible=icon]:hidden">
               Memra Admin
             </span>
-          </div>
-
-          <nav className="flex-1 space-y-0.5 px-2">
-            {NAV_ITEMS.map(({ href, label, icon: Icon, exact }) => {
-              const active = exact
-                ? pathname === href
-                : pathname.startsWith(href);
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  className={cn(
-                    "flex items-center gap-2.5 rounded-md px-3 py-1.5 text-[13px] transition-colors",
-                    active
-                      ? "bg-neutral-800 text-white"
-                      : "text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-200",
-                  )}
-                >
-                  <Icon size={15} strokeWidth={1.8} />
-                  {label}
-                </Link>
-              );
-            })}
-          </nav>
-
-          {/* Admin info + logout */}
-          <div className="border-t border-neutral-800 p-3">
+          </SidebarHeader>
+          <SidebarContent>
+            <SidebarGroup>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {NAV_ITEMS.map(({ href, label, icon: Icon, exact }) => {
+                    const active = exact
+                      ? pathname === href
+                      : pathname.startsWith(href);
+                    return (
+                      <SidebarMenuItem key={href}>
+                        <SidebarMenuButton
+                          render={<Link href={href} />}
+                          isActive={active}
+                          tooltip={label}
+                          size="sm"
+                        >
+                          <Icon size={16} strokeWidth={1.8} />
+                          <span>{label}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </SidebarContent>
+          <SidebarSeparator />
+          <SidebarFooter>
             {admin && (
-              <div className="mb-2">
-                <p className="truncate text-xs font-medium text-neutral-300">
+              <div className="mb-1 px-2 group-data-[collapsible=icon]:hidden">
+                <p className="truncate text-xs font-medium text-sidebar-foreground">
                   {admin.name}
                 </p>
-                <p className="truncate text-[11px] text-neutral-500">
+                <p className="truncate text-[11px] text-muted-foreground">
                   {admin.email}
                 </p>
               </div>
             )}
-            <button
-              onClick={handleLogout}
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[12px] text-neutral-500 transition-colors hover:bg-neutral-800 hover:text-neutral-300"
-            >
-              <LogOut size={13} />
-              Logout
-            </button>
-          </div>
-        </aside>
-
-        {/* Main content */}
-        <main className="flex-1 overflow-auto">{children}</main>
-      </div>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={handleLogout}
+                  size="sm"
+                  tooltip="Logout"
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <LogOut size={14} />
+                  <span>Logout</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarFooter>
+        </Sidebar>
+        <SidebarInset>
+          <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4 md:hidden">
+            <SidebarTrigger />
+            <span className="text-sm font-medium text-foreground">Memra Admin</span>
+          </header>
+          <main className="flex-1 overflow-auto">{children}</main>
+        </SidebarInset>
+      </SidebarProvider>
     </AdminContext.Provider>
   );
 }
