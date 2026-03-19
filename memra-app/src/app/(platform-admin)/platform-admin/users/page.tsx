@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import {
   useQuery,
   useMutation,
@@ -152,22 +152,6 @@ export default function UsersPage() {
     },
   });
 
-  const handleDisable = useCallback(
-    (e: React.MouseEvent, id: string) => {
-      e.stopPropagation();
-      disableMutate.mutate(id);
-    },
-    [disableMutate],
-  );
-
-  const handleEnable = useCallback(
-    (e: React.MouseEvent, id: string) => {
-      e.stopPropagation();
-      enableMutate.mutate(id);
-    },
-    [enableMutate],
-  );
-
   const users = data?.users ?? [];
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / (data?.limit ?? 50)));
@@ -282,12 +266,15 @@ export default function UsersPage() {
                         {u.disabled ? "Disabled" : "Active"}
                       </Badge>
                     </td>
-                    <td className="px-4 py-2">
+                    <td
+                      className="px-4 py-2"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       {u.disabled ? (
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={(e) => handleEnable(e, u.id)}
+                          onClick={() => enableMutate.mutate(u.id)}
                           disabled={enableMutate.isPending}
                           className="h-7 text-xs text-emerald-400 hover:text-emerald-300"
                         >
@@ -300,7 +287,6 @@ export default function UsersPage() {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={(e) => e.stopPropagation()}
                                 disabled={disableMutate.isPending}
                                 className="h-7 text-xs text-destructive hover:text-destructive"
                               >

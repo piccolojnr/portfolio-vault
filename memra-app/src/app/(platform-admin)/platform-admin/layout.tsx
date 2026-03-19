@@ -23,6 +23,7 @@ import {
   SidebarGroupContent,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
+import { Separator } from "@/components/ui/separator";
 import {
   LayoutDashboard,
   Users,
@@ -133,7 +134,7 @@ export default function PlatformAdminLayout({
 
   return (
     <AdminContext.Provider value={admin}>
-      <SidebarProvider>
+      <SidebarProvider className="h-svh overflow-hidden">
         <Sidebar variant="sidebar" collapsible="icon">
           <SidebarHeader className="px-3 py-4">
             <span className="text-sm font-semibold tracking-wide text-sidebar-foreground group-data-[collapsible=icon]:hidden">
@@ -193,12 +194,13 @@ export default function PlatformAdminLayout({
             </SidebarMenu>
           </SidebarFooter>
         </Sidebar>
-        <SidebarInset>
-          <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4 md:hidden">
+        <SidebarInset className="overflow-hidden">
+          <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
             <SidebarTrigger />
+            <Separator orientation="vertical" className="mx-1 h-4" />
             <span className="text-sm font-medium text-foreground">Memra Admin</span>
           </header>
-          <main className="flex-1 overflow-auto">{children}</main>
+          <div className="flex-1 overflow-auto min-h-0">{children}</div>
         </SidebarInset>
       </SidebarProvider>
     </AdminContext.Provider>
