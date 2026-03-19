@@ -70,3 +70,4 @@ chroma.sqlite3
 
 generate.py
 rag/data/
+memra-api/data/
