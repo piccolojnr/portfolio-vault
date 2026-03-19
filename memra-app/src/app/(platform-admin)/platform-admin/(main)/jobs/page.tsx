@@ -185,6 +185,7 @@ export default function PlatformAdminJobsPage() {
         `/api/platform/jobs?${sp.toString()}`
       );
     },
+    refetchInterval: 5000,
   });
 
   const retryMutation = useMutation({
