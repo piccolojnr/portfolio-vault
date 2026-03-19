@@ -1,6 +1,6 @@
-import { IS_PRODUCTION } from "@/lib/env";
 import { RAG_BACKEND_URL } from "@/lib/network";
 import { NextResponse } from "next/server";
+import { setAdminAuthCookies, extractRefreshToken } from "@/lib/cookies";
 
 export async function POST(req: Request) {
   const cookieHeader = req.headers.get("cookie") ?? "";
@@ -23,29 +23,8 @@ export async function POST(req: Request) {
 
   const data = await res.json();
   const { access_token } = data;
+  const refresh = extractRefreshToken(res, "admin_refresh_token");
   const response = NextResponse.json({ access_token });
-
-  response.cookies.set("admin_access_token", access_token, {
-    httpOnly: false,
-    sameSite: "lax",
-    path: "/",
-    secure: IS_PRODUCTION,
-    maxAge: 60 * 15,
-  });
-
-  const setCookie = res.headers.get("set-cookie");
-  if (setCookie) {
-    const refreshMatch = setCookie.match(/admin_refresh_token=([^;]+)/);
-    if (refreshMatch) {
-      response.cookies.set("admin_refresh_token", refreshMatch[1], {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        secure: IS_PRODUCTION,
-        maxAge: 60 * 60 * 24 * 7,
-      });
-    }
-  }
-
+  setAdminAuthCookies(response, access_token, refresh?.token, refresh?.maxAge);
   return response;
 }

@@ -5,16 +5,17 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/providers/auth-provider";
 import { OrgSwitcher } from "./org-switcher";
+import { Skeleton } from "../ui/skeleton";
 
 export function HeaderNav() {
   const pathname = usePathname();
-  const { user, org, isAuthenticated, logout } = useAuth();
+  const { user, org, isAuthenticated, logout, isLoading } = useAuth();
   const canManage = org?.role === "admin" || org?.role === "owner";
 
   const isVault = pathname.startsWith("/documents");
   const isGraph = pathname.startsWith("/graph");
-  const isAdmin =
-    pathname.startsWith("/admin") && pathname !== "/admin/settings";
+  // const isAdmin =
+    // pathname.startsWith("/admin") && pathname !== "/admin/settings";
   const isOrgSettings = pathname.startsWith("/settings/organisation");
   const isProfile = pathname.startsWith("/settings/profile");
 
@@ -28,6 +29,15 @@ export function HeaderNav() {
 
   return (
     <nav className="flex items-center gap-1">
+      {isLoading ? (
+        <div
+          className="flex items-center gap-1"
+        >
+          <Skeleton className="w-10 h-4" />
+          <Skeleton className="w-10 h-4" />
+        </div>
+      ) : (
+        <>
       <Link href="/documents" className={navLink(isVault)}>
         documents
       </Link>
@@ -39,11 +49,12 @@ export function HeaderNav() {
           org
         </Link>
       )}
-      {canManage && (
+      {/* users should not see this */}
+      {/* {canManage && (
         <Link href="/admin/jobs" className={navLink(isAdmin)}>
           admin
         </Link>
-      )}
+      )} */}
 
       {isAuthenticated && (
         <>
@@ -60,6 +71,8 @@ export function HeaderNav() {
             sign out
           </button>
         </>
+      )}
+      </>
       )}
     </nav>
   );

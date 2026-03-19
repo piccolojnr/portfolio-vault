@@ -2,7 +2,7 @@
 
 import { APP_NAME } from "@/lib/env";
 import Image from "next/image";
-import { useParams, usePathname, useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   Sidebar,
   SidebarInset,
@@ -14,13 +14,7 @@ import { HeaderNav } from "@/components/layout/header-nav";
 import { ConversationSidebarContent } from "@/components/conversations/conversation-sidebar";
 import { useConversations } from "@/components/providers/conversation-context";
 
-const BARE_PATHS = ["/onboarding"];
-
-function isBareRoute(pathname: string): boolean {
-  return BARE_PATHS.some((p) => pathname === p || pathname.startsWith(p));
-}
-
-function AppChrome({ children }: { children: React.ReactNode }) {
+export function AppContent({ children }: { children: React.ReactNode }) {
   const { conversations, isLoading, isFetching, deleteConversation, renameConversation } =
     useConversations();
 
@@ -59,7 +53,6 @@ function AppChrome({ children }: { children: React.ReactNode }) {
             className="rounded-full shrink-0 ring-1 ring-primary/20"
           />
 
-          {/* Title — hidden on small screens to save space */}
           <div className="hidden sm:flex items-baseline gap-2 min-w-0">
             <span className="text-sm font-semibold tracking-tight text-foreground truncate">
               {APP_NAME}
@@ -77,14 +70,4 @@ function AppChrome({ children }: { children: React.ReactNode }) {
       </SidebarInset>
     </SidebarProvider>
   );
-}
-
-export function AppContent({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-
-  if (isBareRoute(pathname)) {
-    return <>{children}</>;
-  }
-
-  return <AppChrome>{children}</AppChrome>;
 }

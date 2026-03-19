@@ -47,9 +47,9 @@ export default function PlatformAdminLoginPage() {
       document.cookie = `admin_access_token=${access_token}; path=/; max-age=${60 * 15}; SameSite=Lax`;
 
       if (must_change_password) {
-        router.push("/platform-admin/change-password");
+        router.push("/change-password");
       } else {
-        router.push("/platform-admin");
+        router.push("/");
       }
     } catch {
       setError("Login failed");

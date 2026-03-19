@@ -33,7 +33,7 @@ export default function PlatformAdminChangePasswordPage() {
         }),
       });
 
-      router.push("/platform-admin");
+      router.push("/");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Change password failed";
       const detailMatch = msg.match(/^\d+:\s*(\{.*\})$/);

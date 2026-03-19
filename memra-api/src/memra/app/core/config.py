@@ -73,7 +73,7 @@ class Settings(BaseSettings):
 
     # App metadata (used in email templates)
     app_name: str = "Memra"
-    app_url: str = "http://localhost:3000"
+    app_url: str = "http://app.memra.local"
 
     @computed_field  # type: ignore[prop-decorator]
     @property

@@ -18,8 +18,13 @@ export const ADMIN_JWT_SECRET =
 
 export const ADMIN_DOMAIN = process.env.ADMIN_DOMAIN ?? "admin.memra.local";
 
+export const APP_DOMAIN = process.env.APP_DOMAIN ?? "app.memra.local";
+
 export const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
 // ── Client-side (NEXT_PUBLIC_*) ──────────────────────────────────────────────
 
 export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "Memra";
+
+export const APP_URL =
+  process.env.NEXT_PUBLIC_APP_URL ?? "http://app.memra.local";

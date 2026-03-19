@@ -1,7 +1,7 @@
-import { IS_PRODUCTION } from "@/lib/env";
 import { RAG_BACKEND_URL } from "@/lib/network";
 import { serverFetch } from "@/lib/network";
 import { NextResponse } from "next/server";
+import { setAuthCookies } from "@/lib/cookies";
 
 export async function POST(req: Request) {
   const body = await req.text();
@@ -18,16 +18,7 @@ export async function POST(req: Request) {
 
   const data = await res.json();
   const { access_token } = data;
-
   const response = NextResponse.json({ access_token });
-
-  response.cookies.set("access_token", access_token, {
-    httpOnly: false,
-    sameSite: "lax",
-    path: "/",
-    secure: IS_PRODUCTION,
-    maxAge: 60 * 60,
-  });
-
+  setAuthCookies(response, access_token);
   return response;
 }

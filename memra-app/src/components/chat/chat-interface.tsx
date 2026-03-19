@@ -337,7 +337,7 @@ export function ChatInterface({ slug }: { slug?: string }) {
                 <Button
                   key={i}
                   variant="outline"
-                  onClick={() => send(s)}
+                  onClick={() => setInput(s)}
                   style={{ animationDelay: `${i * 0.05}s` }}
                   className="h-auto px-4 py-3 text-left justify-start text-[13px] leading-snug text-muted-foreground font-normal whitespace-normal bg-surface border-border hover:border-primary/30 hover:text-foreground hover:bg-primary/5 animate-fade-up transition-all min-h-13"
                 >

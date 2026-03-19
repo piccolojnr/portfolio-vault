@@ -1,23 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   isAdminDomain,
+  isAppDomain,
   isBypass,
-  isAuthPage,
-  isPublicPage,
+  isMainDomainPublic,
   isAdminPublicPath,
-  isAdminPublicDevPath,
-  isMemberBlocked,
-  DEV_ADMIN_MODE,
 } from "@/middleware/routes";
-import { verifyAccessToken, silentRefresh } from "@/middleware/token";
-import { attachTokenCookies, ORG_COOKIES } from "@/middleware/cookies";
-import { handleAdminDomain, handleAdminDevMode } from "@/middleware/admin";
+import { handleAdminDomain } from "@/middleware/admin";
+import { handleAppDomain } from "@/middleware/app";
+import { ADMIN_DOMAIN, APP_DOMAIN } from "@/lib/env";
+
+function redirectToSubdomain(
+  request: NextRequest,
+  domain: string,
+  path: string,
+): NextResponse {
+  const url = request.nextUrl.clone();
+  url.hostname = domain;
+  url.pathname = path;
+  return NextResponse.redirect(url);
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const hostname = request.headers.get("host") ?? "";
 
-  // ── Admin domain ────────────────────────────────────────────────────────
+  // ── Admin subdomain ───────────────────────────────────────────────────
   if (isAdminDomain(hostname)) {
     if (isBypass(pathname)) return NextResponse.next();
     if (isAdminPublicPath(pathname)) {
@@ -28,67 +36,33 @@ export async function middleware(request: NextRequest) {
     return handleAdminDomain(request, pathname);
   }
 
-  // ── /platform-admin on main domain ──────────────────────────────────────
-  if (pathname.startsWith("/platform-admin")) {
-    if (!DEV_ADMIN_MODE) return new NextResponse(null, { status: 404 });
-    if (isBypass(pathname) || isAdminPublicDevPath(pathname)) {
-      return NextResponse.next();
-    }
-    return handleAdminDevMode(request);
+  // ── App subdomain ─────────────────────────────────────────────────────
+  if (isAppDomain(hostname)) {
+    if (isBypass(pathname)) return NextResponse.next();
+    return handleAppDomain(request, pathname);
   }
 
-  // ── Normal app ──────────────────────────────────────────────────────────
-  if (isBypass(pathname) || isPublicPage(pathname)) return NextResponse.next();
+  // ── Main domain ───────────────────────────────────────────────────────
+  if (isBypass(pathname) || isMainDomainPublic(pathname)) return NextResponse.next();
 
-  const accessCookie = request.cookies.get("access_token")?.value;
-  const refreshCookie = request.cookies.get("refresh_token")?.value;
-
-  let payload = accessCookie ? await verifyAccessToken(accessCookie) : null;
-  let newAccess: string | null = null;
-  let newRefresh: string | null = null;
-
-  if (!payload && refreshCookie) {
-    const tokens = await silentRefresh(refreshCookie);
-    if (tokens) {
-      payload = await verifyAccessToken(tokens.access_token);
-      newAccess = tokens.access_token;
-      newRefresh = tokens.refresh_token;
-    }
+  // Redirect /platform-admin/* → admin subdomain
+  if (pathname.startsWith("/platform-admin") && ADMIN_DOMAIN) {
+    const adminPath = pathname.replace(/^\/platform-admin/, "") || "/";
+    return redirectToSubdomain(request, ADMIN_DOMAIN, adminPath);
   }
 
-  if (isAuthPage(pathname)) {
-    if (payload?.email_verified) {
-      return NextResponse.redirect(new URL("/", request.url));
-    }
-    return NextResponse.next();
+  // Redirect /app/* → app subdomain
+  if (pathname.startsWith("/app") && APP_DOMAIN) {
+    const appPath = pathname.replace(/^\/app/, "") || "/";
+    return redirectToSubdomain(request, APP_DOMAIN, appPath);
   }
 
-  if (!payload) {
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("redirect", pathname);
-    return NextResponse.redirect(loginUrl);
+  // Everything else on the main domain → app subdomain
+  if (APP_DOMAIN) {
+    return redirectToSubdomain(request, APP_DOMAIN, pathname);
   }
 
-  if (!payload.email_verified && !pathname.startsWith("/auth/verify")) {
-    return NextResponse.redirect(new URL("/auth/verify?pending=1", request.url));
-  }
-
-  if (!payload.onboarding_completed_at && pathname !== "/onboarding") {
-    return NextResponse.redirect(new URL("/onboarding", request.url));
-  }
-  if (payload.onboarding_completed_at && pathname === "/onboarding") {
-    return NextResponse.redirect(new URL("/", request.url));
-  }
-
-  if (payload.role === "member" && isMemberBlocked(pathname)) {
-    return NextResponse.redirect(new URL("/", request.url));
-  }
-
-  const response = NextResponse.next();
-  if (newAccess) {
-    attachTokenCookies(response, newAccess, newRefresh, ORG_COOKIES);
-  }
-  return response;
+  return NextResponse.next();
 }
 
 export const config = {

@@ -52,7 +52,7 @@ export async function handleAdminDomain(
   const auth = await authenticateAdmin(request);
 
   if (!auth.payload) {
-    return NextResponse.rewrite(new URL("/platform-admin/login", request.url));
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
   const response = NextResponse.rewrite(rewriteUrl);

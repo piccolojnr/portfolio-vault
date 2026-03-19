@@ -1,6 +1,6 @@
-import { IS_PRODUCTION } from "@/lib/env";
 import { RAG_BACKEND_URL } from "@/lib/network";
 import { NextRequest, NextResponse } from "next/server";
+import { setAuthCookies, extractRefreshToken } from "@/lib/cookies";
 
 export async function POST(req: NextRequest) {
   const refreshToken = req.cookies.get("refresh_token")?.value;
@@ -11,9 +11,7 @@ export async function POST(req: NextRequest) {
 
   const res = await fetch(`${RAG_BACKEND_URL}/api/v1/auth/refresh`, {
     method: "POST",
-    headers: {
-      Cookie: `refresh_token=${refreshToken}`,
-    },
+    headers: { Cookie: `refresh_token=${refreshToken}` },
   });
 
   if (!res.ok) {
@@ -23,31 +21,8 @@ export async function POST(req: NextRequest) {
 
   const data = await res.json();
   const { access_token } = data;
-
+  const refresh = extractRefreshToken(res);
   const response = NextResponse.json({ access_token });
-
-  response.cookies.set("access_token", access_token, {
-    httpOnly: false,
-    sameSite: "lax",
-    path: "/",
-    secure: IS_PRODUCTION,
-    maxAge: 60 * 60,
-  });
-
-  const setCookie = res.headers.get("set-cookie");
-  if (setCookie) {
-    const refreshMatch = setCookie.match(/refresh_token=([^;]+)/);
-    const maxAgeMatch = setCookie.match(/max-age=(\d+)/i);
-    if (refreshMatch) {
-      response.cookies.set("refresh_token", refreshMatch[1], {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        secure: IS_PRODUCTION,
-        maxAge: maxAgeMatch ? parseInt(maxAgeMatch[1]) : 60 * 60 * 24 * 30,
-      });
-    }
-  }
-
+  setAuthCookies(response, access_token, refresh?.token, refresh?.maxAge);
   return response;
 }

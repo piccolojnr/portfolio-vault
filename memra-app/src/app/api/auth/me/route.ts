@@ -1,11 +1,10 @@
-import { IS_PRODUCTION } from "@/lib/env";
 import { RAG_BACKEND_URL, serverFetch } from "@/lib/network";
 import { NextRequest, NextResponse } from "next/server";
+import { setAuthCookies } from "@/lib/cookies";
 
 export async function GET(req: NextRequest) {
   const res = await serverFetch(`${RAG_BACKEND_URL}/api/v1/auth/me`, req);
   const data = await res.json().catch(() => ({}));
-
 
   if (res.status === 404) {
     req.cookies.delete("access_token");
@@ -16,8 +15,6 @@ export async function GET(req: NextRequest) {
     return Response.json(data, { status: res.status });
   }
 
-  // Echo the access_token cookie back in the response body so the client
-  // can hydrate its in-memory token without an extra /refresh round-trip.
   const tokenFromCookie = req.cookies.get("access_token")?.value ?? null;
   return Response.json({ ...data, access_token: tokenFromCookie }, { status: res.status });
 }
@@ -35,17 +32,10 @@ export async function PATCH(req: NextRequest) {
     return Response.json(data, { status: res.status });
   }
 
-  // Set the fresh access_token as a cookie so middleware stays in sync
   const newToken: string | undefined = data.access_token;
   const response = NextResponse.json(data, { status: res.status });
   if (newToken) {
-    response.cookies.set("access_token", newToken, {
-      httpOnly: false,
-      secure: IS_PRODUCTION,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 15, // 15 minutes (matches JWT expiry)
-    });
+    setAuthCookies(response, newToken);
   }
   return response;
 }

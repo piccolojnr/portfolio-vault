@@ -16,6 +16,12 @@ export const ADMIN_COOKIES: CookieConfig = {
   refreshMaxAge: 60 * 60 * 24 * 7,
 };
 
+const baseOptions = {
+  sameSite: "lax" as const,
+  path: "/",
+  secure: IS_PRODUCTION,
+};
+
 export function attachTokenCookies(
   response: NextResponse,
   newAccess: string,
@@ -23,18 +29,14 @@ export function attachTokenCookies(
   config: CookieConfig,
 ): void {
   response.cookies.set(config.accessName, newAccess, {
+    ...baseOptions,
     httpOnly: false,
-    sameSite: "lax",
-    path: "/",
-    secure: IS_PRODUCTION,
     maxAge: config.accessMaxAge,
   });
   if (newRefresh) {
     response.cookies.set(config.refreshName, newRefresh, {
+      ...baseOptions,
       httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-      secure: IS_PRODUCTION,
       maxAge: config.refreshMaxAge,
     });
   }

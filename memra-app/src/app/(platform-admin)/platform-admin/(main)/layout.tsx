@@ -21,7 +21,6 @@ import {
   SidebarTrigger,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -46,13 +45,13 @@ const AdminContext = createContext<AdminUser | null>(null);
 export const useAdmin = () => useContext(AdminContext);
 
 const NAV_ITEMS = [
-  { href: "/platform-admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
-  { href: "/platform-admin/users", label: "Users", icon: Users },
-  { href: "/platform-admin/orgs", label: "Organisations", icon: Building2 },
-  { href: "/platform-admin/logs", label: "API Logs", icon: ScrollText },
-  { href: "/platform-admin/jobs", label: "Jobs", icon: Layers },
-  { href: "/platform-admin/settings", label: "Settings", icon: Settings },
-  { href: "/platform-admin/health", label: "System Health", icon: HeartPulse },
+  { href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { href: "/users", label: "Users", icon: Users },
+  { href: "/orgs", label: "Organisations", icon: Building2 },
+  { href: "/logs", label: "API Logs", icon: ScrollText },
+  { href: "/jobs", label: "Jobs", icon: Layers },
+  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/health", label: "System Health", icon: HeartPulse },
 ];
 
 export default function PlatformAdminLayout({
@@ -98,7 +97,7 @@ export default function PlatformAdminLayout({
         setAdmin(data);
 
         if (data.must_change_password && !pathname.endsWith("/change-password")) {
-          router.push("/platform-admin/change-password");
+          router.push("/change-password");
         }
       } catch {
         // ignore
@@ -114,15 +113,8 @@ export default function PlatformAdminLayout({
     await clearAdminTokens();
     document.cookie = "admin_access_token=; path=/; max-age=0";
     document.cookie = "admin_refresh_token=; path=/; max-age=0";
-    router.push("/platform-admin/login");
+    router.push("/login");
   };
-
-  if (
-    pathname === "/platform-admin/login" ||
-    pathname === "/platform-admin/change-password"
-  ) {
-    return <>{children}</>;
-  }
 
   if (loading) {
     return (
@@ -134,7 +126,7 @@ export default function PlatformAdminLayout({
 
   return (
     <AdminContext.Provider value={admin}>
-      <SidebarProvider className="h-svh overflow-hidden">
+      <SidebarProvider className="overflow-hidden">
         <Sidebar variant="sidebar" collapsible="icon">
           <SidebarHeader className="px-3 py-4">
             <span className="text-sm font-semibold tracking-wide text-sidebar-foreground group-data-[collapsible=icon]:hidden">
@@ -167,7 +159,6 @@ export default function PlatformAdminLayout({
               </SidebarGroupContent>
             </SidebarGroup>
           </SidebarContent>
-          <SidebarSeparator />
           <SidebarFooter>
             {admin && (
               <div className="mb-1 px-2 group-data-[collapsible=icon]:hidden">
@@ -197,7 +188,7 @@ export default function PlatformAdminLayout({
         <SidebarInset className="overflow-hidden">
           <header className="shrink-0 flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 border-b border-border bg-bg/90 backdrop-blur-md z-20">
             <SidebarTrigger className="shrink-0 text-muted-foreground hover:text-foreground" />
-            <Separator orientation="vertical" className="h-4 shrink-0" />
+            <Separator orientation="vertical" className="" />
             <span className="text-sm font-semibold tracking-tight text-foreground">
               Platform Admin
             </span>
