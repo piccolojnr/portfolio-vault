@@ -33,7 +33,8 @@ class UpdateSettingRequest(BaseModel):
 
 @router.get("")
 async def list_settings(session: DBSession, admin: Admin):
-    return await pss.get_all_masked(session)
+    settings = get_settings()
+    return await pss.get_all_masked(session, fallback_settings=settings)
 
 
 @router.put("/{key}")
@@ -73,7 +74,9 @@ async def reveal_secret(
     admin: Admin,
 ):
     settings = get_settings()
-    value = await pss.reveal_secret(session, key, settings.secret_key)
+    value = await pss.reveal_secret(
+        session, key, settings.secret_key, fallback_settings=settings
+    )
     if value is None:
         raise HTTPException(status_code=404, detail="Setting not found or empty")
 

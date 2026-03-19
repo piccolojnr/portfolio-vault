@@ -8,6 +8,7 @@ GET  /logs/summary  → aggregated by call_type and org
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Annotated
 from uuid import UUID
 
@@ -50,11 +51,11 @@ async def list_logs(
         conditions.append("a.call_type = ANY(:call_types)")
         params["call_types"] = call_type
     if date_from:
-        conditions.append("a.created_at >= :date_from::timestamptz")
-        params["date_from"] = date_from
+        conditions.append("a.created_at >= :date_from")
+        params["date_from"] = datetime.fromisoformat(date_from.replace("Z", "+00:00"))
     if date_to:
-        conditions.append("a.created_at <= :date_to::timestamptz")
-        params["date_to"] = date_to
+        conditions.append("a.created_at <= :date_to")
+        params["date_to"] = datetime.fromisoformat(date_to.replace("Z", "+00:00"))
 
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
@@ -109,11 +110,11 @@ async def logs_summary(
     params: dict = {}
 
     if date_from:
-        conditions.append("a.created_at >= :date_from::timestamptz")
-        params["date_from"] = date_from
+        conditions.append("a.created_at >= :date_from")
+        params["date_from"] = datetime.fromisoformat(date_from.replace("Z", "+00:00"))
     if date_to:
-        conditions.append("a.created_at <= :date_to::timestamptz")
-        params["date_to"] = date_to
+        conditions.append("a.created_at <= :date_to")
+        params["date_to"] = datetime.fromisoformat(date_to.replace("Z", "+00:00"))
 
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 

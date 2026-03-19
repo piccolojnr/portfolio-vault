@@ -152,81 +152,72 @@ export default function PlatformAdminDashboardPage() {
   const jobs = failedJobs.data?.jobs ?? [];
 
   return (
-    <div className="min-h-screen bg-[#0f0f0f] text-neutral-200 p-6">
-      <h1 className="text-lg font-medium text-neutral-200 mb-6">Dashboard</h1>
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-lg font-semibold text-foreground">Dashboard</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Platform overview and analytics
+        </p>
+      </div>
 
       {overview.isLoading ? (
-        <p className="text-neutral-500 text-sm">Loading...</p>
+        <div className="grid grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-24 animate-pulse rounded-lg bg-muted/20" />
+          ))}
+        </div>
       ) : (
         <div className="space-y-6">
           {/* Summary cards */}
-          <div className="grid grid-cols-4 gap-4">
-            <div className="bg-[#141414] border border-neutral-800 rounded-lg p-4">
-              <p className="text-[11px] text-neutral-500 uppercase tracking-wider mb-1">
-                Total Users
-              </p>
-              <p className="text-2xl font-mono text-neutral-200">
-                {overview.data?.total_users ?? 0}
-              </p>
-            </div>
-            <div className="bg-[#141414] border border-neutral-800 rounded-lg p-4">
-              <p className="text-[11px] text-neutral-500 uppercase tracking-wider mb-1">
-                Total Orgs
-              </p>
-              <p className="text-2xl font-mono text-neutral-200">
-                {overview.data?.total_orgs ?? 0}
-              </p>
-            </div>
-            <div className="bg-[#141414] border border-neutral-800 rounded-lg p-4">
-              <p className="text-[11px] text-neutral-500 uppercase tracking-wider mb-1">
-                API Cost Today ($)
-              </p>
-              <p className="text-2xl font-mono text-neutral-200">
-                {(overview.data?.total_cost_today ?? 0).toFixed(2)}
-              </p>
-            </div>
-            <div className="bg-[#141414] border border-neutral-800 rounded-lg p-4">
-              <p className="text-[11px] text-neutral-500 uppercase tracking-wider mb-1">
-                API Cost This Month ($)
-              </p>
-              <p className="text-2xl font-mono text-neutral-200">
-                {(overview.data?.total_cost_this_month ?? 0).toFixed(2)}
-              </p>
-            </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { label: "Total Users", value: overview.data?.total_users ?? 0 },
+              { label: "Total Orgs", value: overview.data?.total_orgs ?? 0 },
+              { label: "API Cost Today ($)", value: (overview.data?.total_cost_today ?? 0).toFixed(2) },
+              { label: "API Cost This Month ($)", value: (overview.data?.total_cost_this_month ?? 0).toFixed(2) },
+            ].map(({ label, value }) => (
+              <div key={label} className="rounded-lg border border-border bg-card p-4">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+                  {label}
+                </p>
+                <p className="text-2xl font-mono text-card-foreground">{value}</p>
+              </div>
+            ))}
           </div>
 
           {/* Charts */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-[#141414] border border-neutral-800 rounded-lg p-4">
-              <p className="text-[12px] text-neutral-400 mb-3">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="rounded-lg border border-border bg-card p-4">
+              <p className="text-sm text-muted-foreground mb-3">
                 Daily API calls last 30 days
               </p>
               <div className="h-[240px]">
                 {dailyByType.isLoading ? (
-                  <div className="flex h-full items-center justify-center text-neutral-500 text-[12px]">
+                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                     Loading...
                   </div>
                 ) : stackedData.length === 0 ? (
-                  <div className="flex h-full items-center justify-center text-neutral-500 text-[12px]">
+                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                     No data
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={stackedData} margin={{ top: 4, right: 4, left: 4, bottom: 4 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis
                         dataKey="date"
                         tickFormatter={formatDate}
-                        stroke="#52525b"
+                        stroke="hsl(var(--muted-foreground))"
                         tick={{ fontSize: 10 }}
                       />
-                      <YAxis stroke="#52525b" tick={{ fontSize: 10 }} />
+                      <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 10 }} />
                       <Tooltip
                         contentStyle={{
-                          backgroundColor: "#1a1a1a",
-                          border: "1px solid #27272a",
-                          borderRadius: 4,
+                          backgroundColor: "hsl(var(--card))",
+                          border: "1px solid hsl(var(--border))",
+                          borderRadius: 8,
                           fontSize: 11,
+                          color: "hsl(var(--card-foreground))",
                         }}
                         labelFormatter={(label: ReactNode) => formatDate(label as string)}
                       />
@@ -246,36 +237,37 @@ export default function PlatformAdminDashboardPage() {
               </div>
             </div>
 
-            <div className="bg-[#141414] border border-neutral-800 rounded-lg p-4">
-              <p className="text-[12px] text-neutral-400 mb-3">
+            <div className="rounded-lg border border-border bg-card p-4">
+              <p className="text-sm text-muted-foreground mb-3">
                 Daily cost last 30 days
               </p>
               <div className="h-[240px]">
                 {daily.isLoading ? (
-                  <div className="flex h-full items-center justify-center text-neutral-500 text-[12px]">
+                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                     Loading...
                   </div>
                 ) : !daily.data?.length ? (
-                  <div className="flex h-full items-center justify-center text-neutral-500 text-[12px]">
+                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                     No data
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={daily.data} margin={{ top: 4, right: 4, left: 4, bottom: 4 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis
                         dataKey="date"
                         tickFormatter={formatDate}
-                        stroke="#52525b"
+                        stroke="hsl(var(--muted-foreground))"
                         tick={{ fontSize: 10 }}
                       />
-                      <YAxis stroke="#52525b" tick={{ fontSize: 10 }} />
+                      <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 10 }} />
                       <Tooltip
                         contentStyle={{
-                          backgroundColor: "#1a1a1a",
-                          border: "1px solid #27272a",
-                          borderRadius: 4,
+                          backgroundColor: "hsl(var(--card))",
+                          border: "1px solid hsl(var(--border))",
+                          borderRadius: 8,
                           fontSize: 11,
+                          color: "hsl(var(--card-foreground))",
                         }}
                         labelFormatter={(label: ReactNode) => formatDate(label as string)}
                         formatter={(v: any) => [`$${v?.toFixed(2) ?? 0}`, "Cost"]}
@@ -296,30 +288,30 @@ export default function PlatformAdminDashboardPage() {
           </div>
 
           {/* Tables */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-[#141414] border border-neutral-800 rounded-lg p-4">
-              <p className="text-[12px] text-neutral-400 mb-3">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="rounded-lg border border-border bg-card p-4">
+              <p className="text-sm text-muted-foreground mb-3">
                 Top Orgs by Cost
               </p>
               <div className="overflow-x-auto">
                 {byOrg.isLoading ? (
-                  <p className="text-neutral-500 text-[12px]">Loading...</p>
+                  <p className="text-sm text-muted-foreground">Loading...</p>
                 ) : topOrgs.length === 0 ? (
-                  <p className="text-neutral-500 text-[12px]">No data</p>
+                  <p className="text-sm text-muted-foreground">No data</p>
                 ) : (
-                  <table className="w-full text-[12px] border-collapse">
+                  <table className="w-full text-xs border-collapse">
                     <thead>
-                      <tr className="border-b border-neutral-800">
-                        <th className="text-left py-2 pr-4 text-neutral-500 font-medium">
+                      <tr className="border-b border-border">
+                        <th className="text-left py-2 pr-4 text-muted-foreground font-medium">
                           Org Name
                         </th>
-                        <th className="text-left py-2 pr-4 text-neutral-500 font-medium">
+                        <th className="text-left py-2 pr-4 text-muted-foreground font-medium">
                           Plan
                         </th>
-                        <th className="text-right py-2 pr-4 text-neutral-500 font-medium">
+                        <th className="text-right py-2 pr-4 text-muted-foreground font-medium">
                           Cost ($)
                         </th>
-                        <th className="text-right py-2 text-neutral-500 font-medium">
+                        <th className="text-right py-2 text-muted-foreground font-medium">
                           Calls
                         </th>
                       </tr>
@@ -328,18 +320,16 @@ export default function PlatformAdminDashboardPage() {
                       {topOrgs.map((row) => (
                         <tr
                           key={row.org_id ?? row.org_name ?? "unknown"}
-                          className="border-b border-neutral-800/50"
+                          className="border-b border-border/50"
                         >
-                          <td className="py-2 pr-4 text-neutral-200">
-                            {row.org_name ?? "—"}
-                          </td>
-                          <td className="py-2 pr-4 text-neutral-400 font-mono">
+                          <td className="py-2 pr-4">{row.org_name ?? "—"}</td>
+                          <td className="py-2 pr-4 text-muted-foreground font-mono">
                             {row.plan ?? "—"}
                           </td>
-                          <td className="py-2 pr-4 text-right font-mono text-neutral-200">
+                          <td className="py-2 pr-4 text-right font-mono">
                             {row.cost_usd.toFixed(2)}
                           </td>
-                          <td className="py-2 text-right font-mono text-neutral-400">
+                          <td className="py-2 text-right font-mono text-muted-foreground">
                             {row.calls}
                           </td>
                         </tr>
@@ -350,29 +340,29 @@ export default function PlatformAdminDashboardPage() {
               </div>
             </div>
 
-            <div className="bg-[#141414] border border-neutral-800 rounded-lg p-4">
-              <p className="text-[12px] text-neutral-400 mb-3">
+            <div className="rounded-lg border border-border bg-card p-4">
+              <p className="text-sm text-muted-foreground mb-3">
                 Recent Failed Jobs
               </p>
               <div className="overflow-x-auto">
                 {failedJobs.isLoading ? (
-                  <p className="text-neutral-500 text-[12px]">Loading...</p>
+                  <p className="text-sm text-muted-foreground">Loading...</p>
                 ) : jobs.length === 0 ? (
-                  <p className="text-neutral-500 text-[12px]">No failed jobs</p>
+                  <p className="text-sm text-muted-foreground">No failed jobs</p>
                 ) : (
-                  <table className="w-full text-[12px] border-collapse">
+                  <table className="w-full text-xs border-collapse">
                     <thead>
-                      <tr className="border-b border-neutral-800">
-                        <th className="text-left py-2 pr-4 text-neutral-500 font-medium">
+                      <tr className="border-b border-border">
+                        <th className="text-left py-2 pr-4 text-muted-foreground font-medium">
                           Type
                         </th>
-                        <th className="text-left py-2 pr-4 text-neutral-500 font-medium">
+                        <th className="text-left py-2 pr-4 text-muted-foreground font-medium">
                           Org
                         </th>
-                        <th className="text-left py-2 pr-4 text-neutral-500 font-medium">
+                        <th className="text-left py-2 pr-4 text-muted-foreground font-medium">
                           Error
                         </th>
-                        <th className="text-left py-2 text-neutral-500 font-medium">
+                        <th className="text-left py-2 text-muted-foreground font-medium">
                           Created
                         </th>
                       </tr>
@@ -381,18 +371,16 @@ export default function PlatformAdminDashboardPage() {
                       {jobs.map((job) => (
                         <tr
                           key={job.id}
-                          className="border-b border-neutral-800/50"
+                          className="border-b border-border/50"
                         >
-                          <td className="py-2 pr-4 text-neutral-200 font-mono">
-                            {job.type}
-                          </td>
-                          <td className="py-2 pr-4 text-neutral-400">
+                          <td className="py-2 pr-4 font-mono">{job.type}</td>
+                          <td className="py-2 pr-4 text-muted-foreground">
                             {job.org_name ?? "—"}
                           </td>
-                          <td className="py-2 pr-4 text-neutral-400 max-w-[140px] truncate" title={job.error ?? undefined}>
+                          <td className="py-2 pr-4 text-muted-foreground max-w-[140px] truncate" title={job.error ?? undefined}>
                             {truncate(job.error ?? "—", 24)}
                           </td>
-                          <td className="py-2 text-neutral-500 font-mono text-[11px]">
+                          <td className="py-2 text-muted-foreground font-mono text-[11px]">
                             {job.created_at
                               ? new Date(job.created_at).toLocaleString()
                               : "—"}

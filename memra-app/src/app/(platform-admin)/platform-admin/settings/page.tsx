@@ -6,6 +6,7 @@ import { adminFetch } from "@/lib/platform-admin/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -29,6 +30,7 @@ interface PlatformSetting {
   description: string;
   updated_at: string | null;
   has_value: boolean;
+  source?: "database" | "environment" | "none";
 }
 
 interface ModelConfig {
@@ -94,79 +96,93 @@ function SettingRow({ s }: { s: PlatformSetting }) {
     setEditing(true);
   };
 
+  const sourceBadge = s.source === "environment" ? (
+    <Badge variant="outline" className="text-[9px] ml-1.5">env</Badge>
+  ) : s.source === "database" ? (
+    <Badge variant="secondary" className="text-[9px] ml-1.5">db</Badge>
+  ) : null;
+
   return (
-    <div className="flex items-start gap-4 border-b border-neutral-800 py-3 last:border-b-0">
-      <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-medium text-neutral-200">{s.key}</p>
-        {s.description && (
-          <p className="text-[11px] text-neutral-500 mt-0.5">{s.description}</p>
-        )}
-        <div className="mt-2">
-          {editing ? (
-            <Input
-              type={s.is_secret ? "password" : "text"}
-              value={editValue}
-              onChange={(e) => setEditValue(e.target.value)}
-              placeholder={s.is_secret && s.has_value ? "••••••••" : ""}
-              className="h-7 text-[12px] bg-neutral-900 border-neutral-700 max-w-md"
-            />
-          ) : (
-            <span
-              className={`text-[12px] font-mono ${
-                revealedValue !== null ? "text-amber-400" : "text-neutral-400"
-              }`}
-            >
-              {displayValue || "—"}
-            </span>
+    <div className="rounded-lg border border-border p-4 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-medium text-foreground">{s.key}</p>
+          {sourceBadge}
+          {s.is_secret && (
+            <Badge variant="outline" className="text-[9px] text-amber-400 border-amber-400/30">
+              secret
+            </Badge>
           )}
         </div>
-        <p className="text-[10px] text-neutral-600 mt-1">
-          Last updated: {formatDaysAgo(s.updated_at)}
-        </p>
-      </div>
-      <div className="flex shrink-0 items-center gap-1.5">
-        {editing ? (
-          <>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setEditing(false)}
-              className="h-7 text-[11px] border-neutral-700"
-            >
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => saveMutation.mutate(editValue)}
-              disabled={saveMutation.isPending}
-              className="h-7 text-[11px]"
-            >
-              {saveMutation.isPending ? "Saving..." : "Save"}
-            </Button>
-          </>
-        ) : (
-          <>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={startEditing}
-              className="h-7 text-[11px] text-neutral-400 hover:text-neutral-200"
-            >
-              Edit
-            </Button>
-            {s.is_secret && s.has_value && (
+        <div className="flex shrink-0 items-center gap-1.5">
+          {editing ? (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setEditing(false)}
+                className="h-7 text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => saveMutation.mutate(editValue)}
+                disabled={saveMutation.isPending}
+                className="h-7 text-xs"
+              >
+                {saveMutation.isPending ? "Saving..." : "Save"}
+              </Button>
+            </>
+          ) : (
+            <>
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={reveal}
-                className="h-7 text-[11px] text-neutral-400 hover:text-neutral-200"
+                onClick={startEditing}
+                className="h-7 text-xs"
               >
-                Reveal
+                Edit
               </Button>
-            )}
-          </>
+              {s.is_secret && s.has_value && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={reveal}
+                  className="h-7 text-xs"
+                >
+                  Reveal
+                </Button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+      {s.description && (
+        <p className="text-xs text-muted-foreground">{s.description}</p>
+      )}
+      <div>
+        {editing ? (
+          <Input
+            type={s.is_secret ? "password" : "text"}
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            placeholder={s.is_secret && s.has_value ? "••••••••" : ""}
+            className="h-8 text-sm max-w-md"
+          />
+        ) : (
+          <span
+            className={`text-sm font-mono ${
+              revealedValue !== null ? "text-amber-400" : "text-muted-foreground"
+            }`}
+          >
+            {displayValue || "—"}
+          </span>
         )}
       </div>
+      <p className="text-[10px] text-muted-foreground/60">
+        Last updated: {formatDaysAgo(s.updated_at)}
+      </p>
     </div>
   );
 }
@@ -191,21 +207,25 @@ function ModelRow({ m }: { m: ModelConfig }) {
   });
 
   return (
-    <tr className="border-b border-neutral-800/50 last:border-b-0">
-      <td className="py-2 pr-4 text-[12px] text-neutral-200">{m.model_name}</td>
-      <td className="py-2 pr-4 text-[12px] text-neutral-400 font-mono">
-        {m.provider}
-      </td>
-      <td className="py-2 pr-4 text-[12px] text-neutral-400">{m.model_type}</td>
-      <td className="py-2 pr-4">
+    <div className="rounded-lg border border-border p-4 flex items-center justify-between gap-4">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-medium">{m.model_name}</p>
+          <Badge variant="outline" className="text-[10px] font-mono">
+            {m.provider}
+          </Badge>
+          <Badge variant="secondary" className="text-[10px]">
+            {m.model_type}
+          </Badge>
+        </div>
+        <p className="text-xs text-muted-foreground font-mono mt-0.5">{m.model_id}</p>
+      </div>
+      <div className="flex items-center gap-3 shrink-0">
         <Select
           value={m.min_plan}
           onValueChange={(v) => updateMutation.mutate({ min_plan: v ?? undefined })}
         >
-          <SelectTrigger
-            className="h-7 min-w-[100px] text-[11px] border-neutral-700 bg-neutral-900"
-            size="sm"
-          >
+          <SelectTrigger className="h-7 w-24 text-xs" size="sm">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -214,15 +234,13 @@ function ModelRow({ m }: { m: ModelConfig }) {
             <SelectItem value="enterprise">enterprise</SelectItem>
           </SelectContent>
         </Select>
-      </td>
-      <td className="py-2">
         <Switch
           checked={m.enabled}
           onCheckedChange={(v) => updateMutation.mutate({ enabled: v })}
           size="sm"
         />
-      </td>
-    </tr>
+      </div>
+    </div>
   );
 }
 
@@ -278,204 +296,173 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f0f0f] text-neutral-200 p-6">
-      <h1 className="text-lg font-medium text-neutral-200 mb-6">Settings</h1>
+    <div className="p-6 space-y-8">
+      <div>
+        <h1 className="text-lg font-semibold text-foreground">Settings</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Platform configuration, API keys, and model management
+        </p>
+      </div>
 
-      <div className="space-y-6">
-        {/* API Keys */}
-        <div className="bg-[#141414] border border-neutral-800 rounded-lg p-4">
-          <h2 className="text-[13px] font-medium text-neutral-300 mb-3">
-            API Keys
-          </h2>
-          {settingsQuery.isLoading ? (
-            <p className="text-neutral-500 text-[12px]">Loading...</p>
-          ) : !settingsQuery.data?.length ? (
-            <p className="text-neutral-500 text-[12px]">No settings</p>
-          ) : (
-            <div className="divide-y-0">
-              {settingsQuery.data.map((s) => (
-                <SettingRow key={s.key} s={s} />
-              ))}
-            </div>
-          )}
-        </div>
+      {/* Platform Settings */}
+      <div className="space-y-3">
+        <h2 className="text-sm font-medium text-foreground">Platform Settings</h2>
+        {settingsQuery.isLoading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-24 animate-pulse rounded-lg bg-muted/20" />
+            ))}
+          </div>
+        ) : !settingsQuery.data?.length ? (
+          <p className="text-sm text-muted-foreground">No settings configured</p>
+        ) : (
+          <div className="space-y-3">
+            {settingsQuery.data.map((s) => (
+              <SettingRow key={s.key} s={s} />
+            ))}
+          </div>
+        )}
+      </div>
 
-        {/* Model Configuration */}
-        <div className="bg-[#141414] border border-neutral-800 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-[13px] font-medium text-neutral-300">
-              Model Configuration
-            </h2>
-            <Dialog open={addOpen} onOpenChange={setAddOpen}>
-              <DialogTrigger render={         <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-[11px] border-neutral-700"
-                >
-                  Add Model
-                </Button>} />
-       
-              <DialogContent className="bg-[#141414] border-neutral-800 text-neutral-200 max-w-sm">
-                <DialogHeader>
-                  <DialogTitle className="text-neutral-200">
-                    Add Model
-                  </DialogTitle>
-                </DialogHeader>
-                <div className="grid gap-3 py-2">
-                  <div>
-                    <label className="text-[11px] text-neutral-500 block mb-1">
-                      Model ID
-                    </label>
-                    <Input
-                      value={newModel.model_id}
-                      onChange={(e) =>
-                        setNewModel((p) => ({ ...p, model_id: e.target.value }))
-                      }
-                      placeholder="e.g. gpt-4"
-                      className="h-7 text-[12px] bg-neutral-900 border-neutral-700"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] text-neutral-500 block mb-1">
-                      Model Name
-                    </label>
-                    <Input
-                      value={newModel.model_name}
-                      onChange={(e) =>
-                        setNewModel((p) => ({ ...p, model_name: e.target.value }))
-                      }
-                      placeholder="e.g. GPT-4"
-                      className="h-7 text-[12px] bg-neutral-900 border-neutral-700"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] text-neutral-500 block mb-1">
-                      Model Type
-                    </label>
-                    <Select
-                      value={newModel.model_type}
-                      onValueChange={(v) =>
-                        setNewModel((p) => ({ ...p, model_type: v ?? "" }))
-                      }
-                    >
-                      <SelectTrigger
-                        className="h-7 text-[12px] border-neutral-700 bg-neutral-900"
-                        size="sm"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="chat">chat</SelectItem>
-                        <SelectItem value="embed">embed</SelectItem>
-                        <SelectItem value="classify">classify</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <label className="text-[11px] text-neutral-500 block mb-1">
-                      Provider
-                    </label>
-                    <Select
-                      value={newModel.provider}
-                      onValueChange={(v) =>
-                        setNewModel((p) => ({ ...p, provider: v ?? "" }))
-                      }
-                    >
-                      <SelectTrigger
-                        className="h-7 text-[12px] border-neutral-700 bg-neutral-900"
-                        size="sm"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="anthropic">anthropic</SelectItem>
-                        <SelectItem value="openai">openai</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <label className="text-[11px] text-neutral-500 block mb-1">
-                      Min Plan
-                    </label>
-                    <Select
-                      value={newModel.min_plan}
-                      onValueChange={(v) =>
-                        setNewModel((p) => ({ ...p, min_plan: v ?? "free" }))
-                      }
-                    >
-                      <SelectTrigger
-                        className="h-7 text-[12px] border-neutral-700 bg-neutral-900"
-                        size="sm"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="free">free</SelectItem>
-                        <SelectItem value="pro">pro</SelectItem>
-                        <SelectItem value="enterprise">enterprise</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+      {/* Model Configuration */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-medium text-foreground">Model Configuration</h2>
+          <Dialog open={addOpen} onOpenChange={setAddOpen}>
+            <DialogTrigger render={
+              <Button size="sm" variant="outline" className="h-8 text-xs">
+                Add Model
+              </Button>
+            } />
+            <DialogContent className="sm:max-w-sm">
+              <DialogHeader>
+                <DialogTitle>Add Model</DialogTitle>
+              </DialogHeader>
+              <div className="grid gap-3 py-2">
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">
+                    Model ID
+                  </label>
+                  <Input
+                    value={newModel.model_id}
+                    onChange={(e) =>
+                      setNewModel((p) => ({ ...p, model_id: e.target.value }))
+                    }
+                    placeholder="e.g. gpt-4"
+                    className="h-8 text-sm"
+                  />
                 </div>
-                <DialogFooter className="border-t border-neutral-800 pt-4">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setAddOpen(false)}
-                    className="text-neutral-400"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleAddModel}
-                    disabled={
-                      createMutation.isPending ||
-                      !newModel.model_id.trim() ||
-                      !newModel.model_name.trim()
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">
+                    Model Name
+                  </label>
+                  <Input
+                    value={newModel.model_name}
+                    onChange={(e) =>
+                      setNewModel((p) => ({ ...p, model_name: e.target.value }))
+                    }
+                    placeholder="e.g. GPT-4"
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">
+                    Model Type
+                  </label>
+                  <Select
+                    value={newModel.model_type}
+                    onValueChange={(v) =>
+                      setNewModel((p) => ({ ...p, model_type: v ?? "" }))
                     }
                   >
-                    {createMutation.isPending ? "Adding..." : "Add"}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
-          {modelsQuery.isLoading ? (
-            <p className="text-neutral-500 text-[12px]">Loading...</p>
-          ) : !modelsQuery.data?.length ? (
-            <p className="text-neutral-500 text-[12px]">No models</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-[12px] border-collapse">
-                <thead>
-                  <tr className="border-b border-neutral-800">
-                    <th className="text-left py-2 pr-4 text-neutral-500 font-medium">
-                      Model Name
-                    </th>
-                    <th className="text-left py-2 pr-4 text-neutral-500 font-medium">
-                      Provider
-                    </th>
-                    <th className="text-left py-2 pr-4 text-neutral-500 font-medium">
-                      Type
-                    </th>
-                    <th className="text-left py-2 pr-4 text-neutral-500 font-medium">
-                      Min Plan
-                    </th>
-                    <th className="text-left py-2 text-neutral-500 font-medium">
-                      Enabled
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {modelsQuery.data.map((m) => (
-                    <ModelRow key={m.model_id} m={m} />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                    <SelectTrigger className="h-8 text-sm" size="sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="chat">chat</SelectItem>
+                      <SelectItem value="embed">embed</SelectItem>
+                      <SelectItem value="classify">classify</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">
+                    Provider
+                  </label>
+                  <Select
+                    value={newModel.provider}
+                    onValueChange={(v) =>
+                      setNewModel((p) => ({ ...p, provider: v ?? "" }))
+                    }
+                  >
+                    <SelectTrigger className="h-8 text-sm" size="sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="anthropic">anthropic</SelectItem>
+                      <SelectItem value="openai">openai</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">
+                    Min Plan
+                  </label>
+                  <Select
+                    value={newModel.min_plan}
+                    onValueChange={(v) =>
+                      setNewModel((p) => ({ ...p, min_plan: v ?? "free" }))
+                    }
+                  >
+                    <SelectTrigger className="h-8 text-sm" size="sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="free">free</SelectItem>
+                      <SelectItem value="pro">pro</SelectItem>
+                      <SelectItem value="enterprise">enterprise</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setAddOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleAddModel}
+                  disabled={
+                    createMutation.isPending ||
+                    !newModel.model_id.trim() ||
+                    !newModel.model_name.trim()
+                  }
+                >
+                  {createMutation.isPending ? "Adding..." : "Add"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
+        {modelsQuery.isLoading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-20 animate-pulse rounded-lg bg-muted/20" />
+            ))}
+          </div>
+        ) : !modelsQuery.data?.length ? (
+          <p className="text-sm text-muted-foreground">No models configured</p>
+        ) : (
+          <div className="space-y-3">
+            {modelsQuery.data.map((m) => (
+              <ModelRow key={m.model_id} m={m} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

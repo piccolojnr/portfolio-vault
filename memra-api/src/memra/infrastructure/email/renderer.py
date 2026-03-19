@@ -54,12 +54,24 @@ class EmailRenderer:
             autoescape=select_autoescape(["html"]),
         )
 
+    @staticmethod
+    def _global_defaults() -> dict:
+        """Settings-derived defaults injected into every template render."""
+        from memra.app.core.config import get_settings
+
+        settings = get_settings()
+        return {
+            "app_name": settings.app_name,
+            "app_url": settings.app_url,
+        }
+
     def render(self, template_name: str, context: dict) -> EmailMessage:
+        merged = {**self._global_defaults(), **context}
         template = self._env.get_template(template_name)
-        html = template.render(**context)
-        subject = _extract_subject(html, context)
+        html = template.render(**merged)
+        subject = _extract_subject(html, merged)
         text = _html_to_text(html)
-        to = context.get("to", "")
+        to = merged.get("to", "")
         return EmailMessage(to=to, subject=subject, html=html, text=text)
 
 

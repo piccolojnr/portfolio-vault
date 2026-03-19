@@ -116,33 +116,62 @@ async def set_value(
     invalidate_cache()
 
 
-async def get_all_masked(session: AsyncSession) -> list[dict]:
-    """Return all settings with secrets masked (for admin UI)."""
+async def get_all_masked(session: AsyncSession, *, fallback_settings=None) -> list[dict]:
+    """Return all settings with secrets masked (for admin UI).
+
+    When *fallback_settings* (a ``Settings`` instance) is provided, the
+    response will also reflect env-var values for keys that have no DB
+    entry, and include a ``source`` field ("database", "environment", or
+    "none") so the admin UI can indicate where the value comes from.
+    """
     rows = (await session.execute(
         select(PlatformSetting).order_by(PlatformSetting.key)
     )).scalars().all()
 
     result = []
     for row in rows:
+        db_has_value = bool(row.value)
+
+        env_value = None
+        if fallback_settings and row.key in _KEY_TO_ENV:
+            env_value = getattr(fallback_settings, _KEY_TO_ENV[row.key], None) or None
+
+        has_value = db_has_value or bool(env_value)
+        source = "database" if db_has_value else ("environment" if env_value else "none")
+
+        if row.is_secret and has_value:
+            display_value = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
+        elif db_has_value:
+            display_value = row.value
+        elif env_value:
+            display_value = str(env_value)
+        else:
+            display_value = ""
+
         result.append({
             "key": row.key,
-            "value": "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" if (row.is_secret and row.value) else (row.value or ""),
+            "value": display_value,
             "is_secret": row.is_secret,
             "description": row.description or "",
             "updated_at": row.updated_at.isoformat() if row.updated_at else None,
-            "has_value": bool(row.value),
+            "has_value": has_value,
+            "source": source,
         })
     return result
 
 
-async def reveal_secret(session: AsyncSession, key: str, secret_key: str) -> str | None:
+async def reveal_secret(
+    session: AsyncSession, key: str, secret_key: str, *, fallback_settings=None
+) -> str | None:
     """Decrypt and return a secret value. Caller must log this action."""
     row = await session.get(PlatformSetting, key)
-    if row is None or not row.value:
-        return None
-    if row.is_secret:
-        return decrypt(row.value, secret_key)
-    return row.value
+    if row is not None and row.value:
+        if row.is_secret:
+            return decrypt(row.value, secret_key)
+        return row.value
+    if fallback_settings and key in _KEY_TO_ENV:
+        return getattr(fallback_settings, _KEY_TO_ENV[key], None) or None
+    return None
 
 
 async def build_settings_overrides(session: AsyncSession, secret_key: str) -> dict:

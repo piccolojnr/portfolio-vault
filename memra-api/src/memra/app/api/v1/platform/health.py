@@ -60,25 +60,39 @@ async def _check_qdrant() -> tuple[str, float]:
 
 
 async def _check_worker(session: AsyncSession) -> tuple[str, float]:
-    """Worker is ok if a job was picked up in the last 5 minutes."""
+    """Worker is ok if it recently picked up a job, or if no jobs are waiting."""
     start = time.time()
     try:
         result = await session.execute(
-            text("SELECT MAX(started_at) AS last FROM jobs WHERE started_at IS NOT NULL")
+            text(
+                "SELECT MAX(started_at) AS last_started,"
+                " COUNT(*) FILTER (WHERE status = 'pending') AS pending"
+                " FROM jobs"
+            )
         )
         row = result.mappings().first()
         elapsed = round((time.time() - start) * 1000, 1)
-        if row is None or row["last"] is None:
-            return "offline", elapsed
-        from datetime import datetime, timezone
-        last = row["last"]
-        if last.tzinfo is None:
-            last = last.replace(tzinfo=timezone.utc)
-        age = (datetime.now(timezone.utc) - last).total_seconds()
-        if age <= 300:
+        if row is None:
             return "ok", elapsed
-        elif age <= 600:
-            return "stale", elapsed
+
+        pending = row["pending"] or 0
+        last = row["last_started"]
+
+        if last is not None:
+            from datetime import datetime, timezone
+            if last.tzinfo is None:
+                last = last.replace(tzinfo=timezone.utc)
+            age = (datetime.now(timezone.utc) - last).total_seconds()
+            if age <= 300:
+                return "ok", elapsed
+            if pending == 0:
+                return "ok", elapsed
+            if age <= 600:
+                return "stale", elapsed
+            return "offline", elapsed
+
+        if pending == 0:
+            return "ok", elapsed
         return "offline", elapsed
     except Exception:
         return "error", round((time.time() - start) * 1000, 1)
