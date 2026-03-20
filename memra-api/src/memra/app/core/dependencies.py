@@ -8,14 +8,14 @@ Centralises all Depends() helpers so routers stay lean.
 from fastapi import Depends, HTTPException, Request
 from memra.app.core.config import Settings, get_settings
 from memra.app.core.db import get_db_conn
-from memra.infrastructure.vector.qdrant import get_qdrant_client
+from memra.infrastructure.vector import get_vector_client
 
 __all__ = ["get_client", "get_db_conn", "get_live_settings", "get_current_user", "require_role"]
 
 
 def get_client(settings: Settings = Depends(get_settings)):
-    """Return a Qdrant client using injected settings."""
-    return get_qdrant_client(settings)
+    """Return configured vector client (qdrant/chroma) using settings."""
+    return get_vector_client(settings)
 
 
 async def get_live_settings(request: Request) -> Settings:

@@ -7,7 +7,7 @@ Central integration point for LightRAG graph-augmented retrieval.
 Maintains an in-memory registry of LightRAG instances keyed by corpus_id.
 All instances share the same storage configuration:
 
-  - QdrantVectorDBStorage   vectors    (cloud Qdrant from .env)
+  - QdrantVectorDBStorage / NanoVectorDBStorage vectors
   - PGKVStorage             documents  (POSTGRES_ENABLE_VECTOR=false — no pgvector)
   - Neo4JStorage            graph      (Neo4j Aura — external, persistent)
 
@@ -113,10 +113,15 @@ def _apply_storage_env(settings) -> None:
     pool-initialisation time, so per-instance credentials would require a
     different mechanism (e.g., subclassing the storage backends).
     """
-    if settings.qdrant_url:
-        os.environ["QDRANT_URL"] = settings.qdrant_url
-    if settings.qdrant_api_key:
-        os.environ["QDRANT_API_KEY"] = settings.qdrant_api_key
+    vector_provider = (getattr(settings, "vector_provider", "qdrant") or "qdrant").lower()
+    # LightRAG vector storage selection:
+    # - qdrant -> QdrantVectorDBStorage (reads QDRANT_* env vars)
+    # - nano/chroma -> NanoVectorDBStorage (local file-based, no QDRANT_* required)
+    if vector_provider == "qdrant":
+        if settings.qdrant_url:
+            os.environ["QDRANT_URL"] = settings.qdrant_url
+        if settings.qdrant_api_key:
+            os.environ["QDRANT_API_KEY"] = settings.qdrant_api_key
 
     if settings.database_url:
         for k, v in _parse_db_url(settings.database_url).items():
@@ -263,6 +268,20 @@ def _resolve_graph_storage(settings) -> str:
     return "NetworkXStorage"
 
 
+def _resolve_vector_storage(settings) -> str:
+    """Choose LightRAG vector storage backend.
+
+    VECTOR_PROVIDER values:
+      - qdrant: uses QdrantVectorDBStorage
+      - nano:   uses NanoVectorDBStorage
+      - chroma: alias to nano for backward compatibility in local dev
+    """
+    provider = (getattr(settings, "vector_provider", "qdrant") or "qdrant").lower()
+    if provider in {"nano", "chroma"}:
+        return "NanoVectorDBStorage"
+    return "QdrantVectorDBStorage"
+
+
 async def get_or_create_instance(corpus_id: str, settings, *, org_id=None) -> "LightRAG":
     """Return the cached LightRAG instance for corpus_id, creating it if needed.
 
@@ -294,12 +313,13 @@ async def get_or_create_instance(corpus_id: str, settings, *, org_id=None) -> "L
         )
 
         graph_backend = _resolve_graph_storage(settings)
+        vector_backend = _resolve_vector_storage(settings)
 
         rag = LightRAG(
             working_dir=working_dir,
             workspace=corpus_id,
             kv_storage="PGKVStorage",
-            vector_storage="QdrantVectorDBStorage",
+            vector_storage=vector_backend,
             graph_storage=graph_backend,
             llm_model_func=_make_llm_func(settings),
             llm_model_name=llm_name,

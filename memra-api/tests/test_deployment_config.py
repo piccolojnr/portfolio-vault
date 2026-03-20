@@ -101,6 +101,24 @@ class TestLightragStorageEnv:
         s = make_test_settings(neo4j_uri="")
         assert _resolve_graph_storage(s) == "NetworkXStorage"
 
+    def test_resolve_vector_storage_qdrant(self):
+        from memra.domain.services.lightrag_service import _resolve_vector_storage
+
+        s = make_test_settings(vector_provider="qdrant")
+        assert _resolve_vector_storage(s) == "QdrantVectorDBStorage"
+
+    def test_resolve_vector_storage_nano(self):
+        from memra.domain.services.lightrag_service import _resolve_vector_storage
+
+        s = make_test_settings(vector_provider="nano")
+        assert _resolve_vector_storage(s) == "NanoVectorDBStorage"
+
+    def test_resolve_vector_storage_chroma_alias(self):
+        from memra.domain.services.lightrag_service import _resolve_vector_storage
+
+        s = make_test_settings(vector_provider="chroma")
+        assert _resolve_vector_storage(s) == "NanoVectorDBStorage"
+
 
 class TestLightragParseDbUrl:
     def test_standard_url(self):
@@ -151,7 +169,7 @@ class TestApplyStorageEnv:
 
         try:
             _apply_storage_env(s)
-            assert os.environ.get("NEO4J_URI") == "neo4j+s://test.neo4j.io"
+            assert os.environ.get("NEO4J_URI") == "neo4j+ssc://test.neo4j.io"
             assert os.environ.get("NEO4J_USERNAME") == "neo4j"
             assert os.environ.get("NEO4J_PASSWORD") == "testpass"
         finally:

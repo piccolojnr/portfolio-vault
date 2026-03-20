@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
-
 from tests.conftest import make_test_settings
 
 
@@ -89,3 +85,14 @@ class TestSettings:
     def test_cors_origins_custom(self):
         s = make_test_settings(cors_origins="https://a.com,https://b.com")
         assert s.allowed_origins == ["https://a.com", "https://b.com"]
+
+    def test_local_dev_ephemeral_false_uses_project_data_dir(self):
+        s = make_test_settings(local_dev_ephemeral=False, environment="development")
+        assert s.data_dir.name == "data"
+
+    def test_local_dev_ephemeral_true_uses_temp_data_dir(self):
+        s = make_test_settings(local_dev_ephemeral=True, environment="development")
+        assert s.data_dir.name == "memra-local-dev"
+        assert s.chunks_file.parent == s.data_dir
+        assert s.qdrant_local_path.parent == s.data_dir
+        assert s.chroma_local_path.parent == s.data_dir

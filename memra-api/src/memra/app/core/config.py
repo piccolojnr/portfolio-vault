@@ -8,6 +8,7 @@ Use get_settings() (cached) for dependency injection via FastAPI Depends().
 
 from functools import lru_cache
 from pathlib import Path
+from tempfile import gettempdir
 from pydantic import computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -27,6 +28,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     qdrant_url: str = ""
     qdrant_api_key: str = ""
+    vector_provider: str = "qdrant"  # "qdrant" | "nano" | "chroma"(alias->nano in LightRAG)
     database_url: str = ""
 
     # Secret key for encrypting sensitive DB settings (32+ char recommended)
@@ -34,6 +36,7 @@ class Settings(BaseSettings):
 
     # Optional override
     demo_mode: str = ""
+    local_dev_ephemeral: bool = False
 
     # Model selection — overridable from DB settings at runtime
     embedding_model: str = "text-embedding-3-small"
@@ -130,17 +133,34 @@ class Settings(BaseSettings):
     @property
     def qdrant_local_path(self) -> Path:
         """Local Qdrant storage path used when qdrant_url is not set."""
+        if self.local_dev_ephemeral and not self.is_production:
+            return self.data_dir / "qdrant_local"
         return _RAG_DIR / "data" / "qdrant_local"
 
     @computed_field  # type: ignore[prop-decorator]
     @property
+    def chroma_local_path(self) -> Path:
+        """Local Chroma storage path used for vector_provider=chroma.
+
+        Keep this ephemeral in OS temp to match local-dev semantics used by
+        other transient LightRAG files.
+        """
+        if self.local_dev_ephemeral and not self.is_production:
+            return self.data_dir / "chroma_local"
+        return Path(gettempdir()) / "memra-chroma-local"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
     def chunks_file(self) -> Path:
-        return _RAG_DIR / "data" / "chunks.json"
+        return self.data_dir / "chunks.json"
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def data_dir(self) -> Path:
-        path = _RAG_DIR / "data"
+        if self.local_dev_ephemeral and not self.is_production:
+            path = Path(gettempdir()) / "memra-local-dev"
+        else:
+            path = _RAG_DIR / "data"
         path.mkdir(exist_ok=True)
         return path
 

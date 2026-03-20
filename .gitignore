@@ -72,3 +72,4 @@ generate.py
 rag/data/
 memra-api/data/
 memra-api/.env copy
+memra-api/.env.production

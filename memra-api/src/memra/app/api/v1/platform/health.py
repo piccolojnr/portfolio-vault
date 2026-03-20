@@ -68,8 +68,9 @@ async def _check_qdrant() -> tuple[str, float, str | None]:
     try:
         from memra.app.core.config import get_settings
         settings = get_settings()
-        from memra.infrastructure.vector.qdrant import get_qdrant_client
-        client = get_qdrant_client(settings)
+        from memra.infrastructure.vector import get_vector_client
+
+        client = get_vector_client(settings)
         errors: list[str] = []
         resolved_collections = _resolve_lightrag_qdrant_collections(client)
         for name in _LIGHTRAG_QDRANT_COLLECTIONS:
