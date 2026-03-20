@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -14,6 +15,15 @@ from memra.domain.services.paystack_service import (
     PaystackTransactionInitResult,
 )
 from tests.conftest import make_mock_session, make_test_settings
+
+
+def _run(coro):
+    """Run an async coroutine synchronously — works without pytest-asyncio."""
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
 
 
 class TestWebhookSignatureVerification:
@@ -88,8 +98,7 @@ class TestWebhookSignatureVerification:
 class TestPaystackServiceGetSecret:
     """Test that _get_secret fetches from platform_settings_service."""
 
-    @pytest.mark.asyncio
-    async def test_missing_secret_raises(self):
+    def test_missing_secret_raises(self):
         session = make_mock_session()
         settings = make_test_settings(paystack_secret_key="")
 
@@ -100,10 +109,9 @@ class TestPaystackServiceGetSecret:
         ):
             svc = PaystackService(session=session, settings=settings)
             with pytest.raises(RuntimeError, match="Missing paystack_secret_key"):
-                await svc._get_secret()
+                _run(svc._get_secret())
 
-    @pytest.mark.asyncio
-    async def test_returns_secret_from_platform_settings(self):
+    def test_returns_secret_from_platform_settings(self):
         session = make_mock_session()
         settings = make_test_settings()
 
@@ -113,13 +121,12 @@ class TestPaystackServiceGetSecret:
             return_value="sk_test_real_key",
         ):
             svc = PaystackService(session=session, settings=settings)
-            result = await svc._get_secret()
+            result = _run(svc._get_secret())
             assert result == "sk_test_real_key"
 
 
 class TestPaystackServiceGetPlanCode:
-    @pytest.mark.asyncio
-    async def test_pro_plan_code(self):
+    def test_pro_plan_code(self):
         session = make_mock_session()
         settings = make_test_settings()
 
@@ -129,11 +136,10 @@ class TestPaystackServiceGetPlanCode:
             return_value="PLN_test_pro",
         ):
             svc = PaystackService(session=session, settings=settings)
-            result = await svc._get_plan_code("pro")
+            result = _run(svc._get_plan_code("pro"))
             assert result == "PLN_test_pro"
 
-    @pytest.mark.asyncio
-    async def test_enterprise_plan_code(self):
+    def test_enterprise_plan_code(self):
         session = make_mock_session()
         settings = make_test_settings()
 
@@ -143,11 +149,10 @@ class TestPaystackServiceGetPlanCode:
             return_value="PLN_test_ent",
         ):
             svc = PaystackService(session=session, settings=settings)
-            result = await svc._get_plan_code("enterprise")
+            result = _run(svc._get_plan_code("enterprise"))
             assert result == "PLN_test_ent"
 
-    @pytest.mark.asyncio
-    async def test_missing_plan_code_raises(self):
+    def test_missing_plan_code_raises(self):
         session = make_mock_session()
         settings = make_test_settings()
 
@@ -158,7 +163,7 @@ class TestPaystackServiceGetPlanCode:
         ):
             svc = PaystackService(session=session, settings=settings)
             with pytest.raises(RuntimeError, match="Missing paystack_pro_plan_code"):
-                await svc._get_plan_code("pro")
+                _run(svc._get_plan_code("pro"))
 
 
 class TestPaystackTransactionInitResult:
@@ -168,8 +173,7 @@ class TestPaystackTransactionInitResult:
 
 
 class TestInitializeSubscriptionTransaction:
-    @pytest.mark.asyncio
-    async def test_success(self):
+    def test_success(self):
         session = make_mock_session()
         settings = make_test_settings()
 
@@ -187,16 +191,15 @@ class TestInitializeSubscriptionTransaction:
             },
         ):
             svc = PaystackService(session=session, settings=settings)
-            result = await svc.initialize_subscription_transaction(
+            result = _run(svc.initialize_subscription_transaction(
                 email="user@test.com",
                 tier="pro",
                 callback_url="http://localhost/callback",
-            )
+            ))
             assert isinstance(result, PaystackTransactionInitResult)
             assert result.authorization_url == "https://checkout.paystack.com/test123"
 
-    @pytest.mark.asyncio
-    async def test_failure_status_false(self):
+    def test_failure_status_false(self):
         session = make_mock_session()
         settings = make_test_settings()
 
@@ -212,14 +215,13 @@ class TestInitializeSubscriptionTransaction:
         ):
             svc = PaystackService(session=session, settings=settings)
             with pytest.raises(RuntimeError, match="failed"):
-                await svc.initialize_subscription_transaction(
+                _run(svc.initialize_subscription_transaction(
                     email="user@test.com",
                     tier="pro",
                     callback_url="http://localhost/callback",
-                )
+                ))
 
-    @pytest.mark.asyncio
-    async def test_missing_authorization_url(self):
+    def test_missing_authorization_url(self):
         session = make_mock_session()
         settings = make_test_settings()
 
@@ -235,16 +237,15 @@ class TestInitializeSubscriptionTransaction:
         ):
             svc = PaystackService(session=session, settings=settings)
             with pytest.raises(RuntimeError, match="authorization_url"):
-                await svc.initialize_subscription_transaction(
+                _run(svc.initialize_subscription_transaction(
                     email="user@test.com",
                     tier="pro",
                     callback_url="http://localhost/callback",
-                )
+                ))
 
 
 class TestFetchSubscription:
-    @pytest.mark.asyncio
-    async def test_success(self):
+    def test_success(self):
         session = make_mock_session()
         settings = make_test_settings()
 
@@ -266,12 +267,11 @@ class TestFetchSubscription:
             },
         ):
             svc = PaystackService(session=session, settings=settings)
-            result = await svc.fetch_subscription(subscription_code="SUB_test")
+            result = _run(svc.fetch_subscription(subscription_code="SUB_test"))
             assert result["email_token"] == "tok123"
             assert result["status"] == "active"
 
-    @pytest.mark.asyncio
-    async def test_failure_no_data(self):
+    def test_failure_no_data(self):
         session = make_mock_session()
         settings = make_test_settings()
 
@@ -287,12 +287,11 @@ class TestFetchSubscription:
         ):
             svc = PaystackService(session=session, settings=settings)
             with pytest.raises(RuntimeError, match="fetch failed"):
-                await svc.fetch_subscription(subscription_code="SUB_bad")
+                _run(svc.fetch_subscription(subscription_code="SUB_bad"))
 
 
 class TestDisableSubscription:
-    @pytest.mark.asyncio
-    async def test_success(self):
+    def test_success(self):
         session = make_mock_session()
         settings = make_test_settings()
 
@@ -307,14 +306,13 @@ class TestDisableSubscription:
             return_value={"status": True, "data": {"message": "Subscription disabled"}},
         ):
             svc = PaystackService(session=session, settings=settings)
-            result = await svc.disable_subscription(
+            result = _run(svc.disable_subscription(
                 subscription_code="SUB_test",
                 email_token="tok123",
-            )
+            ))
             assert result["message"] == "Subscription disabled"
 
-    @pytest.mark.asyncio
-    async def test_already_inactive_404(self):
+    def test_already_inactive_404(self):
         session = make_mock_session()
         settings = make_test_settings()
 
@@ -332,16 +330,15 @@ class TestDisableSubscription:
             },
         ):
             svc = PaystackService(session=session, settings=settings)
-            result = await svc.disable_subscription(
+            result = _run(svc.disable_subscription(
                 subscription_code="SUB_gone",
                 email_token="tok123",
-            )
+            ))
             assert result["already_inactive"] is True
 
 
 class TestEnableSubscription:
-    @pytest.mark.asyncio
-    async def test_success(self):
+    def test_success(self):
         session = make_mock_session()
         settings = make_test_settings()
 
@@ -356,14 +353,13 @@ class TestEnableSubscription:
             return_value={"status": True, "data": {"message": "Subscription enabled"}},
         ):
             svc = PaystackService(session=session, settings=settings)
-            result = await svc.enable_subscription(
+            result = _run(svc.enable_subscription(
                 subscription_code="SUB_test",
                 email_token="tok123",
-            )
+            ))
             assert result["message"] == "Subscription enabled"
 
-    @pytest.mark.asyncio
-    async def test_already_active(self):
+    def test_already_active(self):
         session = make_mock_session()
         settings = make_test_settings()
 
@@ -384,14 +380,13 @@ class TestEnableSubscription:
             },
         ):
             svc = PaystackService(session=session, settings=settings)
-            result = await svc.enable_subscription(
+            result = _run(svc.enable_subscription(
                 subscription_code="SUB_active",
                 email_token="tok123",
-            )
+            ))
             assert result["already_active"] is True
 
-    @pytest.mark.asyncio
-    async def test_permanently_cancelled(self):
+    def test_permanently_cancelled(self):
         session = make_mock_session()
         settings = make_test_settings()
 
@@ -412,16 +407,15 @@ class TestEnableSubscription:
             },
         ):
             svc = PaystackService(session=session, settings=settings)
-            result = await svc.enable_subscription(
+            result = _run(svc.enable_subscription(
                 subscription_code="SUB_cancelled",
                 email_token="tok123",
-            )
+            ))
             assert result["permanently_cancelled"] is True
 
 
 class TestVerifyTransaction:
-    @pytest.mark.asyncio
-    async def test_success(self):
+    def test_success(self):
         session = make_mock_session()
         settings = make_test_settings()
 
@@ -439,11 +433,10 @@ class TestVerifyTransaction:
             },
         ):
             svc = PaystackService(session=session, settings=settings)
-            result = await svc.verify_transaction(reference="ref_123")
+            result = _run(svc.verify_transaction(reference="ref_123"))
             assert result["status"] == "success"
 
-    @pytest.mark.asyncio
-    async def test_failure(self):
+    def test_failure(self):
         session = make_mock_session()
         settings = make_test_settings()
 
@@ -459,4 +452,4 @@ class TestVerifyTransaction:
         ):
             svc = PaystackService(session=session, settings=settings)
             with pytest.raises(RuntimeError, match="verify failed"):
-                await svc.verify_transaction(reference="ref_bad")
+                _run(svc.verify_transaction(reference="ref_bad"))
