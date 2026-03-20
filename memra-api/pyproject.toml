@@ -36,7 +36,9 @@ dependencies = [
     "jinja2>=3.1",
     "resend>=2.0",
     "pyjwt>=2.8",
-    "bcrypt>=4.1"
+    "bcrypt>=4.1",
+    "neo4j>=5.0",
+    "gunicorn>=22.0"
 ]
 
 [project.optional-dependencies]

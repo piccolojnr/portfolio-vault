@@ -28,3 +28,15 @@ class TestMakeAsyncUrl:
         url = "postgresql://user:pass@host:5432/db?sslmode=require"
         expected = "postgresql+asyncpg://user:pass@host:5432/db?sslmode=require"
         assert _make_async_url(url) == expected
+
+
+class TestPoolSizingDocumentation:
+    """Verify the connection pool tuning comment matches the code."""
+
+    def test_pool_size_is_small_for_multi_process(self):
+        import inspect
+        from memra.app.core.db import open_db_engine
+
+        source = inspect.getsource(open_db_engine)
+        assert "pool_size=2" in source
+        assert "max_overflow=3" in source

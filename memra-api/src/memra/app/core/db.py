@@ -32,16 +32,28 @@ async def open_db_engine(
 ) -> tuple[AsyncEngine, async_sessionmaker[AsyncSession]]:
     """Create async engine and session factory. Call once from lifespan.
 
-    pool_size=2 / max_overflow=0: keeps the per-instance connection count small,
-    which matters on serverless where many instances run in parallel.
-    pool_pre_ping=True: transparently reconnects if a connection goes stale
-    between warm invocations.
+    Pool sizes are kept small to accommodate multi-process deployments
+    (Gunicorn workers).  With 4 workers at pool_size=2, max_overflow=3,
+    the worst-case total is 4 * 5 = 20 connections from the API + 5 from
+    the background worker = 25 total — well within Supabase limits.
+
+    pool_pre_ping=True: transparently reconnects if a connection goes stale.
     """
+    connect_args = {}
+    url = _make_async_url(database_url)
+
+    # PgBouncer (transaction mode) is incompatible with asyncpg's prepared
+    # statements.  Detect pooler URLs (port 6543 or ?pgbouncer=true) and
+    # disable the statement cache.
+    if ":6543" in database_url or "pgbouncer=true" in database_url:
+        connect_args["statement_cache_size"] = 0
+
     engine = create_async_engine(
-        _make_async_url(database_url),
-        pool_size=5,
-        max_overflow=10,
+        url,
+        pool_size=2,
+        max_overflow=3,
         pool_pre_ping=True,
+        connect_args=connect_args,
     )
     factory = async_sessionmaker(engine, expire_on_commit=False)
     return engine, factory

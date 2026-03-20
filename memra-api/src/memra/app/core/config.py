@@ -78,6 +78,18 @@ class Settings(BaseSettings):
     # Logging — set LOG_LEVEL=DEBUG to see memra.* debug lines (e.g. Paystack webhooks)
     log_level: str = "INFO"
 
+    # Neo4j (graph storage for LightRAG)
+    neo4j_uri: str = ""
+    neo4j_username: str = "neo4j"
+    neo4j_password: str = ""
+
+    # Deployment / environment
+    environment: str = "development"   # "development" | "production"
+    gunicorn_workers: int = 4
+
+    # CORS — comma-separated allowed origins (overrides allow_origins=["*"])
+    cors_origins: str = ""
+
     # Billing / Paystack (can be overridden by platform settings DB)
     paystack_secret_key: str = ""
     paystack_public_key: str = ""
@@ -90,6 +102,28 @@ class Settings(BaseSettings):
         if self.demo_mode == "1":
             return True
         return not self.openai_api_key and not self.anthropic_api_key
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def is_production(self) -> bool:
+        return self.environment.lower() == "production"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def cookie_secure(self) -> bool:
+        return self.is_production
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def cookie_samesite(self) -> str:
+        return "none" if self.is_production else "lax"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def allowed_origins(self) -> list[str]:
+        if self.cors_origins:
+            return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+        return ["*"]
 
     # Qdrant collection name
     qdrant_collection: str = "default"

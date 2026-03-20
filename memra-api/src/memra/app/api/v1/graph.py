@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from uuid import UUID
 
-import networkx as nx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
@@ -16,10 +14,6 @@ from memra.app.core.limiter import limiter
 from memra.domain.services import org_service
 
 router = APIRouter(prefix="/graph", tags=["graph"])
-
-# rag/ directory is five levels above this file
-# (src/memra/app/api/v1/graph.py → v1/ → api/ → app/ → memra/ → src/ → rag/)
-_RAG_DIR = Path(__file__).resolve().parents[5]
 
 DBSession = Annotated[AsyncSession, Depends(get_db_conn)]
 
@@ -43,6 +37,34 @@ async def get_graph(
         )
 
     corpus_key = corpus.corpus_key
+
+    driver = getattr(request.app.state, "neo4j_driver", None)
+    if driver is not None:
+        return await _graph_from_neo4j(driver, corpus_key)
+    return await _graph_from_graphml(corpus_key)
+
+
+async def _graph_from_neo4j(driver, workspace: str) -> dict:
+    """Fetch graph data from Neo4j."""
+    from memra.infrastructure.neo4j import fetch_graph_for_workspace
+
+    data = await fetch_graph_for_workspace(driver, workspace)
+    if not data["nodes"]:
+        raise HTTPException(
+            status_code=404,
+            detail="Knowledge graph not built yet. Ingest documents to generate it.",
+        )
+    return data
+
+
+async def _graph_from_graphml(corpus_key: str) -> dict:
+    """Legacy fallback: read graph data from .graphml files on disk."""
+    import re
+    from pathlib import Path
+
+    import networkx as nx
+
+    _RAG_DIR = Path(__file__).resolve().parents[5]
     graph_path = (
         _RAG_DIR / "data" / "graphs" / corpus_key / "graph_chunk_entity_relation.graphml"
     )
@@ -52,18 +74,13 @@ async def get_graph(
             detail="Knowledge graph not built yet. Ingest documents to generate it.",
         )
 
-    import re
-    # LightRAG uses the entity name as the node id (e.g. "Daud Rahim", "KGL Group").
-    # Internal chunk/source nodes (if any leak through) have hash-like ids such as
-    # "chunk-abc123..." or bare hex strings — exclude those.
-    _JUNK_RE = re.compile(r'^(chunk-|[0-9a-f]{8}-[0-9a-f]{4}|[0-9a-f]{32,})', re.I)
+    _JUNK_RE = re.compile(r"^(chunk-|[0-9a-f]{8}-[0-9a-f]{4}|[0-9a-f]{32,})", re.I)
 
     G = nx.read_graphml(str(graph_path))
 
     nodes = [
         {
             "id": n,
-            # entity_id attribute mirrors the node id; fall back to n directly
             "label": (d.get("entity_id") or n).strip(),
             "type": d.get("entity_type", "unknown").lower(),
         }
@@ -73,7 +90,6 @@ async def get_graph(
 
     valid_ids = {node["id"] for node in nodes}
 
-    # Only emit edges that connect two real entity nodes and carry a readable label.
     links = [
         {
             "source": u,

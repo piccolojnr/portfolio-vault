@@ -51,8 +51,8 @@ def _set_admin_refresh_cookie(response: Response, token: str, settings: Settings
         key="admin_refresh_token",
         value=token,
         httponly=True,
-        secure=True,
-        samesite="lax",
+        secure=getattr(settings, "cookie_secure", True),
+        samesite=getattr(settings, "cookie_samesite", "lax"),
         max_age=settings.admin_jwt_refresh_expiry_days * 86400,
         path="/",
     )

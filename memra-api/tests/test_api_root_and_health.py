@@ -64,7 +64,7 @@ class TestRootEndpoint:
 
 class TestHealthEndpoint:
     def _get_health(self):
-        s = make_test_settings(qdrant_url="", database_url="", storage_provider="local")
+        s = make_test_settings(qdrant_url="", database_url="", storage_provider="local", neo4j_uri="")
 
         mock_qdrant = MagicMock()
         count_result = MagicMock()
@@ -108,3 +108,9 @@ class TestHealthEndpoint:
         resp = self._get_health()
         data = resp.json()
         assert "demo_mode" in data
+
+    def test_health_includes_neo4j(self):
+        resp = self._get_health()
+        data = resp.json()
+        assert "neo4j" in data
+        assert data["neo4j"]["status"] == "not_configured"

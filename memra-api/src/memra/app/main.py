@@ -6,9 +6,7 @@ Application factory + lifespan + uvicorn entrypoint.
 
 Run:
   cd rag
-  .venv/Scripts/uvicorn.exe memra.app.main:app --reload
-  # or
-  .venv/Scripts/python.exe -m memra.app.main
+  uvicorn memra.app.main:app --reload
 """
 
 from contextlib import asynccontextmanager
@@ -41,23 +39,20 @@ def _configure_memra_logging(log_level: str) -> None:
     logging.getLogger("memra").setLevel(level)
 
 
-def _print_startup_banner(db_connected: bool = False) -> None:
+def _print_startup_banner(db_connected: bool = False, neo4j_connected: bool = False) -> None:
     settings = get_settings()
     print("=" * 60)
     print("Memra API  v1.0.0")
     print("=" * 60)
+    print(f"  Environment:    {settings.environment}")
     print(f"  Demo mode:      {settings.use_demo}")
     print(f"  OpenAI key:     {'yes' if settings.openai_api_key else 'no'}")
     print(f"  Anthropic key:  {'yes' if settings.anthropic_api_key else 'no'}")
     print(f"  Qdrant URL:     {'yes' if settings.qdrant_url else 'no'}")
     print(f"  Database:       {'connected' if db_connected else 'not configured'}")
+    print(f"  Neo4j:          {'connected' if neo4j_connected else 'not configured'}")
     print(f"  Storage:        {settings.storage_provider}")
-    print(f"  Log level:      {settings.log_level} (memra.*; use LOG_LEVEL=DEBUG for webhook details)")
-    print("=" * 60)
-    print("  Docs:     http://localhost:8000/docs")
-    print("  Health:   GET  http://localhost:8000/api/v1/health")
-    print("  Retrieve: POST http://localhost:8000/api/v1/retrieve")
-    print("  Query:    POST http://localhost:8000/api/v1/query")
+    print(f"  Log level:      {settings.log_level}")
     print("=" * 60)
 
 
@@ -65,26 +60,49 @@ def _print_startup_banner(db_connected: bool = False) -> None:
 async def lifespan(app: FastAPI):
     settings = get_settings()
     _configure_memra_logging(settings.log_level)
+
+    # ── Database ──
     if settings.database_url:
         engine, factory = await open_db_engine(settings.database_url)
         app.state.db_engine = engine
         app.state.db_session_factory = factory
         from memra.domain.services.lightrag_service import set_session_factory as _lr_set_sf
         _lr_set_sf(factory)
-        _print_startup_banner(db_connected=True)
     else:
         app.state.db_engine = None
         app.state.db_session_factory = None
-        _print_startup_banner(db_connected=False)
+
+    # ── Neo4j ──
+    neo4j_connected = False
+    app.state.neo4j_driver = None
+    if settings.neo4j_uri:
+        from memra.infrastructure.neo4j import open_neo4j_driver
+        driver = await open_neo4j_driver(settings)
+        app.state.neo4j_driver = driver
+        neo4j_connected = driver is not None
+
+    _print_startup_banner(
+        db_connected=bool(settings.database_url),
+        neo4j_connected=neo4j_connected,
+    )
+
     yield
+
+    # ── Shutdown ──
     if app.state.db_engine:
         await app.state.db_engine.dispose()
-    # Close asyncpg pools and Qdrant connections held by cached LightRAG instances.
+
+    if app.state.neo4j_driver:
+        from memra.infrastructure.neo4j import close_neo4j_driver
+        await close_neo4j_driver(app.state.neo4j_driver)
+
     from memra.domain.services.lightrag_service import finalize_all as _lr_finalize
     await _lr_finalize()
 
 
 def create_app() -> FastAPI:
+    _settings = get_settings()
+
     app = FastAPI(
         title="Memra API",
         description="Memra — AI-powered knowledge API",
@@ -98,7 +116,7 @@ def create_app() -> FastAPI:
     app.add_middleware(SlowAPIMiddleware)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=_settings.allowed_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

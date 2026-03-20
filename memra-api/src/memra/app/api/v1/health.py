@@ -41,16 +41,22 @@ async def health(
             db_status = str(e)
 
     # Storage
+    storage_provider = settings.storage_provider
     try:
         from memra.infrastructure.storage import get_storage_backend
         backend = get_storage_backend()
-        storage_provider = settings.storage_provider
-        # Probe: attempt to get a URL for a non-existent path — should return
-        # None (local) or a URL (supabase) without raising.
         await backend.get_public_url("__health_probe__")
         storage_status = "ok"
     except Exception as e:
         storage_status = str(e)
+
+    # Neo4j
+    neo4j_driver = getattr(request.app.state, "neo4j_driver", None)
+    if neo4j_driver is not None:
+        from memra.infrastructure.neo4j import neo4j_health_check
+        neo4j_status = await neo4j_health_check(neo4j_driver)
+    else:
+        neo4j_status = "not_configured"
 
     # Worker connectivity — inferred from MAX(started_at) in jobs table
     worker_connected: bool | None = None
@@ -75,6 +81,7 @@ async def health(
         if qdrant_status == "ok"
         and db_status in ("ok", "not_configured")
         and storage_status == "ok"
+        and neo4j_status in ("ok", "not_configured")
         else "degraded"
     )
 
@@ -83,6 +90,7 @@ async def health(
         "demo_mode": settings.use_demo,
         "qdrant": {"status": qdrant_status, "chunks_loaded": chunk_count},
         "database": {"status": db_status, "doc_count": doc_count},
+        "neo4j": {"status": neo4j_status},
         "storage": {"status": storage_status, "provider": storage_provider},
         "worker_connected": worker_connected,
     }
