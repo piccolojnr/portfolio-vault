@@ -226,6 +226,42 @@ class PaystackService:
 
         raise RuntimeError(f"Paystack subscription disable failed: {result}")
 
+    async def enable_subscription(
+        self,
+        *,
+        subscription_code: str,
+        email_token: str,
+    ) -> dict[str, Any]:
+        secret_key = await self._get_secret()
+        payload = {"code": subscription_code, "token": email_token}
+        result = await self._api_call(
+            method="POST",
+            path="/subscription/enable",
+            secret_key=secret_key,
+            body=payload,
+        )
+        print("enable_subscription result:", result)
+        logger.info(
+            "[paystack.enable_subscription] response subscription_code=%s result=%s",
+            subscription_code, result,
+        )
+        if isinstance(result, dict) and result.get("status") is True:
+            data = result.get("data")
+            return data if isinstance(data, dict) else {}
+        if isinstance(result, dict):
+            body = result.get("body")
+            body_code = body.get("code") if isinstance(body, dict) else None
+            body_message = body.get("message") if isinstance(body, dict) else None
+            if body_code in ("subscription_active", "already_active"):
+                return {"already_active": True, "message": body_message}
+            # Paystack rejects enable on fully-cancelled subscriptions.
+            # Signal this so the caller can redirect to a new subscribe flow.
+            if body_code == "invalid_params":
+                body_msg_lower = (body_message or "").lower()
+                if "cancelled" in body_msg_lower or "reactivat" in body_msg_lower:
+                    return {"permanently_cancelled": True, "message": body_message}
+        raise RuntimeError(f"Paystack subscription enable failed: {result}")
+
     async def verify_transaction(self, *, reference: str) -> dict[str, Any]:
         secret_key = await self._get_secret()
         result = await self._api_call(

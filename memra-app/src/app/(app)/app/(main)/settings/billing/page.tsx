@@ -41,6 +41,14 @@ type HistoryRow = {
   created_at: string | null;
 };
 
+type HistoryResponse = {
+  total: number;
+  page: number;
+  per_page: number;
+  pages: number;
+  items: HistoryRow[];
+};
+
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
     <h2 className="text-[13px] font-semibold text-foreground font-mono border-b border-border/40 pb-2 mb-4">
@@ -80,6 +88,7 @@ function formatEventLabel(value: string): string {
     "subscription.create": "Subscription started",
     "subscription.not_renew": "Auto-renew disabled",
     "subscription.disable": "Subscription cancelled",
+    "subscription.enable": "Subscription resumed",
   };
   if (labels[key]) return labels[key];
   return key
@@ -97,12 +106,17 @@ export default function BillingPage() {
 
   const [billing, setBilling] = useState<BillingResponse | null>(null);
   const [history, setHistory] = useState<HistoryRow[]>([]);
+  const [historyMeta, setHistoryMeta] = useState<{ total: number; page: number; pages: number } | null>(null);
+  const [historyPage, setHistoryPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [upgradePlan, setUpgradePlan] = useState<"pro" | "enterprise">("pro");
   const [cancelLoading, setCancelLoading] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [cancelSuccess, setCancelSuccess] = useState<string | null>(null);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [resumeLoading, setResumeLoading] = useState(false);
+  const [resumeError, setResumeError]   = useState<string | null>(null);
+  const [resumeSuccess, setResumeSuccess] = useState<string | null>(null);
 
   const success = searchParams.get("payment") === "success";
 
@@ -115,28 +129,30 @@ export default function BillingPage() {
     return { pct, used, limit };
   }, [billing]);
 
-  const loadBilling = useCallback(async () => {
+  const loadBilling = useCallback(async (page = historyPage) => {
     if (!org?.id) return;
     setLoading(true);
     setCancelError(null);
     try {
       const [b, h] = await Promise.all([
         apiFetch<BillingResponse>("/api/billing"),
-        apiFetch<HistoryRow[]>("/api/billing/history"),
+        apiFetch<HistoryResponse>(`/api/billing/history?page=${page}&per_page=10`),
       ]);
       setBilling(b);
-      setHistory(h);
+      setHistory(h.items);
+      setHistoryMeta({ total: h.total, page: h.page, pages: h.pages });
     } catch {
       setBilling(null);
       setHistory([]);
+      setHistoryMeta(null);
     } finally {
       setLoading(false);
     }
-  }, [org?.id]);
+  }, [org?.id, historyPage]);
 
   useEffect(() => {
-    void loadBilling();
-  }, [loadBilling]);
+    void loadBilling(historyPage);
+  }, [loadBilling, historyPage]);
 
   useEffect(() => {
     if (success) void refresh();
@@ -225,6 +241,44 @@ export default function BillingPage() {
     }
   }
 
+  async function onResume() {
+    setResumeLoading(true);
+    setResumeError(null);
+    setResumeSuccess(null);
+    try {
+      const res = await apiFetch<{ status: string }>("/api/billing/resume", { method: "POST" });
+      if (res.status === "resume_pending_manual") {
+        setResumeSuccess("Resume is being prepared. If it does not update shortly, please contact support.");
+      } else if (res.status === "already_active") {
+        setResumeSuccess("Your subscription is already active. Refreshing…");
+      } else {
+        setResumeSuccess("Subscription resumed. Your renewal has been re-enabled.");
+      }
+      await refresh();
+      await loadBilling();
+      router.refresh();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Resume failed";
+      if (msg.includes("403") || msg.toLowerCase().includes("forbidden")) {
+        setResumeError("Only the organisation owner can resume the subscription.");
+      } else {
+        setResumeError("Could not resume the subscription right now. Please try again.");
+      }
+    } finally {
+      setResumeLoading(false);
+    }
+  }
+
+  async function onReactivate() {
+    const plan = (billing?.plan ?? "pro") as "pro" | "enterprise";
+    const res = await apiFetch<{ authorization_url: string }>("/api/billing/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plan }),
+    });
+    window.location.href = res.authorization_url;
+  }
+
   async function onCancel() {
     setCancelDialogOpen(false);
     const ok = window.confirm(
@@ -280,6 +334,12 @@ export default function BillingPage() {
                 {cancelError ? (
                   <p className="text-[12px] font-mono text-destructive mb-3">{cancelError}</p>
                 ) : null}
+                {resumeSuccess ? (
+                  <p className="text-[12px] font-mono text-emerald-400 mb-3">{resumeSuccess}</p>
+                ) : null}
+                {resumeError ? (
+                  <p className="text-[12px] font-mono text-destructive mb-3">{resumeError}</p>
+                ) : null}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div className="text-[12px] font-mono text-muted-foreground">
                     Manage your current subscription settings.
@@ -320,6 +380,13 @@ export default function BillingPage() {
                       className="h-8 px-3 text-[11px] font-mono"
                     >
                       {cancelLoading ? "cancelling…" : "cancel subscription"}
+                    </Button>
+                  ) : isOwner && isSelfService && isPaidPlan && (subStatus === "non_renewing" || subStatus === "cancelled") ? (
+                    <Button
+                      onClick={() => void onReactivate()}
+                      className="h-8 px-3 text-[11px] font-mono"
+                    >
+                      reactivate
                     </Button>
                   ) : isOwner && isSelfService && isPaidPlan && !subscriptionStatusNote ? (
                     <p className="text-[11px] font-mono text-muted-foreground max-w-md text-right sm:text-left">
@@ -378,7 +445,7 @@ export default function BillingPage() {
                 <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-2">
                   <h2 className="text-[13px] font-semibold text-foreground font-mono">Payment history</h2>
                   <span className="text-[11px] font-mono text-muted-foreground">
-                    {history.length} activities
+                    {historyMeta ? `${historyMeta.total} total` : `${history.length} activities`}
                   </span>
                 </div>
 
@@ -436,6 +503,31 @@ export default function BillingPage() {
                     </tbody>
                   </table>
                 </div>
+                {historyMeta && historyMeta.pages > 1 ? (
+                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/40">
+                    <span className="text-[11px] font-mono text-muted-foreground">
+                      page {historyMeta.page} of {historyMeta.pages}
+                    </span>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        className="h-7 px-2.5 text-[11px] font-mono"
+                        disabled={historyPage <= 1}
+                        onClick={() => setHistoryPage((p) => p - 1)}
+                      >
+                        prev
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="h-7 px-2.5 text-[11px] font-mono"
+                        disabled={historyPage >= historyMeta.pages}
+                        onClick={() => setHistoryPage((p) => p + 1)}
+                      >
+                        next
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
               </section>
             </>
           )}

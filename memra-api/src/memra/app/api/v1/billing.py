@@ -7,12 +7,12 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
-from sqlalchemy import desc, text
+from sqlalchemy import desc, func, text
 
 from memra.app.core.config import Settings, get_settings
 from memra.app.core.db import get_db_conn
@@ -379,6 +379,91 @@ async def cancel_subscription(
     return {"status": "cancel_queued"}
 
 
+@router.post("/resume")
+async def resume_subscription(
+    session: DBSession = Depends(get_db_conn),
+    current_user: dict = Depends(require_role("owner")),
+    settings: Settings = Depends(get_live_settings),
+):
+    org_id = UUID(current_user["org_id"])
+    logger.info("[billing.resume] start org_id=%s", org_id)
+
+    org = (await session.execute(select(Organisation).where(Organisation.id == org_id))).scalars().first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organisation not found")
+
+    subscription = (await session.execute(
+        select(Subscription).where(Subscription.org_id == org_id)
+    )).scalars().first()
+    if not subscription:
+        return {"status": "no_subscription"}
+
+    sub_code = subscription.paystack_subscription_code
+    email_token = subscription.paystack_email_token
+    logger.info(
+        "[billing.resume] loaded subscription org_id=%s sub_status=%s has_sub_code=%s has_email_token=%s",
+        org_id, subscription.status, bool(sub_code), bool(email_token),
+    )
+
+    if not sub_code:
+        return {"status": "no_subscription"}
+
+    if subscription.status == "active":
+        return {"status": "already_active"}
+
+    if subscription.status != "non_renewing":
+        # cancelled/attention require a new subscribe flow
+        return {"status": "no_subscription"}
+
+    paystack = PaystackService(session=session, settings=settings)
+
+    if not email_token:
+        logger.info("[billing.resume] email_token missing; attempting fetch org_id=%s sub_code=%s", org_id, sub_code)
+        try:
+            details = await paystack.fetch_subscription(subscription_code=sub_code)
+            fetched_token = details.get("email_token")
+            if fetched_token:
+                subscription.paystack_email_token = fetched_token
+                email_token = fetched_token
+                session.add(subscription)
+                await session.commit()
+            else:
+                logger.warning("[billing.resume] fetch_subscription returned no email_token org_id=%s", org_id)
+        except Exception:
+            logger.exception("[billing.resume] fetch_subscription failed org_id=%s", org_id)
+            return {"status": "resume_pending_manual"}
+
+    if not email_token:
+        return {"status": "resume_pending_manual"}
+
+    enable_result = await paystack.enable_subscription(subscription_code=sub_code, email_token=email_token)
+
+    if enable_result.get("already_active"):
+        if subscription.status != "active":
+            subscription.status = "active"
+            session.add(subscription)
+            await session.commit()
+        return {"status": "already_active"}
+
+    if enable_result.get("permanently_cancelled"):
+        # Paystack has fully cancelled the subscription; sync our DB and tell
+        # the UI to fall through to the reactivate (new transaction) path.
+        logger.info(
+            "[billing.resume] paystack reports permanently_cancelled org_id=%s sub_code=%s; syncing status",
+            org_id, sub_code,
+        )
+        subscription.status = "cancelled"
+        session.add(subscription)
+        await session.commit()
+        return {"status": "no_subscription"}
+
+    subscription.status = "active"
+    session.add(subscription)
+    await session.commit()
+    logger.info("[billing.resume] completed org_id=%s result=resumed", org_id)
+    return {"status": "resumed"}
+
+
 @router.post("/resolve")
 async def resolve_subscription_payment(
     session: DBSession = Depends(get_db_conn),
@@ -425,26 +510,41 @@ async def resolve_subscription_payment(
 async def billing_history(
     session: DBSession = Depends(get_db_conn),
     current_user: dict = Depends(get_current_user),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(10, ge=1, le=100),
 ):
     org_id = UUID(current_user["org_id"])
+
+    total_res = await session.execute(
+        select(func.count()).where(PaymentEvent.org_id == org_id)
+    )
+    total = total_res.scalar() or 0
+
     rows_res = await session.execute(
         select(PaymentEvent)
         .where(PaymentEvent.org_id == org_id)
         .order_by(desc(PaymentEvent.created_at))
-        .limit(50)
+        .offset((page - 1) * per_page)
+        .limit(per_page)
     )
     rows = rows_res.scalars().all()
-    return [
-        {
-            "id": str(r.id),
-            "paystack_event": r.paystack_event,
-            "paystack_reference": r.paystack_reference,
-            "processed": r.processed,
-            "error": r.error,
-            "created_at": r.created_at.isoformat() if r.created_at else None,
-        }
-        for r in rows
-    ]
+    return {
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "pages": max(1, -(-total // per_page)),  # ceiling division
+        "items": [
+            {
+                "id": str(r.id),
+                "paystack_event": r.paystack_event,
+                "paystack_reference": r.paystack_reference,
+                "processed": r.processed,
+                "error": r.error,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in rows
+        ],
+    }
 
 
 @router.api_route("/callback", methods=["GET", "POST"])

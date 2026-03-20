@@ -229,6 +229,8 @@ async def paystack_webhook(
         raise HTTPException(status_code=400, detail="Webhook payload missing event")
 
     data = payload.get("data") or {}
+    print("data:", data)
+    print("event_type:", event_type)
     if not isinstance(data, dict):
         data = {}
 
@@ -367,6 +369,15 @@ async def paystack_webhook(
                 session=session,
                 data=data,
                 org_id=org_id,
+            )
+
+        elif event_type == "subscription.enable":
+            await _handle_subscription_enable(
+                session=session,
+                data=data,
+                org_id=org_id,
+                pro_plan_code=pro_plan_code,
+                enterprise_plan_code=enterprise_plan_code,
             )
 
         else:
@@ -736,4 +747,44 @@ async def _handle_subscription_disable(
     org_row = org_res.scalars().first()
     if org_row and org_row.plan_source == "self_service":
         org_row.plan = "free"
+        await session.commit()
+
+
+async def _handle_subscription_enable(
+    *,
+    session: AsyncSession,
+    data: dict[str, Any],
+    org_id: UUID | None,
+    pro_plan_code: str | None,
+    enterprise_plan_code: str | None,
+) -> None:
+    sub_code = _extract_subscription_code(data)
+    q = None
+    if sub_code:
+        q = await session.execute(select(Subscription).where(Subscription.paystack_subscription_code == sub_code))
+    elif org_id:
+        q = await session.execute(select(Subscription).where(Subscription.org_id == org_id))
+    sub_row = q.scalars().first() if q else None
+    if not sub_row:
+        return
+
+    email_token = _extract_email_token(data)
+    sub_row.status = "active"
+    sub_row.cancelled_at = None
+    if email_token:
+        sub_row.paystack_email_token = email_token
+    await session.commit()
+
+    # Re-upgrade org plan if it was downgraded by the disable webhook.
+    org_res = await session.execute(select(Organisation).where(Organisation.id == sub_row.org_id))
+    org_row = org_res.scalars().first()
+    if not org_row or org_row.plan_source != "self_service":
+        return
+
+    plan_code = sub_row.paystack_plan_code or _extract_plan_code(data)
+    tier = _tier_from_plan_code(
+        pro_code=pro_plan_code, enterprise_code=enterprise_plan_code, plan_code=plan_code,
+    )
+    if tier:
+        org_row.plan = tier
         await session.commit()
