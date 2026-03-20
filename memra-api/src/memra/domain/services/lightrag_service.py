@@ -9,11 +9,10 @@ All instances share the same storage configuration:
 
   - QdrantVectorDBStorage   vectors    (cloud Qdrant from .env)
   - PGKVStorage             documents  (POSTGRES_ENABLE_VECTOR=false — no pgvector)
-  - NetworkXStorage         graph      (in-memory, persisted to
-                                        data/graphs/<corpus_id>/*.graphml)
+  - Neo4JStorage            graph      (Neo4j Aura — external, persistent)
 
-Each corpus_id is isolated at the Qdrant workspace level and in its own
-working_dir, so test and production data never mix.
+Each corpus_id is isolated at the Qdrant workspace level and via Neo4j
+workspace labels, so corpora never mix.
 
 CORPUS_ID = "default" is the default for all vault documents.
 """
@@ -33,7 +32,11 @@ if TYPE_CHECKING:
     from lightrag import LightRAG
 
 _RAG_DIR = Path(__file__).parents[4]          # domain/services/ → src/memra/ → src/ → rag/
-_GRAPHS_DIR = _RAG_DIR / "data" / "graphs"
+
+# Working directory for LightRAG internals.  With Neo4JStorage the graph
+# is stored externally so this is only used for ephemeral cache files.
+# /tmp is writable on Railway containers and safe to lose on restart.
+_WORKING_DIR = Path("/tmp/memra-lightrag")
 
 # Default corpus used by the ingestion and query paths for vault documents.
 CORPUS_ID = "default"
@@ -121,8 +124,31 @@ def _apply_storage_env(settings) -> None:
         # COMPAT: PGKVStorage calls register_vector() at pool init which fails
         # if the pgvector Postgres extension is not installed.  Setting this to
         # "false" skips that registration.  The service does not use Postgres
-        # vector columns; NetworkXStorage handles the graph, Qdrant handles vectors.
+        # vector columns; Neo4JStorage handles the graph, Qdrant handles vectors.
         os.environ.setdefault("POSTGRES_ENABLE_VECTOR", "false")
+        # COMPAT: Supabase/pgBouncer transaction poolers (port 6543 or explicit
+        # pgbouncer=true query param) break asyncpg prepared statements.
+        # LightRAG reads this env var in PGKVStorage and forwards it to asyncpg.
+        if ":6543" in settings.database_url or "pgbouncer=true" in settings.database_url:
+            os.environ["POSTGRES_STATEMENT_CACHE_SIZE"] = "0"
+
+    # Neo4j credentials for LightRAG's Neo4JStorage backend.
+    if getattr(settings, "neo4j_uri", ""):
+        neo4j_uri = settings.neo4j_uri
+        # LightRAG constructs its own Neo4j driver from env vars and therefore
+        # bypasses memra.infrastructure.neo4j's dev trust fallback. In non-prod
+        # environments where TLS interception/self-signed chains exist, fallback
+        # from neo4j+s:// to neo4j+ssc:// to allow ingestion to proceed.
+        if (
+            getattr(settings, "environment", "").lower() != "production"
+            and neo4j_uri.startswith("neo4j+s://")
+        ):
+            neo4j_uri = neo4j_uri.replace("neo4j+s://", "neo4j+ssc://", 1)
+        os.environ["NEO4J_URI"] = neo4j_uri
+    if getattr(settings, "neo4j_username", ""):
+        os.environ["NEO4J_USERNAME"] = settings.neo4j_username
+    if getattr(settings, "neo4j_password", ""):
+        os.environ["NEO4J_PASSWORD"] = settings.neo4j_password
 
 
 # ── LLM function ──────────────────────────────────────────────────────────────
@@ -230,11 +256,19 @@ class QueryResult:
 
 # ── registry API ──────────────────────────────────────────────────────────────
 
+def _resolve_graph_storage(settings) -> str:
+    """Choose graph storage backend based on available configuration."""
+    if getattr(settings, "neo4j_uri", ""):
+        return "Neo4JStorage"
+    return "NetworkXStorage"
+
+
 async def get_or_create_instance(corpus_id: str, settings, *, org_id=None) -> "LightRAG":
     """Return the cached LightRAG instance for corpus_id, creating it if needed.
 
-    working_dir is corpus-scoped: rag/data/graphs/<corpus_id>/
-    workspace=corpus_id isolates Qdrant and PG data per corpus.
+    workspace=corpus_id isolates Qdrant, PG, and Neo4j data per corpus.
+    working_dir points to an ephemeral temp path (only used for LightRAG
+    internal cache files — persistent state lives in external backends).
     """
     if corpus_id in _registry:
         return _registry[corpus_id]
@@ -252,20 +286,21 @@ async def get_or_create_instance(corpus_id: str, settings, *, org_id=None) -> "L
 
         from lightrag import LightRAG
 
-        working_dir = str(_GRAPHS_DIR)
-        # mkdir must precede LightRAG() construction — it writes files at init time.
+        working_dir = str(_WORKING_DIR)
         Path(working_dir).mkdir(parents=True, exist_ok=True)
 
         llm_name = (
             settings.anthropic_model if settings.anthropic_api_key else settings.openai_model
         )
 
+        graph_backend = _resolve_graph_storage(settings)
+
         rag = LightRAG(
             working_dir=working_dir,
             workspace=corpus_id,
             kv_storage="PGKVStorage",
             vector_storage="QdrantVectorDBStorage",
-            graph_storage="NetworkXStorage",  # PGGraphStorage requires Apache AGE (unavailable)
+            graph_storage=graph_backend,
             llm_model_func=_make_llm_func(settings),
             llm_model_name=llm_name,
             llm_model_max_async=4,

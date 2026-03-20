@@ -2,6 +2,8 @@
 
 FastAPI backend that turns markdown vault documents into a searchable, conversational knowledge base using vector embeddings and an LLM.
 
+For production setup across Railway, Supabase, Qdrant, Neo4j, Paystack, and workers, see `DEPLOYMENT.md`.
+
 ## Stack
 
 | Layer         | Technology                                                 |

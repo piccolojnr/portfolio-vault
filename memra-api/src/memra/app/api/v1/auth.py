@@ -44,8 +44,8 @@ def _set_refresh_cookie(response: Response, token: str, settings) -> None:
         key="refresh_token",
         value=token,
         httponly=True,
-        secure=True,
-        samesite="lax",
+        secure=getattr(settings, "cookie_secure", True),
+        samesite=getattr(settings, "cookie_samesite", "lax"),
         max_age=settings.jwt_refresh_expiry_days * 86400,
         path="/",
     )

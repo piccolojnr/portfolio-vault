@@ -6,6 +6,7 @@ import { adminFetch } from "@/lib/platform-admin/api";
 interface ComponentHealth {
   status: string;
   response_ms: number;
+  detail?: string | null;
 }
 
 interface HealthResponse {
@@ -15,6 +16,8 @@ interface HealthResponse {
   worker: ComponentHealth;
   email: ComponentHealth;
   storage: ComponentHealth;
+  paystack: ComponentHealth;
+  neo4j: ComponentHealth;
   uptime_seconds: number;
   version: string;
 }
@@ -32,6 +35,8 @@ const COMPONENTS = [
   { key: "qdrant", label: "Qdrant" },
   { key: "worker", label: "Worker" },
   { key: "email", label: "Email" },
+  { key: "paystack", label: "Paystack" },
+  { key: "neo4j", label: "Neo4j" },
   { key: "storage", label: "Storage" },
 ] as const;
 
@@ -46,6 +51,17 @@ function formatUptime(seconds: number): string {
   return parts.join(" ");
 }
 
+function statusToCardTone(status: string) {
+  const isOk = status === "ok";
+  const isStale = status === "stale";
+  const isError = status === "error" || status === "offline";
+
+  if (isError) return "error";
+  if (isStale) return "stale";
+  if (isOk) return "ok";
+  return "unknown";
+}
+
 function StatusCard({
   label,
   status,
@@ -57,35 +73,42 @@ function StatusCard({
   ms: number;
   detail?: string;
 }) {
-  const isOk = status === "ok";
-  const isStale = status === "stale";
-  const isError = status === "error" || status === "offline";
+  const tone = statusToCardTone(status);
 
-  const borderColor = isError
+  const borderColor = tone === "error"
     ? "border-red-500/30 bg-red-500/5"
-    : isStale
+    : tone === "stale"
       ? "border-yellow-500/30 bg-yellow-500/5"
       : "border-border/40 bg-surface/30";
 
-  const dotColor = isOk
+  const dotColor = tone === "ok"
     ? "text-green-400"
-    : isStale
+    : tone === "stale"
       ? "text-yellow-400"
-      : "text-red-400";
+      : tone === "error"
+        ? "text-red-400"
+        : "text-muted-foreground/70";
 
   return (
     <div className={`px-4 py-3 rounded-xl border ${borderColor}`}>
       <div className="flex items-center justify-between">
         <span className="text-[12px] font-mono text-foreground">{label}</span>
         <span className={`text-[10px] font-mono ${dotColor}`}>
-          {isOk ? "●" : isStale ? "◐" : "○"} {status}
+          {tone === "ok"
+            ? "●"
+            : tone === "stale"
+              ? "◐"
+              : tone === "error"
+                ? "○"
+                : "?"}{" "}
+          {status}
         </span>
       </div>
       <div className="text-[11px] font-mono text-muted-foreground mt-1">
         {ms > 0 ? `${ms}ms` : "—"}
       </div>
       {detail && (
-        <div className="text-[10px] text-muted-foreground/50 mt-0.5 font-mono">
+        <div className="text-[10px] text-muted-foreground/50 mt-0.5 font-mono break-words whitespace-pre-wrap">
           {detail}
         </div>
       )}
@@ -115,7 +138,6 @@ export default function HealthPage() {
 
   const data = healthQuery.data;
   const frontend = frontendQuery.data;
-
   const getStatus = (key: string): string => {
     if (key === "frontend") return frontend?.status ?? "unknown";
     if (!data) return "unknown";
@@ -130,12 +152,24 @@ export default function HealthPage() {
     return (data as unknown as Record<string, ComponentHealth>)[key]?.response_ms ?? 0;
   };
 
+  const getDetail = (key: string): string | undefined => {
+    if (key === "frontend") return frontend?.runtime;
+    if (key === "api_server") return undefined;
+    const d = (data as unknown as Record<string, ComponentHealth>)[key]?.detail;
+    return d ? String(d) : undefined;
+  };
+
   const degraded = COMPONENTS.filter((c) => {
     const s = getStatus(c.key);
     return s === "error" || s === "offline";
   });
 
-  const allHealthy = degraded.length === 0 && data && frontend;
+  const stale = COMPONENTS.filter((c) => {
+    const s = getStatus(c.key);
+    return s === "stale";
+  });
+
+  const allHealthy = degraded.length === 0 && stale.length === 0 && data && frontend;
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-bg">
@@ -162,8 +196,8 @@ export default function HealthPage() {
         </div>
 
         {healthQuery.isLoading ? (
-          <div className="grid grid-cols-4 gap-3">
-            {Array.from({ length: 7 }).map((_, i) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {Array.from({ length: COMPONENTS.length }).map((_, i) => (
               <div key={i} className="h-20 animate-pulse rounded-xl bg-surface/40" />
             ))}
           </div>
@@ -184,14 +218,29 @@ export default function HealthPage() {
               </div>
             )}
 
-            {allHealthy && (
+            {stale.length > 0 && degraded.length === 0 && (
+              <div className="flex items-start gap-3 px-4 py-3 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
+                <span className="text-yellow-400 mt-0.5 shrink-0">◐</span>
+                <div>
+                  <p className="text-sm font-medium text-yellow-200">
+                    Some components are stale
+                  </p>
+                  <p className="text-[11px] text-yellow-200/70 mt-0.5">
+                    {stale.map((c) => c.label).join(", ")}{" "}
+                    {stale.length === 1 ? "needs" : "need"} attention.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {allHealthy && degraded.length === 0 && stale.length === 0 && (
               <div className="flex items-start gap-3 px-4 py-3 bg-green-500/10 border border-green-500/30 rounded-xl">
                 <span className="text-green-400 mt-0.5 shrink-0">●</span>
                 <p className="text-sm text-green-300">All systems operational</p>
               </div>
             )}
 
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {COMPONENTS.map((c) => (
                 <StatusCard
                   key={c.key}
@@ -199,9 +248,7 @@ export default function HealthPage() {
                   status={getStatus(c.key)}
                   ms={getMs(c.key)}
                   detail={
-                    c.key === "frontend" && frontend?.runtime
-                      ? frontend.runtime
-                      : undefined
+                    getDetail(c.key)
                   }
                 />
               ))}

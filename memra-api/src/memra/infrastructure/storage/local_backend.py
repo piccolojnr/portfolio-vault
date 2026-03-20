@@ -26,3 +26,9 @@ class LocalStorageBackend(StorageBackend):
     async def delete(self, path: str) -> None:
         dest = self._base / path
         await asyncio.to_thread(lambda: dest.unlink(missing_ok=True))
+
+    async def download(self, path: str) -> bytes:
+        p = Path(path)
+        if not p.is_absolute():
+            p = self._base / path
+        return await asyncio.to_thread(p.read_bytes)

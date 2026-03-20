@@ -30,8 +30,16 @@ async def handle_ingest_document(payload: dict) -> None:
     settings = get_settings()
     logger.info("[handler] ingest_document doc_id=%s corpus=%s", doc_id, corpus_key)
     import uuid as _uuid
-    await ingest_document(doc_id, settings, corpus_key=corpus_key,
-                          org_id=_uuid.UUID(org_id_str) if org_id_str else None)
+    try:
+        await ingest_document(
+            doc_id,
+            settings,
+            corpus_key=corpus_key,
+            org_id=_uuid.UUID(org_id_str) if org_id_str else None,
+        )
+    except LookupError:
+        # Stale queue item (document deleted before worker pickup) — no-op.
+        logger.warning("[handler] ingest_document: doc not found id=%s", doc_id)
 
 
 async def handle_reingest_document(payload: dict) -> None:

@@ -33,6 +33,18 @@ def _get_sync_engine():
     return create_engine(settings.database_url)
 
 
+def get_engine():
+    """Return (sync_engine, settings) for other CLI commands.
+
+    Backward-compatible helper used by `clear-lightrag`.
+    """
+    from memra.app.core.config import get_settings
+
+    settings = get_settings()
+    engine = _get_sync_engine()
+    return engine, settings
+
+
 def _alembic_cfg():
     """Return an Alembic Config with DATABASE_URL injected from Settings."""
     from alembic.config import Config

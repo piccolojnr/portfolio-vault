@@ -30,7 +30,6 @@ from memra.infrastructure.db.repository import (
     get_doc_by_id,
     save_extracted_text,
     update_doc_metadata,
-    update_doc_lightrag_status,
     update_doc_file_meta,
 )
 
@@ -69,7 +68,7 @@ async def ingest_document(
         if file_data is not None:
             await _attach_file(doc, file_data, settings)
 
-        text, encoding_warning = _extract_text(doc)
+        text, encoding_warning = await _extract_text(doc)
         if not text:
             raise ValueError(f"No text content found for document {doc.slug!r} ({doc_id})")
 
@@ -116,7 +115,7 @@ async def _attach_file(doc, data: bytes, settings) -> None:
     doc.file_path = stored_path
 
 
-def _extract_text(doc) -> tuple[str, str | None]:
+async def _extract_text(doc) -> tuple[str, str | None]:
     """Return (plain_text, encoding_warning_or_None) for a Document.
 
     Prefers the DB-stored extracted_text field; falls back to reading a file
@@ -126,20 +125,26 @@ def _extract_text(doc) -> tuple[str, str | None]:
         return doc.extracted_text, None
 
     if doc.file_path:
-        return _read_file_bytes(doc.file_path)
+        return await _read_file_bytes(doc.file_path)
 
     return "", None
 
 
-def _read_file_bytes(path: str) -> tuple[str, str | None]:
+async def _read_file_bytes(path: str) -> tuple[str, str | None]:
     """Read a file with encoding detection.
 
     Returns (text, warning) where warning is non-None when confidence < 0.7
     or a fallback decode was needed.
     """
     from pathlib import Path
+    from memra.infrastructure.storage import get_storage_backend
 
-    raw = Path(path).read_bytes()
+    p = Path(path)
+    if p.exists():
+        raw = p.read_bytes()
+    else:
+        # Remote backends (e.g. Supabase) store object keys in file_path.
+        raw = await get_storage_backend().download(path)
     try:
         return raw.decode("utf-8"), None
     except UnicodeDecodeError:

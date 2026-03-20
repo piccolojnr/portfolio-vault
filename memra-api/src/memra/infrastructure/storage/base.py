@@ -24,3 +24,8 @@ class StorageBackend(ABC):
     async def delete(self, path: str) -> None:
         """Remove the file at *path*."""
         ...
+
+    @abstractmethod
+    async def download(self, path: str) -> bytes:
+        """Read file bytes from *path*."""
+        ...

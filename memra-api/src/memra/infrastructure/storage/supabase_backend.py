@@ -24,6 +24,13 @@ class SupabaseStorageBackend(StorageBackend):
                 "Install it with: pip install 'supabase>=2.0'"
             ) from exc
 
+        if key.startswith("sb_publishable_"):
+            raise ValueError(
+                "SUPABASE_STORAGE_KEY is a publishable key (sb_publishable_*). "
+                "Server-side uploads require a service-role key "
+                "(SUPABASE_SERVICE_ROLE_KEY / sb_secret_*), or matching RLS insert policies."
+            )
+
         self._client = create_client(url, key)
         self._bucket = bucket
 
@@ -45,3 +52,10 @@ class SupabaseStorageBackend(StorageBackend):
             self._client.storage.from_(self._bucket).remove,
             [path],
         )
+
+    async def download(self, path: str) -> bytes:
+        data = await asyncio.to_thread(
+            self._client.storage.from_(self._bucket).download,
+            path,
+        )
+        return data if isinstance(data, bytes) else bytes(data)
