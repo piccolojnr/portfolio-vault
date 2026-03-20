@@ -1,3 +1,0 @@
-web: gunicorn memra.app.main:app -w ${GUNICORN_WORKERS:-4} -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-8000} --timeout 300 --graceful-timeout 30
-worker: memra worker
-release: alembic upgrade head

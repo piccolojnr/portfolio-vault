@@ -1,5 +1,0 @@
-import { proxyGet } from "../../_helpers";
-
-export async function GET(req: Request) {
-  return proxyGet(req, "/analytics/daily-by-type");
-}

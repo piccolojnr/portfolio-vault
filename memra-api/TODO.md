@@ -1,2 +1,0 @@
-- add loading state when deleting documents
-- add loading state and response when retrying document ingest in ingest page
