@@ -72,7 +72,7 @@ class Settings(BaseSettings):
     mailpit_port: int = 1025
 
     # App metadata (used in email templates)
-    app_name: str = "Memra"
+    app_name: str = "Memraiq"
     app_url: str = "http://app.memra.local"
 
     # Logging — set LOG_LEVEL=DEBUG to see memra.* debug lines (e.g. Paystack webhooks)

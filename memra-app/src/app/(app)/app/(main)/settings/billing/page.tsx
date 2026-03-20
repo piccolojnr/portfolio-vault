@@ -127,9 +127,6 @@ export default function BillingPage() {
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [cancelSuccess, setCancelSuccess] = useState<string | null>(null);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
-  const [resumeLoading, setResumeLoading] = useState(false);
-  const [resumeError, setResumeError]   = useState<string | null>(null);
-  const [resumeSuccess, setResumeSuccess] = useState<string | null>(null);
 
   const success = searchParams.get("payment") === "success";
 
@@ -254,34 +251,6 @@ export default function BillingPage() {
     }
   }
 
-  async function onResume() {
-    setResumeLoading(true);
-    setResumeError(null);
-    setResumeSuccess(null);
-    try {
-      const res = await apiFetch<{ status: string }>("/api/billing/resume", { method: "POST" });
-      if (res.status === "resume_pending_manual") {
-        setResumeSuccess("Resume is being prepared. If it does not update shortly, please contact support.");
-      } else if (res.status === "already_active") {
-        setResumeSuccess("Your subscription is already active. Refreshing…");
-      } else {
-        setResumeSuccess("Subscription resumed. Your renewal has been re-enabled.");
-      }
-      await refresh();
-      await loadBilling();
-      router.refresh();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Resume failed";
-      if (msg.includes("403") || msg.toLowerCase().includes("forbidden")) {
-        setResumeError("Only the organisation owner can resume the subscription.");
-      } else {
-        setResumeError("Could not resume the subscription right now. Please try again.");
-      }
-    } finally {
-      setResumeLoading(false);
-    }
-  }
-
   async function onReactivate() {
     const plan = (billing?.plan ?? "pro") as "pro" | "enterprise";
     const res = await apiFetch<{ authorization_url: string }>("/api/billing/subscribe", {
@@ -346,12 +315,6 @@ export default function BillingPage() {
                 ) : null}
                 {cancelError ? (
                   <p className="text-[12px] font-mono text-destructive mb-3">{cancelError}</p>
-                ) : null}
-                {resumeSuccess ? (
-                  <p className="text-[12px] font-mono text-emerald-400 mb-3">{resumeSuccess}</p>
-                ) : null}
-                {resumeError ? (
-                  <p className="text-[12px] font-mono text-destructive mb-3">{resumeError}</p>
                 ) : null}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div className="text-[12px] font-mono text-muted-foreground">

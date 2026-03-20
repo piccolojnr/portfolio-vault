@@ -60,9 +60,19 @@ class EmailRenderer:
         from memra.app.core.config import get_settings
 
         settings = get_settings()
+        app_name = settings.app_name or "Memraiq"
+        if app_name.lower().endswith("iq"):
+            brand_main = app_name[:-2] or "Memra"
+            brand_suffix = app_name[-2:]
+        else:
+            brand_main = app_name
+            brand_suffix = ""
         return {
-            "app_name": settings.app_name,
+            "app_name": app_name,
             "app_url": settings.app_url,
+            "app_logo_url": f"{settings.app_url.rstrip('/')}/logo.png",
+            "app_brand_main": brand_main,
+            "app_brand_suffix": brand_suffix,
         }
 
     def render(self, template_name: str, context: dict) -> EmailMessage:

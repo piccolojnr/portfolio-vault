@@ -16,6 +16,18 @@ const AUTH_PAGES = [
 ];
 
 const PUBLIC_PAGES = ["/auth/invite", "/auth/verify"];
+const MAIN_MARKETING_PAGES = [
+  "/",
+  "/pricing",
+  "/features",
+  "/security",
+  "/integrations",
+  "/docs",
+  "/blog",
+  "/contact",
+  "/about",
+  "/legal",
+];
 
 const ADMIN_PUBLIC_PATHS = ["/login", "/change-password"];
 
@@ -50,7 +62,8 @@ export function isAppDomain(host: string): boolean {
 export const isBypass = (p: string) => matchesPrefixes(p, BYPASS_PREFIXES);
 export const isAuthPage = (p: string) => matchesPrefixes(p, AUTH_PAGES);
 export const isPublicPage = (p: string) => matchesPrefixes(p, PUBLIC_PAGES);
-export const isMainDomainPublic = (p: string) => p === "/" || isPublicPage(p);
+export const isMainDomainPublic = (p: string) =>
+  matchesExactOrPrefix(p, MAIN_MARKETING_PAGES) || isPublicPage(p);
 
 export const isAdminPublicPath = (p: string) =>
   matchesExactOrPrefix(p, ADMIN_PUBLIC_PATHS);

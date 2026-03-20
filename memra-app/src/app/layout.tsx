@@ -3,9 +3,7 @@ import "./globals.css";
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { QueryProvider } from "@/components/providers/query-provider";
-import { AuthProvider } from "@/components/providers/auth-provider";
 import { Toaster } from "sonner";
-import { PaywallProvider } from "@/components/providers/paywall-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -17,6 +15,9 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const SITE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://memraiq.co";
+const SITE_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "MemraIQ";
+
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
@@ -24,8 +25,21 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Memra",
-  description: "Memra — AI-powered knowledge App",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: `${SITE_NAME} | AI Knowledge Workspace`,
+    template: `%s | ${SITE_NAME}`,
+  },
+  description:
+    "Memra is an AI-powered knowledge workspace for teams. Upload documents, search instantly, and chat with grounded answers.",
+  keywords: [
+    "AI knowledge base",
+    "document intelligence",
+    "RAG",
+    "team knowledge management",
+    "enterprise search",
+  ],
+  applicationName: SITE_NAME,
   icons: {
     icon: [
       { url: "/favicon.ico" },
@@ -35,6 +49,43 @@ export const metadata: Metadata = {
     apple: "/apple-touch-icon.png",
   },
   manifest: "/site.webmanifest",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    url: "/",
+    siteName: SITE_NAME,
+    title: `${SITE_NAME} | AI Knowledge Workspace`,
+    description:
+      "Turn team documents into a searchable, conversational knowledge workspace with Memra.",
+    images: [
+      {
+        url: "/logos/memraiq-icon-512.png",
+        width: 512,
+        height: 512,
+        alt: `${SITE_NAME} logo`,
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `${SITE_NAME} | AI Knowledge Workspace`,
+    description:
+      "Upload docs, discover connections, and chat with grounded answers in one AI workspace.",
+    images: ["/logos/memraiq-icon-512.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
 };
 
 export default function RootLayout({
@@ -48,12 +99,8 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased overflow-hidden`}
       >
         <QueryProvider>
-          <AuthProvider>
-            <PaywallProvider>
-              {children}
-              <Toaster position="bottom-right" />
-            </PaywallProvider>
-          </AuthProvider>
+          {children}
+          <Toaster position="bottom-right" />
         </QueryProvider>
       </body>
     </html>

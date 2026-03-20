@@ -108,7 +108,7 @@ function StatusCard({
         {ms > 0 ? `${ms}ms` : "—"}
       </div>
       {detail && (
-        <div className="text-[10px] text-muted-foreground/50 mt-0.5 font-mono break-words whitespace-pre-wrap">
+        <div className="text-[10px] text-muted-foreground/50 mt-0.5 font-mono wrap-break-word whitespace-pre-wrap">
           {detail}
         </div>
       )}

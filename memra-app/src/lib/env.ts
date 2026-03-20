@@ -24,7 +24,7 @@ export const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
 // ── Client-side (NEXT_PUBLIC_*) ──────────────────────────────────────────────
 
-export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "Memra";
+export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "Memraiq";
 
 export const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL ?? "http://app.memra.local";
