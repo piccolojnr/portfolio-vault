@@ -1,0 +1,151 @@
+
+<link href="https://cdn.jsdelivr.net/npm/@fontsource/outfit/300.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/@fontsource/outfit/400.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/@fontsource/outfit/500.css" rel="stylesheet">
+
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  @keyframes breathe{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.82;transform:scale(1.08)}}
+  @keyframes fadein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  .page{padding:20px 0;font-family:'Outfit',system-ui,sans-serif}
+  .dark-card{background:#060A10;border-radius:20px;padding:48px 40px;display:flex;flex-direction:column;align-items:center;gap:44px}
+  .primary{display:flex;align-items:center;gap:18px;animation:fadein .5s ease both}
+  .wm{font-family:'Outfit',system-ui,sans-serif;font-size:40px;font-weight:300;letter-spacing:-1px;color:#F2F3F5;line-height:1}
+  .wm em{color:#f2c368;font-style:normal;font-weight:400}
+  .divider{width:100%;height:1px;background:rgba(255,255,255,0.06)}
+  .row{display:flex;align-items:flex-end;gap:36px;flex-wrap:wrap;justify-content:center}
+  .col{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .tag{font-family:'Outfit',system-ui,sans-serif;font-size:10px;color:rgba(255,255,255,0.25);letter-spacing:2px;text-transform:uppercase}
+  .light-bg{background:#F5F7FA;border-radius:12px;padding:20px 28px;display:flex;align-items:center;gap:14px}
+  .wm-light{font-family:'Outfit',system-ui,sans-serif;font-size:26px;font-weight:300;letter-spacing:-0.5px;color:#111518;line-height:1}
+  .wm-light em{color:#0aac90;font-style:normal;font-weight:400}
+  .pill{background:#f2c368;color:#060A10;font-family:'Outfit',monospace;font-size:10px;font-weight:500;padding:3px 10px;border-radius:99px;letter-spacing:.5px}
+  .pill-dim{background:rgba(255,255,255,0.07);color:rgba(255,255,255,0.45);font-family:'Outfit',monospace;font-size:10px;font-weight:400;padding:3px 10px;border-radius:99px;letter-spacing:.5px}
+  .swatches{display:flex;gap:10px}
+  .sw{display:flex;flex-direction:column;align-items:center;gap:6px}
+  .sw-block{width:52px;height:36px;border-radius:8px}
+  .sw-hex{font-family:'Outfit',monospace;font-size:9px;color:rgba(255,255,255,0.3);letter-spacing:.5px}
+  .top-node{transform-origin:26px 9px;animation:breathe 3s ease-in-out infinite}
+</style>
+
+<div class="page">
+<div class="dark-card">
+
+  <!-- Primary logo -->
+  <div class="primary">
+    <svg width="56" height="60" viewBox="0 0 52 56">
+      <line x1="26" y1="9" x2="6" y2="49" stroke="#f2c368" stroke-width="1.5" opacity="0.22" stroke-linecap="round"/>
+      <line x1="26" y1="9" x2="46" y2="49" stroke="#f2c368" stroke-width="1.5" opacity="0.22" stroke-linecap="round"/>
+      <line x1="6" y1="49" x2="46" y2="49" stroke="#f2c368" stroke-width="1" opacity="0.12" stroke-linecap="round"/>
+      <circle cx="6" cy="49" r="4.5" fill="#f2c368" opacity="0.38"/>
+      <circle cx="46" cy="49" r="4.5" fill="#f2c368" opacity="0.38"/>
+      <g class="top-node">
+        <circle cx="26" cy="9" r="8" fill="#f2c368"/>
+        <circle cx="26" cy="9" r="3.5" fill="white" opacity="0.55"/>
+      </g>
+    </svg>
+    <div class="wm">memra<em>iq</em></div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- Variants -->
+  <div class="row">
+
+    <!-- Icon only -->
+    <div class="col">
+      <svg width="36" height="38" viewBox="0 0 52 56">
+        <line x1="26" y1="9" x2="6" y2="49" stroke="#f2c368" stroke-width="1.5" opacity="0.22" stroke-linecap="round"/>
+        <line x1="26" y1="9" x2="46" y2="49" stroke="#f2c368" stroke-width="1.5" opacity="0.22" stroke-linecap="round"/>
+        <line x1="6" y1="49" x2="46" y2="49" stroke="#f2c368" stroke-width="1" opacity="0.12" stroke-linecap="round"/>
+        <circle cx="6" cy="49" r="4.5" fill="#f2c368" opacity="0.38"/>
+        <circle cx="46" cy="49" r="4.5" fill="#f2c368" opacity="0.38"/>
+        <circle cx="26" cy="9" r="8" fill="#f2c368"/>
+        <circle cx="26" cy="9" r="3.5" fill="white" opacity="0.55"/>
+      </svg>
+      <span class="tag">Mark</span>
+    </div>
+
+    <!-- Small -->
+    <div class="col">
+      <div style="display:flex;align-items:center;gap:9px">
+        <svg width="26" height="28" viewBox="0 0 52 56">
+          <line x1="26" y1="9" x2="6" y2="49" stroke="#f2c368" stroke-width="1.5" opacity="0.22" stroke-linecap="round"/>
+          <line x1="26" y1="9" x2="46" y2="49" stroke="#f2c368" stroke-width="1.5" opacity="0.22" stroke-linecap="round"/>
+          <line x1="6" y1="49" x2="46" y2="49" stroke="#f2c368" stroke-width="1" opacity="0.12" stroke-linecap="round"/>
+          <circle cx="6" cy="49" r="4.5" fill="#f2c368" opacity="0.38"/>
+          <circle cx="46" cy="49" r="4.5" fill="#f2c368" opacity="0.38"/>
+          <circle cx="26" cy="9" r="8" fill="#f2c368"/>
+          <circle cx="26" cy="9" r="3.5" fill="white" opacity="0.55"/>
+        </svg>
+        <span style="font-family:'Outfit',system-ui;font-size:22px;font-weight:300;color:#F2F3F5;letter-spacing:-.5px;line-height:1">memra<span style="color:#f2c368;font-weight:400">iq</span></span>
+      </div>
+      <span class="tag">Small</span>
+    </div>
+
+    <!-- Light mode -->
+    <div class="col">
+      <div class="light-bg">
+        <svg width="26" height="28" viewBox="0 0 52 56">
+          <line x1="26" y1="9" x2="6" y2="49" stroke="#0aac90" stroke-width="1.5" opacity="0.3" stroke-linecap="round"/>
+          <line x1="26" y1="9" x2="46" y2="49" stroke="#0aac90" stroke-width="1.5" opacity="0.3" stroke-linecap="round"/>
+          <line x1="6" y1="49" x2="46" y2="49" stroke="#0aac90" stroke-width="1" opacity="0.2" stroke-linecap="round"/>
+          <circle cx="6" cy="49" r="4.5" fill="#0aac90" opacity="0.45"/>
+          <circle cx="46" cy="49" r="4.5" fill="#0aac90" opacity="0.45"/>
+          <circle cx="26" cy="9" r="8" fill="#0aac90"/>
+          <circle cx="26" cy="9" r="3.5" fill="white" opacity="0.65"/>
+        </svg>
+        <div class="wm-light">memra<em>iq</em></div>
+      </div>
+      <span class="tag">Light mode</span>
+    </div>
+
+    <!-- App icon -->
+    <div class="col">
+      <div style="background:#060A10;border:1px solid rgba(255,255,255,0.08);border-radius:14px;width:56px;height:56px;display:flex;align-items:center;justify-content:center">
+        <svg width="32" height="34" viewBox="0 0 52 56">
+          <line x1="26" y1="9" x2="6" y2="49" stroke="#f2c368" stroke-width="1.5" opacity="0.22" stroke-linecap="round"/>
+          <line x1="26" y1="9" x2="46" y2="49" stroke="#f2c368" stroke-width="1.5" opacity="0.22" stroke-linecap="round"/>
+          <line x1="6" y1="49" x2="46" y2="49" stroke="#f2c368" stroke-width="1" opacity="0.12" stroke-linecap="round"/>
+          <circle cx="6" cy="49" r="4.5" fill="#f2c368" opacity="0.38"/>
+          <circle cx="46" cy="49" r="4.5" fill="#f2c368" opacity="0.38"/>
+          <circle cx="26" cy="9" r="8" fill="#f2c368"/>
+          <circle cx="26" cy="9" r="3.5" fill="white" opacity="0.55"/>
+        </svg>
+      </div>
+      <span class="tag">App icon</span>
+    </div>
+
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- Brand colors + pills -->
+  <div style="display:flex;flex-direction:column;align-items:center;gap:16px;width:100%">
+    <div class="swatches">
+      <div class="sw">
+        <div class="sw-block" style="background:#060A10;border:1px solid rgba(255,255,255,0.1)"></div>
+        <span class="sw-hex">#060A10</span>
+      </div>
+      <div class="sw">
+        <div class="sw-block" style="background:#f2c368"></div>
+        <span class="sw-hex">#f2c368</span>
+      </div>
+      <div class="sw">
+        <div class="sw-block" style="background:#F2F3F5;border:1px solid rgba(255,255,255,0.1)"></div>
+        <span class="sw-hex">#F2F3F5</span>
+      </div>
+      <div class="sw">
+        <div class="sw-block" style="background:rgba(13,219,184,0.15);border:1px solid rgba(13,219,184,0.2)"></div>
+        <span class="sw-hex">Teal 15%</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+      <span class="pill">Primary accent</span>
+      <span class="pill-dim">Deep background</span>
+      <span class="pill-dim">Off-white text</span>
+    </div>
+  </div>
+
+</div>
+</div>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 92" width="340" height="92">
+  <rect width="340" height="92" fill="#F7F4EF"/>
+  <line x1="34" y1="18" x2="10" y2="76" stroke="#b07c3a" stroke-width="1.5" opacity="0.35" stroke-linecap="round"/>
+  <line x1="34" y1="18" x2="58" y2="76" stroke="#b07c3a" stroke-width="1.5" opacity="0.35" stroke-linecap="round"/>
+  <line x1="10" y1="76" x2="58" y2="76" stroke="#b07c3a" stroke-width="1" opacity="0.2" stroke-linecap="round"/>
+  <circle cx="10" cy="76" r="5" fill="#b07c3a" opacity="0.45"/>
+  <circle cx="58" cy="76" r="5" fill="#b07c3a" opacity="0.45"/>
+  <circle cx="34" cy="18" r="9" fill="#b07c3a"/>
+  <circle cx="34" cy="18" r="4" fill="white" opacity="0.6"/>
+  <text x="76" y="60" font-family="Outfit, sans-serif" font-size="38" font-weight="300" fill="#1A1208" letter-spacing="-1">memra<tspan fill="#b07c3a" font-weight="400">iq</tspan></text>
+</svg>

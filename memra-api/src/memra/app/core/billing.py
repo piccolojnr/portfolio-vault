@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import Depends, Request
@@ -112,6 +111,34 @@ def _error_payload(
             "used": used,
             "plan": plan,
             "upgrade_url": upgrade_url,
+        },
+    )
+
+
+def _document_limit_error(*, limit: int, used: int, plan: str) -> PaywallError:
+    """Policy wording for document cap enforcement.
+
+    We deliberately keep existing documents accessible after downgrade/cancel
+    and only block creation of new documents while over cap.
+    """
+    return PaywallError(
+        status_code=402,
+        payload={
+            "error": (
+                "Document limit reached for your current plan. Existing documents remain "
+                "accessible, but uploading new documents is blocked until you upgrade or "
+                "reduce your document count."
+            ),
+            "code": "document_limit_exceeded",
+            "limit": limit,
+            "used": used,
+            "plan": plan,
+            "upgrade_url": "/settings/billing",
+            "policy": {
+                "existing_documents_access": "allowed",
+                "new_document_uploads": "blocked_when_over_limit",
+                "reingest_existing_documents": "allowed",
+            },
         },
     )
 
@@ -291,13 +318,10 @@ def enforce_plan_limits(
             )
             used_docs = int(doc_count_res.mappings().first()["cnt"])
             if used_docs >= int(plan_limit.max_documents):
-                raise _error_payload(
-                    error="Document limit exceeded.",
-                    code="document_limit_exceeded",
+                raise _document_limit_error(
                     limit=int(plan_limit.max_documents),
                     used=used_docs,
                     plan=org.plan,
-                    status_code=402,
                 )
 
         # ── Member caps ──────────────────────────────────────────────────────

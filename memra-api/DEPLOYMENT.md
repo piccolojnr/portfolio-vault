@@ -304,3 +304,34 @@ Expected:
   - Cause: ingestion job failed or pending
   - Fix: inspect job queue and document `lightrag_status`
 
+---
+
+## 13) Usage & Limits Policy (Public Copy Source)
+
+Use this section as the canonical source for landing-page/public policy wording.
+
+### Token limits
+
+- Token usage is computed from `ai_calls` within a billing window using:
+  - `SUM(input_tokens + output_tokens)` scoped by org + period boundaries.
+- The system does not reset counters on rows. "Reset" happens when the active
+  window changes.
+- Window selection:
+  - Use subscription period (`current_period_start` → `current_period_end`) when available.
+  - Otherwise use calendar month UTC boundaries.
+
+### Document limits
+
+- Document caps are plan-based totals (not monthly resets).
+- If a workspace is over the current plan's document cap (for example after a
+  downgrade), policy is:
+  - Existing documents remain accessible.
+  - New uploads are blocked while over cap.
+  - Re-ingestion of existing documents remains allowed.
+
+### Cancellation and downgrade behavior
+
+- Cancelling/downgrading does not delete existing customer documents by default.
+- Access to new resource creation is controlled by current plan caps.
+- This prevents destructive data loss while still enforcing plan boundaries.
+

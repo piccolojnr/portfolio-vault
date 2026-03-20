@@ -29,6 +29,19 @@ type BillingResponse = {
     corpora: { used: number; max: number | null };
     members: { used: number; max: number | null };
   };
+  policy?: {
+    documents?: {
+      existing_documents_access?: string;
+      new_document_uploads?: string;
+      reingest_existing_documents?: string;
+      over_limit?: boolean;
+    };
+    tokens?: {
+      model?: string;
+      reset_strategy?: string;
+      window_source?: string;
+    };
+  };
   next_billing_date: string | null;
 };
 
@@ -437,6 +450,19 @@ export default function BillingPage() {
                           : `${billing?.limits.members.used} / ${billing?.limits.members.max}`}
                       </div>
                     </div>
+                  </div>
+                  <div className="rounded-lg border border-border/40 bg-muted/10 p-3 space-y-2">
+                    <div className="text-[10px] font-mono uppercase tracking-wide text-muted-foreground">
+                      policy
+                    </div>
+                    <p className="text-[12px] text-muted-foreground leading-relaxed">
+                      Token usage is calculated as a rolling sum of AI call tokens within the active billing window.
+                      Resets happen when the window changes, not by clearing counters.
+                    </p>
+                    <p className="text-[12px] text-muted-foreground leading-relaxed">
+                      Document limits are fixed by plan. If you are over your current limit, existing documents remain
+                      accessible, but new uploads are blocked until you upgrade or reduce document count.
+                    </p>
                   </div>
                 </div>
               </section>

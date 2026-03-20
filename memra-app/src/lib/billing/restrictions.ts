@@ -13,6 +13,14 @@ export type BillingSnapshot = {
   limits: {
     documents: { used: number; max: number | null };
   };
+  policy?: {
+    documents?: {
+      existing_documents_access?: string;
+      new_document_uploads?: string;
+      reingest_existing_documents?: string;
+      over_limit?: boolean;
+    };
+  };
 };
 
 export type RestrictionState = {
@@ -70,7 +78,8 @@ export function deriveRestrictionState(
       reason = "Your subscription is not active. Upgrade or fix billing to continue.";
     }
   } else if (isDocumentLimitReached) {
-    reason = "You have reached your document limit for the current plan.";
+    reason =
+      "You have reached your document limit for the current plan. Existing documents remain accessible, but new uploads are blocked until you upgrade or reduce document count.";
   } else if (isTokenLimitReached) {
     reason = "You have reached your monthly token limit for the current plan.";
   }

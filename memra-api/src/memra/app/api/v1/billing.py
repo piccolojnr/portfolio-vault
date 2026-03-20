@@ -51,6 +51,16 @@ def _naive_utc(dt: datetime) -> datetime:
     return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
 
+def _document_policy(*, used_docs: int, max_docs: int | None) -> dict[str, Any]:
+    over_limit = bool(max_docs is not None and used_docs >= max_docs)
+    return {
+        "existing_documents_access": "allowed",
+        "new_document_uploads": "blocked_when_over_limit" if over_limit else "allowed",
+        "reingest_existing_documents": "allowed",
+        "over_limit": over_limit,
+    }
+
+
 class SubscribeRequest(BaseModel):
     plan: str
 
@@ -147,6 +157,23 @@ async def get_billing(
                 "max": plan_limit.max_members if plan_limit else None,
             },
         },
+        "policy": {
+            "documents": _document_policy(
+                used_docs=used_docs,
+                max_docs=plan_limit.max_documents if plan_limit else None,
+            ),
+            "tokens": {
+                "model": "rolling_sum_within_period_window",
+                "reset_strategy": "window_boundary_change_not_counter_reset",
+                "window_source": (
+                    "subscription_period"
+                    if subscription
+                    and subscription.current_period_start
+                    and subscription.current_period_end
+                    else "calendar_month_utc"
+                ),
+            },
+        },
         "next_billing_date": subscription.current_period_end.isoformat() if subscription and subscription.current_period_end else None,
     }
 
@@ -234,6 +261,12 @@ async def get_billing_restrictions(
                 "used": used_docs,
                 "max": plan_limit.max_documents if plan_limit else None,
             },
+        },
+        "policy": {
+            "documents": _document_policy(
+                used_docs=used_docs,
+                max_docs=plan_limit.max_documents if plan_limit else None,
+            ),
         },
         "upgrade_url": "/settings/billing",
     }
