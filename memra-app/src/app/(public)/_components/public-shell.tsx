@@ -89,6 +89,19 @@ export function PublicShell({
             </p>
           </section>
           {children}
+          <section className="mt-12 rounded-xl border border-border/60 bg-surface/40 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground">
+                Explore pricing, features, and trust pages before starting your workspace.
+              </p>
+              <Link
+                href="/pricing"
+                className="text-[12px] font-mono px-3.5 py-1.5 rounded-md border border-border text-foreground hover:bg-surface/60 transition-colors"
+              >
+                compare plans
+              </Link>
+            </div>
+          </section>
         </div>
       </main>
 

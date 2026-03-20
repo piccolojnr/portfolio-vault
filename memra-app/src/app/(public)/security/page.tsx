@@ -44,9 +44,35 @@ export default function SecurityPage() {
   return (
     <PublicShell
       title="Security and trust by design"
-      subtitle="Memra is built with practical controls for team access, platform visibility, and operational reliability."
+      subtitle="Security posture centers on access boundaries, operational diagnostics, and transparent platform behavior."
     >
       <JsonLd data={faqLd} />
+      <section className="rounded-2xl border border-border bg-surface/40 p-6 mb-8">
+        <div className="grid lg:grid-cols-2 gap-5">
+          <div className="text-sm text-muted-foreground space-y-2">
+            <p className="text-[11px] font-mono tracking-[0.2em] uppercase text-primary/70">
+              Trust model
+            </p>
+            <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
+              Practical controls, clear boundaries
+            </h2>
+            <p>
+              This page summarizes documented security posture and platform safeguards for
+              evaluation and planning.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            {["Access", "Data", "Observability", "Incidents"].map((item) => (
+              <div key={item} className="rounded-lg border border-border/50 bg-bg/40 p-3 text-muted-foreground">
+                {item}
+              </div>
+            ))}
+          </div>
+        </div>
+        <p className="text-sm text-muted-foreground mt-4">
+          TODO(security): publish formal compliance and certification statements only after approval.
+        </p>
+      </section>
       <section className="space-y-4">
         <article className="rounded-xl border border-border bg-surface/40 p-5">
           <h2 className="font-semibold">Access and identity</h2>
@@ -64,6 +90,15 @@ export default function SecurityPage() {
           <h2 className="font-semibold">Observability</h2>
           <p className="text-sm text-muted-foreground mt-2">
             Component-level health checks cover database, vector stores, graph, worker, and billing configuration.
+          </p>
+        </article>
+        <article className="rounded-xl border border-border bg-surface/40 p-5">
+          <h2 className="font-semibold">Incident and operations readiness</h2>
+          <p className="text-sm text-muted-foreground mt-2">
+            Operational workflows include diagnostics-first behavior to help teams investigate outages and dependency degradation quickly.
+          </p>
+          <p className="text-sm text-muted-foreground mt-2">
+            TODO(security): define externally published incident communication expectations.
           </p>
         </article>
       </section>

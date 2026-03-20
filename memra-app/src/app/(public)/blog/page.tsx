@@ -43,9 +43,32 @@ export default function BlogPage() {
   return (
     <PublicShell
       title="Blog and changelog"
-      subtitle="Track platform updates, feature releases, and operational guidance."
+      subtitle="Track platform updates, policy clarifications, and implementation guidance."
     >
       <JsonLd data={collectionLd} />
+      <section className="rounded-2xl border border-border bg-surface/40 p-6 mb-8">
+        <div className="grid lg:grid-cols-2 gap-5">
+          <div>
+            <p className="text-[11px] font-mono tracking-[0.2em] uppercase text-primary/70 mb-2">
+              Update stream
+            </p>
+            <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
+              Product and policy updates
+            </h2>
+            <p className="text-sm text-muted-foreground mt-3">
+              Posts below are release-focused updates. Longer technical and policy guides can be
+              added as this knowledge base grows.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            {["Releases", "Operations", "Billing", "Guidance"].map((item) => (
+              <div key={item} className="rounded-lg border border-border/50 bg-bg/40 p-3 text-center text-muted-foreground">
+                {item}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
       <section className="space-y-3">
         {entries.map((entry) => (
           <article key={entry.slug} className="rounded-xl border border-border bg-surface/40 p-5">

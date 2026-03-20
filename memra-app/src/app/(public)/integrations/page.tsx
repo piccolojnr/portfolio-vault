@@ -30,9 +30,32 @@ export default function IntegrationsPage() {
   return (
     <PublicShell
       title="Integrates with your stack"
-      subtitle="Connect Memra to modern AI, storage, and infrastructure providers."
+      subtitle="Connect knowledge workflows to model, storage, graph, and billing infrastructure already used in production systems."
     >
       <JsonLd data={breadcrumbLd} />
+      <section className="rounded-2xl border border-border bg-surface/40 p-6 mb-8">
+        <div className="grid lg:grid-cols-2 gap-5">
+          <div>
+            <p className="text-[11px] font-mono tracking-[0.2em] uppercase text-primary/70 mb-2">
+              Integration map
+            </p>
+            <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
+              Connect to your existing architecture
+            </h2>
+            <p className="text-sm text-muted-foreground mt-3">
+              Integration points reflect current backend architecture and deployment configuration
+              paths.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-sm text-muted-foreground">
+            {["Models", "Storage", "Graph", "DB", "Billing", "Workers"].map((item) => (
+              <div key={item} className="rounded-lg border border-border/50 bg-bg/40 p-2.5 text-center">
+                {item}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
       <section className="grid md:grid-cols-2 gap-4">
         {[
           ["AI models", "OpenAI and Anthropic model support"],
@@ -47,6 +70,10 @@ export default function IntegrationsPage() {
             <p className="text-sm text-muted-foreground mt-2">{desc}</p>
           </article>
         ))}
+      </section>
+      <section className="mt-10 rounded-xl border border-border bg-surface/40 p-6 text-sm text-muted-foreground space-y-2">
+        <p>Provider selection and configuration are controlled through environment and runtime settings.</p>
+        <p>TODO(integrations): publish supported provider/version matrix for customer-facing docs.</p>
       </section>
     </PublicShell>
   );
