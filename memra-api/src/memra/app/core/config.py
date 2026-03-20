@@ -75,6 +75,9 @@ class Settings(BaseSettings):
     app_name: str = "Memra"
     app_url: str = "http://app.memra.local"
 
+    # Logging — set LOG_LEVEL=DEBUG to see memra.* debug lines (e.g. Paystack webhooks)
+    log_level: str = "INFO"
+
     # Billing / Paystack (can be overridden by platform settings DB)
     paystack_secret_key: str = ""
     paystack_public_key: str = ""

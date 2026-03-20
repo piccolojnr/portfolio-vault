@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID
@@ -24,6 +25,7 @@ from memra.infrastructure.db.models.payment_event import PaymentEvent
 from memra.infrastructure.db.models.subscription import Subscription
 
 router = APIRouter(prefix="/billing", tags=["billing"])
+logger = logging.getLogger(__name__)
 
 DBSession = AsyncSession
 
@@ -258,22 +260,165 @@ async def cancel_subscription(
     settings: Settings = Depends(get_live_settings),
 ):
     org_id = UUID(current_user["org_id"])
+    logger.info("[billing.cancel] start org_id=%s", org_id)
     org = (await session.execute(select(Organisation).where(Organisation.id == org_id))).scalars().first()
     if not org:
+        logger.warning("[billing.cancel] org not found org_id=%s", org_id)
         raise HTTPException(status_code=404, detail="Organisation not found")
 
-    subscription = (await session.execute(select(Subscription).where(Subscription.org_id == org_id))).scalars().first()
-    if not subscription or not subscription.paystack_subscription_code or not subscription.paystack_email_token:
+    subscription = (
+        await session.execute(select(Subscription).where(Subscription.org_id == org_id))
+    ).scalars().first()
+    if not subscription:
         # Nothing to cancel; treat as no-op.
+        logger.info("[billing.cancel] no subscription row org_id=%s", org_id)
         return {"status": "no_subscription"}
 
     paystack = PaystackService(session=session, settings=settings)
-    await paystack.disable_subscription(
-        subscription_code=subscription.paystack_subscription_code,
-        email_token=subscription.paystack_email_token,
+    sub_code = subscription.paystack_subscription_code
+    email_token = subscription.paystack_email_token
+    logger.info(
+        "[billing.cancel] loaded subscription org_id=%s sub_status=%s has_sub_code=%s has_email_token=%s",
+        org_id,
+        subscription.status,
+        bool(sub_code),
+        bool(email_token),
     )
 
+    if not sub_code:
+        logger.warning(
+            "[billing.cancel] missing subscription_code org_id=%s subscription_id=%s",
+            org_id,
+            subscription.id,
+        )
+        return {"status": "no_subscription"}
+
+    # Some historical rows may miss email_token even when a live subscription exists.
+    if not email_token:
+        logger.info(
+            "[billing.cancel] email_token missing; attempting fetch org_id=%s sub_code=%s",
+            org_id,
+            sub_code,
+        )
+        try:
+            details = await paystack.fetch_subscription(subscription_code=sub_code)
+            fetched_token = details.get("email_token")
+            if fetched_token:
+                subscription.paystack_email_token = fetched_token
+                email_token = fetched_token
+                session.add(subscription)
+                await session.commit()
+                logger.info(
+                    "[billing.cancel] recovered email_token via fetch org_id=%s sub_code=%s",
+                    org_id,
+                    sub_code,
+                )
+            else:
+                logger.warning(
+                    "[billing.cancel] fetch_subscription returned no email_token org_id=%s sub_code=%s",
+                    org_id,
+                    sub_code,
+                )
+        except Exception:
+            # Keep endpoint non-fatal; UI can instruct retry/support.
+            logger.exception(
+                "[billing.cancel] fetch_subscription failed org_id=%s sub_code=%s",
+                org_id,
+                sub_code,
+            )
+            return {"status": "cancel_pending_manual"}
+
+    if not email_token:
+        logger.warning(
+            "[billing.cancel] still missing email_token after recovery org_id=%s sub_code=%s",
+            org_id,
+            sub_code,
+        )
+        return {"status": "cancel_pending_manual"}
+
+    logger.info(
+        "[billing.cancel] disabling subscription in paystack org_id=%s sub_code=%s",
+        org_id,
+        sub_code,
+    )
+    disable_result = await paystack.disable_subscription(
+        subscription_code=sub_code,
+        email_token=email_token,
+    )
+    if disable_result.get("already_inactive"):
+        logger.info(
+            "[billing.cancel] paystack reports subscription already inactive org_id=%s sub_code=%s",
+            org_id,
+            sub_code,
+        )
+        if subscription.status != "cancelled":
+            subscription.status = "cancelled"
+            subscription.cancelled_at = _utcnow_naive()
+            session.add(subscription)
+            await session.commit()
+        return {"status": "already_inactive"}
+
+    logger.info(
+        "[billing.cancel] disable request sent org_id=%s sub_code=%s",
+        org_id,
+        sub_code,
+    )
+
+    # Reflect expected post-disable lifecycle immediately while webhook catches up.
+    if subscription.status == "active":
+        subscription.status = "non_renewing"
+        session.add(subscription)
+        await session.commit()
+        logger.info(
+            "[billing.cancel] subscription marked non_renewing locally org_id=%s sub_code=%s",
+            org_id,
+            sub_code,
+        )
+
+    logger.info("[billing.cancel] completed org_id=%s result=cancel_queued", org_id)
     return {"status": "cancel_queued"}
+
+
+@router.post("/resolve")
+async def resolve_subscription_payment(
+    session: DBSession = Depends(get_db_conn),
+    current_user: dict = Depends(require_role("owner")),
+    settings: Settings = Depends(get_live_settings),
+):
+    org_id = UUID(current_user["org_id"])
+    org = (
+        await session.execute(select(Organisation).where(Organisation.id == org_id))
+    ).scalars().first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organisation not found")
+
+    subscription = (
+        await session.execute(select(Subscription).where(Subscription.org_id == org_id))
+    ).scalars().first()
+    if not subscription:
+        raise HTTPException(status_code=400, detail="No subscription found")
+
+    tier = org.plan
+    if tier not in ("pro", "enterprise"):
+        raise HTTPException(status_code=400, detail="Only paid plans can be resolved")
+
+    email = current_user.get("email") or ""
+    if not email:
+        raise HTTPException(status_code=400, detail="Missing owner email in token")
+
+    paystack = PaystackService(session=session, settings=settings)
+    callback_url = f"{settings.app_url}/api/billing/callback"
+    result = await paystack.initialize_subscription_transaction(
+        email=email,
+        tier=tier,
+        callback_url=callback_url,
+        metadata={
+            "org_id": str(org_id),
+            "tier": tier,
+            "source": "billing_resolve",
+        },
+    )
+    return {"authorization_url": result.authorization_url}
 
 
 @router.get("/history")

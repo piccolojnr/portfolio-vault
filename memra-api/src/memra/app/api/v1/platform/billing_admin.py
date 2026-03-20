@@ -131,7 +131,7 @@ async def list_payment_events(
     rows_res = await session.execute(
         text(
             f"""
-            SELECT id, paystack_event, paystack_reference, org_id, processed, error, created_at
+            SELECT id, paystack_event, paystack_reference, org_id, processed, error, created_at, raw_payload
             FROM payment_events
             WHERE {' AND '.join(where)}
             ORDER BY created_at DESC
@@ -150,6 +150,7 @@ async def list_payment_events(
             "processed": r["processed"],
             "error": r["error"],
             "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            "raw_payload": r["raw_payload"],
         }
         for r in rows
     ]

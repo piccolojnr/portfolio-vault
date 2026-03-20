@@ -12,6 +12,7 @@ Run:
 """
 
 from contextlib import asynccontextmanager
+import logging
 
 import uvicorn
 from fastapi import FastAPI, APIRouter
@@ -34,6 +35,12 @@ from memra.app.core.limiter import limiter
 from memra.app.core.billing import PaywallError, paywall_error_handler
 
 
+def _configure_memra_logging(log_level: str) -> None:
+    """Apply LOG_LEVEL to app loggers. Uvicorn defaults to INFO, which hides logger.debug()."""
+    level = getattr(logging, log_level.upper(), logging.INFO)
+    logging.getLogger("memra").setLevel(level)
+
+
 def _print_startup_banner(db_connected: bool = False) -> None:
     settings = get_settings()
     print("=" * 60)
@@ -45,6 +52,7 @@ def _print_startup_banner(db_connected: bool = False) -> None:
     print(f"  Qdrant URL:     {'yes' if settings.qdrant_url else 'no'}")
     print(f"  Database:       {'connected' if db_connected else 'not configured'}")
     print(f"  Storage:        {settings.storage_provider}")
+    print(f"  Log level:      {settings.log_level} (memra.*; use LOG_LEVEL=DEBUG for webhook details)")
     print("=" * 60)
     print("  Docs:     http://localhost:8000/docs")
     print("  Health:   GET  http://localhost:8000/api/v1/health")
@@ -56,6 +64,7 @@ def _print_startup_banner(db_connected: bool = False) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
+    _configure_memra_logging(settings.log_level)
     if settings.database_url:
         engine, factory = await open_db_engine(settings.database_url)
         app.state.db_engine = engine

@@ -17,6 +17,7 @@ import asyncio
 import hashlib
 import hmac
 import json
+import logging
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -26,6 +27,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from memra.app.core.config import Settings
 from memra.domain.services import platform_settings_service as pss
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -200,7 +203,28 @@ class PaystackService:
             secret_key=secret_key,
             body=payload,
         )
-        return result.get("data") if isinstance(result, dict) else {}
+        logger.info(
+            "[paystack.disable_subscription] response subscription_code=%s result=%s",
+            subscription_code,
+            result,
+        )
+
+        # Typical success shape: {"status": true, "data": {...}}
+        if isinstance(result, dict) and result.get("status") is True:
+            data = result.get("data")
+            return data if isinstance(data, dict) else {}
+
+        # HTTPError shape from _api_call: {"status": 404, "body": {...}}
+        if isinstance(result, dict):
+            status_code = result.get("status")
+            body = result.get("body")
+            body_code = body.get("code") if isinstance(body, dict) else None
+            body_message = body.get("message") if isinstance(body, dict) else None
+            if status_code == 404 and body_code == "not_found":
+                # Treat as idempotent cancel state for callers.
+                return {"already_inactive": True, "message": body_message}
+
+        raise RuntimeError(f"Paystack subscription disable failed: {result}")
 
     async def verify_transaction(self, *, reference: str) -> dict[str, Any]:
         secret_key = await self._get_secret()

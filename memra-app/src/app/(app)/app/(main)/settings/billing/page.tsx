@@ -1,10 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/network/api";
 import { useAuth } from "@/components/providers/auth-provider";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type BillingResponse = {
   plan: string;
@@ -61,6 +67,29 @@ function formatDate(value: string | null): string {
   });
 }
 
+function normalizeSubStatus(status: string | null | undefined): string {
+  return (status ?? "").toLowerCase().trim();
+}
+
+function formatEventLabel(value: string): string {
+  const key = value.toLowerCase().trim();
+  const labels: Record<string, string> = {
+    "charge.success": "Payment received",
+    "invoice.payment_failed": "Payment failed",
+    "invoice.update": "Invoice updated",
+    "subscription.create": "Subscription started",
+    "subscription.not_renew": "Auto-renew disabled",
+    "subscription.disable": "Subscription cancelled",
+  };
+  if (labels[key]) return labels[key];
+  return key
+    .replace(/[._]/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
 export default function BillingPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -70,6 +99,10 @@ export default function BillingPage() {
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [upgradePlan, setUpgradePlan] = useState<"pro" | "enterprise">("pro");
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const [cancelSuccess, setCancelSuccess] = useState<string | null>(null);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
 
   const success = searchParams.get("payment") === "success";
 
@@ -82,39 +115,58 @@ export default function BillingPage() {
     return { pct, used, limit };
   }, [billing]);
 
-  useEffect(() => {
+  const loadBilling = useCallback(async () => {
     if (!org?.id) return;
-
-    let cancelled = false;
-    async function load() {
-      setLoading(true);
-      try {
-        const [b, h] = await Promise.all([
-          apiFetch<BillingResponse>("/api/billing"),
-          apiFetch<HistoryRow[]>("/api/billing/history"),
-        ]);
-        if (!cancelled) {
-          setBilling(b);
-          setHistory(h);
-        }
-      } catch {
-        if (!cancelled) {
-          setBilling(null);
-          setHistory([]);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+    setLoading(true);
+    setCancelError(null);
+    try {
+      const [b, h] = await Promise.all([
+        apiFetch<BillingResponse>("/api/billing"),
+        apiFetch<HistoryRow[]>("/api/billing/history"),
+      ]);
+      setBilling(b);
+      setHistory(h);
+    } catch {
+      setBilling(null);
+      setHistory([]);
+    } finally {
+      setLoading(false);
     }
-    load();
+  }, [org?.id]);
 
-    // If the modal already opened because of a 402, refresh auth/org state.
+  useEffect(() => {
+    void loadBilling();
+  }, [loadBilling]);
+
+  useEffect(() => {
     if (success) void refresh();
+  }, [success, refresh]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [org?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const isOwner = org?.role === "owner";
+  const subStatus = normalizeSubStatus(billing?.subscription_status);
+  const isPaidPlan = !!billing && billing.plan !== "free";
+  const isSelfService = billing?.plan_source === "self_service";
+
+  const canShowCancelButton =
+    isOwner &&
+    isPaidPlan &&
+    isSelfService &&
+    subStatus !== "cancelled" &&
+    subStatus !== "non_renewing";
+
+  const subscriptionStatusNote = useMemo(() => {
+    if (!billing || billing.plan === "free") return null;
+    if (subStatus === "non_renewing") {
+      return `Your subscription is set to end. You keep access until ${formatDate(billing.period.current_period_end ?? billing.next_billing_date)}.`;
+    }
+    if (subStatus === "cancelled") {
+      return "This subscription is no longer active.";
+    }
+    if (subStatus === "attention") {
+      return "Payment failed or needs attention. Update your payment method from the app banner or contact support.";
+    }
+    return null;
+  }, [billing, subStatus]);
 
   async function onUpgrade() {
     const plan = upgradePlan;
@@ -131,15 +183,55 @@ export default function BillingPage() {
     window.location.href = res.authorization_url;
   }
 
+  async function runCancel() {
+    setCancelLoading(true);
+    setCancelError(null);
+    setCancelSuccess(null);
+    try {
+      const res = await apiFetch<{ status: string }>("/api/billing/cancel", {
+        method: "POST",
+      });
+      if (res.status === "no_subscription") {
+        setCancelSuccess(
+          "We could not locate a cancellable subscription right now. Please try again shortly.",
+        );
+      } else if (res.status === "cancel_pending_manual") {
+        setCancelSuccess(
+          "Cancellation is being prepared. If it does not update soon, please contact support.",
+        );
+      } else if (res.status === "already_inactive") {
+        setCancelSuccess(
+          "That subscription was already cancelled with the payment provider. Refreshing your billing status…",
+        );
+      } else {
+        setCancelSuccess(
+          "Cancellation request sent. Status will update after payment provider confirmation.",
+        );
+      }
+      await refresh();
+      await loadBilling();
+      router.refresh();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Cancellation failed";
+      if (msg.includes("403") || msg.toLowerCase().includes("forbidden")) {
+        setCancelError("Only the organisation owner can cancel the subscription.");
+      } else {
+        setCancelError(
+          "Could not cancel the subscription right now. Please try again.",
+        );
+      }
+    } finally {
+      setCancelLoading(false);
+    }
+  }
+
   async function onCancel() {
+    setCancelDialogOpen(false);
     const ok = window.confirm(
-      "Cancel your subscription? You will keep access until the end of the current billing period."
+      "Final confirmation: continue with cancellation?",
     );
     if (!ok) return;
-    await apiFetch("/api/billing/cancel", { method: "POST" });
-    await refresh();
-    await new Promise((r) => setTimeout(r, 750));
-    router.refresh();
+    await runCancel();
   }
 
   return (
@@ -177,29 +269,63 @@ export default function BillingPage() {
 
               <section className="rounded-xl border border-border bg-surface/40 p-5">
                 <SectionHeading>Subscription</SectionHeading>
+                {subscriptionStatusNote ? (
+                  <p className="text-[12px] text-muted-foreground mb-3 leading-relaxed">
+                    {subscriptionStatusNote}
+                  </p>
+                ) : null}
+                {cancelSuccess ? (
+                  <p className="text-[12px] font-mono text-emerald-400 mb-3">{cancelSuccess}</p>
+                ) : null}
+                {cancelError ? (
+                  <p className="text-[12px] font-mono text-destructive mb-3">{cancelError}</p>
+                ) : null}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div className="text-[12px] font-mono text-muted-foreground">
-                    Plan source: <span className="text-foreground">{billing?.plan_source ?? "—"}</span>
+                    Manage your current subscription settings.
                   </div>
                   {billing?.plan === "free" ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <select
-                        className="h-8 rounded-md border border-border bg-surface px-2 text-[12px] font-mono"
-                        value={upgradePlan}
-                        onChange={(e) => setUpgradePlan(e.target.value as "pro" | "enterprise")}
-                      >
-                        <option value="pro">pro</option>
-                        <option value="enterprise">enterprise</option>
-                      </select>
-                      <Button onClick={() => void onUpgrade()} className="h-8 px-3 text-[11px] font-mono">
-                        upgrade
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button variant="outline" onClick={() => void onCancel()} className="h-8 px-3 text-[11px] font-mono">
-                      cancel subscription
+                    isOwner ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <select
+                          className="h-8 rounded-md border border-border bg-surface px-2 text-[12px] font-mono"
+                          value={upgradePlan}
+                          onChange={(e) => setUpgradePlan(e.target.value as "pro" | "enterprise")}
+                        >
+                          <option value="pro">pro</option>
+                          <option value="enterprise">enterprise</option>
+                        </select>
+                        <Button onClick={() => void onUpgrade()} className="h-8 px-3 text-[11px] font-mono">
+                          upgrade
+                        </Button>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] font-mono text-muted-foreground max-w-md text-right sm:text-left">
+                        Only the organisation owner can start a subscription.
+                      </p>
+                    )
+                  ) : isPaidPlan && !isSelfService ? (
+                    <p className="text-[11px] font-mono text-muted-foreground max-w-md text-right sm:text-left">
+                      This plan is not managed through self-service billing. Contact your administrator to change or cancel.
+                    </p>
+                  ) : isPaidPlan && !isOwner ? (
+                    <p className="text-[11px] font-mono text-muted-foreground max-w-md text-right sm:text-left">
+                      Only the organisation owner can cancel or change the subscription.
+                    </p>
+                  ) : canShowCancelButton ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => setCancelDialogOpen(true)}
+                      disabled={cancelLoading}
+                      className="h-8 px-3 text-[11px] font-mono"
+                    >
+                      {cancelLoading ? "cancelling…" : "cancel subscription"}
                     </Button>
-                  )}
+                  ) : isOwner && isSelfService && isPaidPlan && !subscriptionStatusNote ? (
+                    <p className="text-[11px] font-mono text-muted-foreground max-w-md text-right sm:text-left">
+                      No cancel action available for this subscription state.
+                    </p>
+                  ) : null}
                 </div>
               </section>
 
@@ -252,7 +378,7 @@ export default function BillingPage() {
                 <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-2">
                   <h2 className="text-[13px] font-semibold text-foreground font-mono">Payment history</h2>
                   <span className="text-[11px] font-mono text-muted-foreground">
-                    {history.length} events
+                    {history.length} activities
                   </span>
                 </div>
 
@@ -261,10 +387,10 @@ export default function BillingPage() {
                     <thead className="bg-muted/10 border-b border-border/40">
                       <tr>
                         <th className="px-3 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider text-left">
-                          Event
+                          Activity
                         </th>
                         <th className="px-3 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider text-left">
-                          Reference
+                          Date
                         </th>
                         <th className="px-3 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider text-left">
                           Status
@@ -281,19 +407,27 @@ export default function BillingPage() {
                       ) : (
                         history.map((r) => (
                           <tr key={r.id} className="border-t border-border/20">
-                            <td className="px-3 py-2.5 font-mono text-[12px]">{r.paystack_event}</td>
-                            <td className="px-3 py-2.5 font-mono text-[11px] text-muted-foreground">
-                              {r.paystack_reference}
+                            <td className="px-3 py-2.5 text-[12px]">
+                              <div className="font-medium text-foreground">
+                                {formatEventLabel(r.paystack_event)}
+                              </div>
+                              <div className="font-mono text-[10px] text-muted-foreground/70">
+                                ref {r.paystack_reference.slice(0, 10)}…
+                              </div>
+                            </td>
+                            <td className="px-3 py-2.5 text-[11px] text-muted-foreground">
+                              {formatDate(r.created_at)}
                             </td>
                             <td className="px-3 py-2.5">
                               <span
-                                className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
-                                  r.processed
-                                    ? "bg-emerald-500/20 text-emerald-400"
-                                    : "bg-amber-500/20 text-amber-400"
+                                className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${r.error
+                                    ? "bg-destructive/20 text-destructive"
+                                    : r.processed
+                                      ? "bg-emerald-500/20 text-emerald-400"
+                                      : "bg-amber-500/20 text-amber-400"
                                 }`}
                               >
-                                {r.processed ? "processed" : "pending"}
+                                {r.error ? "needs review" : r.processed ? "completed" : "pending"}
                               </span>
                             </td>
                           </tr>
@@ -307,6 +441,34 @@ export default function BillingPage() {
           )}
         </div>
       </div>
+      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cancel subscription?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            This stops future auto-renewals. You usually keep access until your
+            current period ends.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setCancelDialogOpen(false)}
+            >
+              Keep subscription
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void onCancel()}
+              disabled={cancelLoading}
+            >
+              Continue
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

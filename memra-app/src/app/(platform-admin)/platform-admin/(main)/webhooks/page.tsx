@@ -13,30 +13,91 @@ type PaymentEventRow = {
   processed: boolean;
   error: string | null;
   created_at: string | null;
+  raw_payload: Record<string, unknown> | null;
 };
-
-function StatCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | number;
-}) {
-  return (
-    <div className="px-4 py-3 rounded-xl border border-border/40 bg-surface/30">
-      <div className="text-lg font-mono font-semibold text-foreground">{value}</div>
-      <div className="text-[11px] text-muted-foreground mt-0.5">{label}</div>
-    </div>
-  );
-}
 
 function formatDateTime(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleString();
 }
 
+function EventBadge({ event }: { event: string }) {
+  const cls: Record<string, string> = {
+    "charge.success": "bg-green-500/20 text-green-400",
+    "subscription.create": "bg-blue-500/20 text-blue-400",
+    "subscription.disable": "bg-orange-500/20 text-orange-400",
+    "subscription.not_renew": "bg-yellow-500/20 text-yellow-400",
+    "invoice.create": "bg-purple-500/20 text-purple-400",
+    "invoice.created": "bg-purple-500/20 text-purple-400",
+    "invoice.update": "bg-indigo-500/20 text-indigo-400",
+    "invoice.payment_failed": "bg-red-500/20 text-red-400",
+  };
+  return (
+    <span
+      className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${cls[event] ?? "bg-muted/20 text-muted-foreground"}`}
+    >
+      {event}
+    </span>
+  );
+}
+
+function RawPayloadModal({
+  event,
+  onClose,
+}: {
+  event: PaymentEventRow;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      onClick={onClose}
+    >
+      <div
+        className="bg-bg border border-border/60 rounded-2xl p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <EventBadge event={event.paystack_event} />
+            <span className="ml-2 text-[11px] font-mono text-muted-foreground">
+              {event.id}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            ✕
+          </button>
+        </div>
+
+        <p className="text-[11px] text-muted-foreground uppercase tracking-wider mb-1">
+          Raw Payload
+        </p>
+        <pre className="text-[12px] font-mono bg-muted/20 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-all">
+          {JSON.stringify(event.raw_payload, null, 2)}
+        </pre>
+
+        {event.error && (
+          <>
+            <p className="text-[11px] text-muted-foreground uppercase tracking-wider mt-4 mb-1">
+              Error
+            </p>
+            <pre className="text-[11px] font-mono bg-red-500/10 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap text-red-300 break-all">
+              {event.error}
+            </pre>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function WebhooksPage() {
   const [page, setPage] = useState(1);
+  const [selectedEvent, setSelectedEvent] = useState<PaymentEventRow | null>(null);
   const pageSize = 25;
   const offset = (page - 1) * pageSize;
 
@@ -46,14 +107,11 @@ export default function WebhooksPage() {
       adminFetch<PaymentEventRow[]>(
         `/api/platform/webhooks/payment-events?limit=${pageSize}&offset=${offset}`,
       ),
+    refetchInterval: 10000,
   });
 
   const rows = data ?? [];
   const hasNextPage = rows.length === pageSize;
-  const totalEvents = rows.length;
-  const processedEvents = rows.filter((e) => e.processed).length;
-  const failedEvents = rows.filter((e) => Boolean(e.error)).length;
-  const latestEvent = rows[0]?.paystack_event ?? "—";
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-bg">
@@ -67,24 +125,6 @@ export default function WebhooksPage() {
               Incoming Paystack event stream and processing status.
             </p>
           </div>
-
-          {isLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-20 animate-pulse rounded-xl bg-surface/40"
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <StatCard label="Total Events" value={totalEvents} />
-              <StatCard label="Processed" value={processedEvents} />
-              <StatCard label="With Errors" value={failedEvents} />
-              <StatCard label="Latest Event" value={latestEvent} />
-            </div>
-          )}
 
           <section className="rounded-xl border border-border/60 bg-surface/40 p-5">
             <h2 className="text-[13px] font-semibold text-foreground font-mono border-b border-border/40 pb-2 mb-4">
@@ -109,57 +149,55 @@ export default function WebhooksPage() {
                   <table className="w-full">
                     <thead className="bg-muted/10">
                       <tr>
-                        <th className="px-3 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider text-left">
-                          Event
-                        </th>
-                        <th className="px-3 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider text-left">
-                          Reference
-                        </th>
-                        <th className="px-3 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider text-left">
-                          Org
-                        </th>
-                        <th className="px-3 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider text-left">
-                          Status
-                        </th>
-                        <th className="px-3 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider text-left">
-                          Time
-                        </th>
+                        {["Event", "Reference", "Org", "Status", "Time", ""].map((h) => (
+                          <th
+                            key={h}
+                            className="px-3 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider text-left whitespace-nowrap"
+                          >
+                            {h}
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
                       {rows.map((event) => (
                         <tr
                           key={event.id}
-                          className="border-t border-border/20 hover:bg-surface/30 transition-colors"
+                          className={`border-t border-border/20 hover:bg-surface/30 transition-colors ${event.error ? "bg-red-500/5" : ""}`}
                         >
-                          <td className="px-3 py-2.5 text-[12px] font-mono text-foreground">
-                            {event.paystack_event}
+                          <td className="px-3 py-2.5 whitespace-nowrap">
+                            <EventBadge event={event.paystack_event} />
                           </td>
-                          <td className="px-3 py-2.5 text-[12px] font-mono text-muted-foreground">
+                          <td className="px-3 py-2.5 text-[11px] font-mono text-muted-foreground max-w-[180px] truncate">
                             {event.paystack_reference || "—"}
                           </td>
-                          <td className="px-3 py-2.5 text-[12px] font-mono text-muted-foreground">
+                          <td className="px-3 py-2.5 text-[11px] font-mono text-muted-foreground max-w-[120px] truncate">
                             {event.org_id ?? "—"}
                           </td>
                           <td className="px-3 py-2.5">
                             <span
                               className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
                                 event.error
-                                  ? "bg-amber-500/20 text-amber-400"
+                                  ? "bg-red-500/20 text-red-400"
                                   : event.processed
                                     ? "bg-emerald-500/20 text-emerald-400"
                                     : "bg-muted/50 text-muted-foreground"
                               }`}
                             >
-                              {event.error
-                                ? "error"
-                                : event.processed
-                                  ? "processed"
-                                  : "pending"}
+                              {event.error ? "error" : event.processed ? "processed" : "pending"}
                             </span>
                           </td>
-                          <td className="px-3 py-2.5 text-[12px] font-mono text-muted-foreground">
+                          <td className="px-3 py-2.5 text-[11px] font-mono text-muted-foreground whitespace-nowrap">
                             {formatDateTime(event.created_at)}
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <button
+                              type="button"
+                              className="text-[11px] text-muted-foreground hover:text-foreground"
+                              onClick={() => setSelectedEvent(event)}
+                            >
+                              View
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -168,7 +206,8 @@ export default function WebhooksPage() {
                 </div>
               )}
             </div>
-            {!isLoading && rows.length > 0 ? (
+
+            {!isLoading && rows.length > 0 && (
               <div className="flex items-center gap-2 justify-center py-4">
                 <Button
                   variant="outline"
@@ -176,7 +215,7 @@ export default function WebhooksPage() {
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page <= 1}
                 >
-                  Prev
+                  ← Prev
                 </Button>
                 <span className="text-[12px] font-mono text-muted-foreground">
                   Page {page}
@@ -187,14 +226,20 @@ export default function WebhooksPage() {
                   onClick={() => setPage((p) => p + 1)}
                   disabled={!hasNextPage}
                 >
-                  Next
+                  Next →
                 </Button>
               </div>
-            ) : null}
+            )}
           </section>
         </div>
       </div>
+
+      {selectedEvent && (
+        <RawPayloadModal
+          event={selectedEvent}
+          onClose={() => setSelectedEvent(null)}
+        />
+      )}
     </div>
   );
 }
-

@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:dev.to)",
+      "WebFetch(domain:pipedream.com)",
+      "WebFetch(domain:medium.com)",
+      "WebFetch(domain:blog.bitsrc.io)",
+      "WebFetch(domain:docs-v1.paystack.com)",
+      "WebFetch(domain:docs-v2.paystack.com)",
+      "WebFetch(domain:gist.github.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:paystack.com)",
+      "WebFetch(domain:zapier.com)",
+      "WebFetch(domain:refunds-pilot--documentation-v2.netlify.app)",
+      "WebFetch(domain:willingly.hashnode.dev)"
+    ]
+  }
+}
