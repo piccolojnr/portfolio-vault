@@ -65,6 +65,14 @@ class SubscribeRequest(BaseModel):
     plan: str
 
 
+class EnterpriseRequest(BaseModel):
+    name: str = ""
+    email: str = ""
+    company: str = ""
+    team_size: str = ""
+    message: str = ""
+
+
 @router.get("")
 async def get_billing(
     session: DBSession = Depends(get_db_conn),
@@ -282,6 +290,15 @@ async def subscribe(
     tier = body.plan
     if tier not in ("pro", "enterprise"):
         raise HTTPException(status_code=400, detail="Invalid plan tier")
+    if tier == "enterprise":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "Enterprise plan is sales-assisted and not available via self-service checkout.",
+                "code": "enterprise_sales_only",
+                "contact_url": "/contact",
+            },
+        )
 
     org_id = UUID(current_user["org_id"])
     org = (await session.execute(select(Organisation).where(Organisation.id == org_id))).scalars().first()
@@ -307,6 +324,60 @@ async def subscribe(
     await session.commit()
 
     return {"authorization_url": result.authorization_url}
+
+
+@router.post("/enterprise-request")
+async def enterprise_request(
+    body: EnterpriseRequest,
+    session: DBSession = Depends(get_db_conn),
+    current_user: dict = Depends(require_role("owner")),
+    settings: Settings = Depends(get_live_settings),
+):
+    org_id = UUID(current_user["org_id"])
+    org = (
+        await session.execute(select(Organisation).where(Organisation.id == org_id))
+    ).scalars().first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organisation not found")
+
+    user_email = body.email.strip() or (current_user.get("email") or "")
+    if not user_email:
+        raise HTTPException(status_code=400, detail="Missing requester email")
+
+    from memra.infrastructure.email.backends import get_email_backend
+    from memra.infrastructure.email.renderer import get_renderer
+
+    renderer = get_renderer()
+    backend = get_email_backend()
+    sales_to = getattr(settings, "sales_email", "") or settings.email_from
+
+    internal_msg = renderer.render(
+        "enterprise_request_internal.html",
+        {
+            "to": sales_to,
+            "request_name": body.name.strip() or current_user.get("display_name") or "Unknown",
+            "request_email": user_email,
+            "request_company": body.company.strip() or org.name,
+            "request_team_size": body.team_size.strip() or "Not provided",
+            "request_message": body.message.strip() or "No additional details provided.",
+            "org_name": org.name,
+            "org_id": str(org.id),
+            "owner_email": current_user.get("email") or "unknown",
+        },
+    )
+    await backend.send(internal_msg)
+
+    confirm_msg = renderer.render(
+        "enterprise_request_confirmation.html",
+        {
+            "to": user_email,
+            "request_name": body.name.strip() or "there",
+            "request_company": body.company.strip() or org.name,
+        },
+    )
+    await backend.send(confirm_msg)
+
+    return {"status": "request_sent"}
 
 
 @router.post("/cancel")
@@ -542,6 +613,15 @@ async def resolve_subscription_payment(
     tier = org.plan
     if tier not in ("pro", "enterprise"):
         raise HTTPException(status_code=400, detail="Only paid plans can be resolved")
+    if tier == "enterprise":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "Enterprise plan is sales-assisted and cannot be resolved via self-service checkout.",
+                "code": "enterprise_sales_only",
+                "contact_url": "/contact",
+            },
+        )
 
     email = current_user.get("email") or ""
     if not email:

@@ -28,3 +28,6 @@ export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "Memraiq";
 
 export const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL ?? "http://app.memra.local";
+
+export const SALES_EMAIL =
+  process.env.NEXT_PUBLIC_SALES_EMAIL ?? "sales@memraiq.com";

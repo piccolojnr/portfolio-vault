@@ -272,6 +272,79 @@ class TestSubscribe:
         assert resp.status_code == 400
         assert "Invalid plan" in resp.json()["detail"]
 
+    def test_subscribe_enterprise_sales_only(self):
+        org = _make_org()
+        call_count = 0
+
+        async def _execute(stmt, params=None):
+            nonlocal call_count
+            call_count += 1
+            return FakeExecuteResult(items=[org])
+
+        session = make_mock_session()
+        session.execute = AsyncMock(side_effect=_execute)
+
+        app = _billing_app(session)
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.post(
+                "/api/v1/billing/subscribe",
+                json={"plan": "enterprise"},
+            )
+
+        assert resp.status_code == 409
+        detail = resp.json()["detail"]
+        assert detail["code"] == "enterprise_sales_only"
+        assert detail["contact_url"] == "/contact"
+
+
+class TestEnterpriseRequest:
+    @patch("memra.infrastructure.email.backends.get_email_backend")
+    @patch("memra.infrastructure.email.renderer.get_renderer")
+    def test_enterprise_request_sends_internal_and_confirmation(
+        self, mock_get_renderer, mock_get_backend
+    ):
+        org = _make_org(plan="free")
+        call_count = 0
+
+        async def _execute(stmt, params=None):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return FakeExecuteResult(items=[org])
+            return FakeExecuteResult()
+
+        session = make_mock_session()
+        session.execute = AsyncMock(side_effect=_execute)
+
+        backend = MagicMock()
+        backend.send = AsyncMock(return_value=None)
+        mock_get_backend.return_value = backend
+
+        renderer = MagicMock()
+        renderer.render.side_effect = [
+            MagicMock(to="sales@memraiq.com", subject="internal", html="<p>x</p>", text="x"),
+            MagicMock(to="owner@test.com", subject="confirmation", html="<p>y</p>", text="y"),
+        ]
+        mock_get_renderer.return_value = renderer
+
+        app = _billing_app(session)
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.post(
+                "/api/v1/billing/enterprise-request",
+                json={
+                    "name": "Owner Name",
+                    "email": "owner@test.com",
+                    "company": "TestOrg",
+                    "team_size": "25",
+                    "message": "Need SSO and compliance docs",
+                },
+            )
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "request_sent"
+        assert renderer.render.call_count == 2
+        assert backend.send.await_count == 2
+
 
 class TestCancelSubscription:
     def test_no_subscription(self):

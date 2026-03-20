@@ -63,7 +63,7 @@ class EmailRenderer:
         app_name = settings.app_name or "Memraiq"
         if app_name.lower().endswith("iq"):
             brand_main = app_name[:-2] or "Memra"
-            brand_suffix = app_name[-2:]
+            brand_suffix = app_name[-2:] or "iq"
         else:
             brand_main = app_name
             brand_suffix = ""

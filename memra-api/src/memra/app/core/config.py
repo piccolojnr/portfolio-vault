@@ -74,6 +74,7 @@ class Settings(BaseSettings):
     # App metadata (used in email templates)
     app_name: str = "Memraiq"
     app_url: str = "http://app.memra.local"
+    sales_email: str = "sales@memraiq.com"
 
     # Logging — set LOG_LEVEL=DEBUG to see memra.* debug lines (e.g. Paystack webhooks)
     log_level: str = "INFO"

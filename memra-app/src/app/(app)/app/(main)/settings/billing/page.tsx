@@ -115,18 +115,28 @@ function formatEventLabel(value: string): string {
 export default function BillingPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { org, refresh } = useAuth();
+  const { user, org, refresh } = useAuth();
 
   const [billing, setBilling] = useState<BillingResponse | null>(null);
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [historyMeta, setHistoryMeta] = useState<{ total: number; page: number; pages: number } | null>(null);
   const [historyPage, setHistoryPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [upgradePlan, setUpgradePlan] = useState<"pro" | "enterprise">("pro");
   const [cancelLoading, setCancelLoading] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [cancelSuccess, setCancelSuccess] = useState<string | null>(null);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [enterpriseDialogOpen, setEnterpriseDialogOpen] = useState(false);
+  const [enterpriseRequest, setEnterpriseRequest] = useState({
+    name: "",
+    email: "",
+    company: "",
+    teamSize: "",
+    message: "",
+  });
+  const [enterpriseLoading, setEnterpriseLoading] = useState(false);
+  const [enterpriseError, setEnterpriseError] = useState<string | null>(null);
+  const [enterpriseSuccess, setEnterpriseSuccess] = useState<string | null>(null);
 
   const success = searchParams.get("payment") === "success";
 
@@ -194,19 +204,67 @@ export default function BillingPage() {
     return null;
   }, [billing, subStatus]);
 
-  async function onUpgrade() {
-    const plan = upgradePlan;
+  async function onUpgradePro() {
     const res = await apiFetch<{ authorization_url: string }>(
       "/api/billing/subscribe",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan }),
+        body: JSON.stringify({ plan: "pro" }),
       },
     );
 
     // Paystack redirect
     window.location.href = res.authorization_url;
+  }
+
+  function openEnterpriseDialog() {
+    setEnterpriseError(null);
+    setEnterpriseSuccess(null);
+    setEnterpriseRequest((prev) => ({
+      ...prev,
+      name: prev.name || user?.display_name || "",
+      email: prev.email || user?.email || "",
+      company: prev.company || org?.name || "",
+    }));
+    setEnterpriseDialogOpen(true);
+  }
+
+  async function onSubmitEnterpriseRequest() {
+    setEnterpriseLoading(true);
+    setEnterpriseError(null);
+    try {
+      const res = await apiFetch<{ status: string }>("/api/billing/enterprise-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: enterpriseRequest.name,
+          email: enterpriseRequest.email,
+          company: enterpriseRequest.company,
+          team_size: enterpriseRequest.teamSize,
+          message: enterpriseRequest.message,
+        }),
+      });
+      if (res.status === "request_sent") {
+        setEnterpriseDialogOpen(false);
+        setEnterpriseSuccess(
+          "Enterprise request sent. We have emailed confirmation and our sales team will contact you shortly.",
+        );
+        setEnterpriseRequest({
+          name: "",
+          email: "",
+          company: "",
+          teamSize: "",
+          message: "",
+        });
+      } else {
+        setEnterpriseError("Could not submit request right now. Please try again.");
+      }
+    } catch {
+      setEnterpriseError("Could not submit request right now. Please try again.");
+    } finally {
+      setEnterpriseLoading(false);
+    }
   }
 
   async function runCancel() {
@@ -316,6 +374,9 @@ export default function BillingPage() {
                 {cancelError ? (
                   <p className="text-[12px] font-mono text-destructive mb-3">{cancelError}</p>
                 ) : null}
+                {enterpriseSuccess ? (
+                  <p className="text-[12px] font-mono text-emerald-400 mb-3">{enterpriseSuccess}</p>
+                ) : null}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div className="text-[12px] font-mono text-muted-foreground">
                     Manage your current subscription settings.
@@ -323,16 +384,15 @@ export default function BillingPage() {
                   {billing?.plan === "free" ? (
                     isOwner ? (
                       <div className="flex flex-wrap items-center gap-2">
-                        <select
-                          className="h-8 rounded-md border border-border bg-surface px-2 text-[12px] font-mono"
-                          value={upgradePlan}
-                          onChange={(e) => setUpgradePlan(e.target.value as "pro" | "enterprise")}
+                        <Button onClick={() => void onUpgradePro()} className="h-8 px-3 text-[11px] font-mono">
+                          upgrade to pro
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={openEnterpriseDialog}
+                          className="h-8 px-3 text-[11px] font-mono"
                         >
-                          <option value="pro">pro</option>
-                          <option value="enterprise">enterprise</option>
-                        </select>
-                        <Button onClick={() => void onUpgrade()} className="h-8 px-3 text-[11px] font-mono">
-                          upgrade
+                          request enterprise
                         </Button>
                       </div>
                     ) : (
@@ -548,6 +608,79 @@ export default function BillingPage() {
               Continue
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={enterpriseDialogOpen} onOpenChange={setEnterpriseDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Enterprise request</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Enterprise is sales-assisted. Share your details and we will contact you.
+          </p>
+          <div className="space-y-3">
+            <input
+              className="w-full h-9 rounded-md border border-border bg-surface px-3 text-sm"
+              placeholder="Full name"
+              value={enterpriseRequest.name}
+              onChange={(e) =>
+                setEnterpriseRequest((prev) => ({ ...prev, name: e.target.value }))
+              }
+            />
+            <input
+              className="w-full h-9 rounded-md border border-border bg-surface px-3 text-sm"
+              placeholder="Work email"
+              type="email"
+              value={enterpriseRequest.email}
+              onChange={(e) =>
+                setEnterpriseRequest((prev) => ({ ...prev, email: e.target.value }))
+              }
+            />
+            <input
+              className="w-full h-9 rounded-md border border-border bg-surface px-3 text-sm"
+              placeholder="Company"
+              value={enterpriseRequest.company}
+              onChange={(e) =>
+                setEnterpriseRequest((prev) => ({ ...prev, company: e.target.value }))
+              }
+            />
+            <input
+              className="w-full h-9 rounded-md border border-border bg-surface px-3 text-sm"
+              placeholder="Team size (optional)"
+              value={enterpriseRequest.teamSize}
+              onChange={(e) =>
+                setEnterpriseRequest((prev) => ({ ...prev, teamSize: e.target.value }))
+              }
+            />
+            <textarea
+              className="w-full min-h-[100px] rounded-md border border-border bg-surface px-3 py-2 text-sm"
+              placeholder="Tell us your requirements (security, SSO, compliance, scale...)"
+              value={enterpriseRequest.message}
+              onChange={(e) =>
+                setEnterpriseRequest((prev) => ({ ...prev, message: e.target.value }))
+              }
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setEnterpriseDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onSubmitEnterpriseRequest}
+              disabled={!enterpriseRequest.email || enterpriseLoading}
+            >
+              {enterpriseLoading ? "Sending..." : "Send request"}
+            </Button>
+          </div>
+          {enterpriseError ? (
+            <p className="text-[12px] font-mono text-destructive">{enterpriseError}</p>
+          ) : null}
         </DialogContent>
       </Dialog>
     </div>
