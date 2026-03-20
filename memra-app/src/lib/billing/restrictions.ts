@@ -3,6 +3,8 @@ import { apiFetch } from "@/lib/network/api";
 export type BillingSnapshot = {
   plan: string;
   subscription_status: string | null;
+  subscription_blocked?: boolean;
+  subscription_block_code?: "subscription_expired" | "subscription_past_due" | null;
   upgrade_url?: string;
   usage: {
     tokens_used: number;
@@ -29,8 +31,6 @@ export type RestrictionState = {
   upgradeUrl: string;
 };
 
-const SUBSCRIPTION_BLOCKED = new Set(["expired", "past_due", "unpaid", "cancelled", "canceled"]);
-
 export function deriveRestrictionState(
   billing: BillingSnapshot | null | undefined,
 ): RestrictionState {
@@ -52,8 +52,7 @@ export function deriveRestrictionState(
   }
 
   const subscriptionStatus = billing.subscription_status?.toLowerCase() ?? null;
-  const isSubscriptionBlocked =
-    !!subscriptionStatus && SUBSCRIPTION_BLOCKED.has(subscriptionStatus);
+  const isSubscriptionBlocked = !!billing.subscription_blocked;
   const isDocumentLimitReached =
     billing.limits.documents.max != null &&
     billing.limits.documents.used >= billing.limits.documents.max;
@@ -63,7 +62,13 @@ export function deriveRestrictionState(
 
   let reason: string | null = null;
   if (isSubscriptionBlocked) {
-    reason = "Your subscription is not active. Upgrade or fix billing to continue.";
+    if (billing.subscription_block_code === "subscription_expired") {
+      reason = "Your subscription period ended and renewal did not complete.";
+    } else if (billing.subscription_block_code === "subscription_past_due") {
+      reason = "Your subscription is past due. Update billing to restore access.";
+    } else {
+      reason = "Your subscription is not active. Upgrade or fix billing to continue.";
+    }
   } else if (isDocumentLimitReached) {
     reason = "You have reached your document limit for the current plan.";
   } else if (isTokenLimitReached) {
@@ -71,11 +76,12 @@ export function deriveRestrictionState(
   }
 
   const blockReadonlyViews = isSubscriptionBlocked;
-  const blockDocumentCreate = isSubscriptionBlocked || isDocumentLimitReached;
+  const blockDocumentCreate =
+    isSubscriptionBlocked || isDocumentLimitReached || isTokenLimitReached;
   const blockReingest = isSubscriptionBlocked || isTokenLimitReached;
   const blockDocumentEdit = isSubscriptionBlocked;
   const blockChatSend = isSubscriptionBlocked || isTokenLimitReached;
-  const showAttentionWarning = subscriptionStatus === "attention";
+  const showAttentionWarning = subscriptionStatus === "attention" && !isSubscriptionBlocked;
 
   return {
     hasBilling: true,

@@ -54,6 +54,14 @@ def _repo(session: AsyncSession, current_user: dict) -> DocumentRepository:
 async def list_documents(
     session: DBSession,
     current_user: dict = Depends(get_current_user),
+    _guard=Depends(
+        enforce_plan_limits(
+            check_documents=False,
+            check_members=False,
+            check_tokens=False,
+            check_models=False,
+        )
+    ),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=500),
 ):
@@ -181,6 +189,14 @@ async def get_document(
     slug: str,
     session: DBSession,
     current_user: dict = Depends(get_current_user),
+    _guard=Depends(
+        enforce_plan_limits(
+            check_documents=False,
+            check_members=False,
+            check_tokens=False,
+            check_models=False,
+        )
+    ),
 ):
     try:
         doc = await _repo(session, current_user).get_by_slug(slug)
@@ -195,6 +211,14 @@ async def update_document(
     patch: CorpusDocUpdate,
     session: DBSession,
     current_user: dict = Depends(require_role("owner", "admin")),
+    _guard=Depends(
+        enforce_plan_limits(
+            check_documents=False,
+            check_members=False,
+            check_tokens=False,
+            check_models=False,
+        )
+    ),
 ):
     try:
         doc = await _repo(session, current_user).update(slug, patch)
@@ -208,6 +232,14 @@ async def delete_document(
     slug: str,
     session: DBSession,
     current_user: dict = Depends(require_role("owner", "admin")),
+    _guard=Depends(
+        enforce_plan_limits(
+            check_documents=False,
+            check_members=False,
+            check_tokens=False,
+            check_models=False,
+        )
+    ),
 ):
     repo = _repo(session, current_user)
 
@@ -245,6 +277,14 @@ async def get_document_status(
     doc_id: str,
     session: DBSession,
     current_user: dict = Depends(get_current_user),
+    _guard=Depends(
+        enforce_plan_limits(
+            check_documents=False,
+            check_members=False,
+            check_tokens=False,
+            check_models=False,
+        )
+    ),
 ):
     try:
         doc = await _repo(session, current_user).get_by_id(doc_id)

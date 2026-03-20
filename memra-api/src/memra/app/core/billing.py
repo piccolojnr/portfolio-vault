@@ -52,6 +52,13 @@ def _month_bounds(now: datetime) -> tuple[datetime, datetime]:
     return start, end
 
 
+def _naive_utc(dt: datetime) -> datetime:
+    # DB timestamps can be timezone-aware; normalize for naive UTC comparisons.
+    if dt.tzinfo is None:
+        return dt
+    return dt.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 def _tier_allows(current_plan: str, required_min_plan: str) -> bool:
     cur = _PLAN_ORDER.get(current_plan, 0)
     req = _PLAN_ORDER.get(required_min_plan, 0)
@@ -164,15 +171,16 @@ def enforce_plan_limits(
             and subscription.current_period_start is not None
             and subscription.current_period_end is not None
         ):
-            period_start = subscription.current_period_start
-            period_end = subscription.current_period_end
+            period_start = _naive_utc(subscription.current_period_start)
+            period_end = _naive_utc(subscription.current_period_end)
         else:
             period_start, period_end = _month_bounds(now)
 
         # ── Subscription-status blocks (self_service only) ────────────────────
         if org.plan_source == "self_service" and subscription:
             if subscription.status == "non_renewing" and subscription.current_period_end is not None:
-                if now >= subscription.current_period_end:
+                current_period_end = _naive_utc(subscription.current_period_end)
+                if now >= current_period_end:
                     # Fill token fields for the UI (best-effort).
                     used_tokens = 0
                     if check_tokens and plan_limit and plan_limit.monthly_token_limit is not None:
@@ -193,7 +201,8 @@ def enforce_plan_limits(
                     )
 
             if subscription.status == "attention" and subscription.current_period_end is not None:
-                grace_end = subscription.current_period_end + timedelta(days=3)
+                current_period_end = _naive_utc(subscription.current_period_end)
+                grace_end = current_period_end + timedelta(days=3)
                 if now >= grace_end:
                     used_tokens = 0
                     if check_tokens and plan_limit and plan_limit.monthly_token_limit is not None:

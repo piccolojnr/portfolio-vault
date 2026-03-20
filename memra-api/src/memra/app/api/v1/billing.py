@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Optional
 from uuid import UUID
 
@@ -41,6 +41,14 @@ def _month_bounds(now: datetime) -> tuple[datetime, datetime]:
 
 def _utcnow_naive() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _naive_utc(dt: datetime) -> datetime:
+    # DB drivers may return timezone-aware timestamps; normalize to naive UTC
+    # to match the rest of billing comparisons in this module.
+    if dt.tzinfo is None:
+        return dt
+    return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 class SubscribeRequest(BaseModel):
@@ -199,9 +207,24 @@ async def get_billing_restrictions(
     )
     used_docs = int(doc_count_res.mappings().first()["cnt"])
 
+    subscription_blocked = False
+    subscription_block_code: str | None = None
+    if org.plan_source == "self_service" and subscription and subscription.current_period_end:
+        current_period_end = _naive_utc(subscription.current_period_end)
+        if subscription.status == "non_renewing" and now >= current_period_end:
+            subscription_blocked = True
+            subscription_block_code = "subscription_expired"
+        elif subscription.status == "attention":
+            grace_end = current_period_end + timedelta(days=3)
+            if now >= grace_end:
+                subscription_blocked = True
+                subscription_block_code = "subscription_past_due"
+
     return {
         "plan": org.plan,
         "subscription_status": subscription.status if subscription else None,
+        "subscription_blocked": subscription_blocked,
+        "subscription_block_code": subscription_block_code,
         "usage": {
             "tokens_used": used_tokens,
             "monthly_token_limit": plan_limit.monthly_token_limit if plan_limit else None,
