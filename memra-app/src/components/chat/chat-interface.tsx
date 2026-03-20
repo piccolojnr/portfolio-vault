@@ -82,7 +82,17 @@ function MessageRow({
   );
 }
 
-export function ChatInterface({ slug }: { slug?: string }) {
+export function ChatInterface({
+  slug,
+  chatBlocked = false,
+  chatBlockedReason,
+  upgradeUrl = "/settings/billing",
+}: {
+  slug?: string;
+  chatBlocked?: boolean;
+  chatBlockedReason?: string;
+  upgradeUrl?: string;
+}) {
   const { createLocalConversation } = useConversations();
   const qc = useQueryClient();
   const { org, isAuthenticated } = useAuth();
@@ -121,7 +131,7 @@ export function ChatInterface({ slug }: { slug?: string }) {
   const send = useCallback(
     async (text?: string) => {
       const userMsg = (text ?? input).trim();
-      if (!userMsg || loading) return;
+      if (!userMsg || loading || chatBlocked) return;
 
       setInput("");
       setLoading(true);
@@ -274,6 +284,7 @@ export function ChatInterface({ slug }: { slug?: string }) {
     [
       input,
       loading,
+      chatBlocked,
       messages,
       slug,
       qc,
@@ -446,6 +457,17 @@ export function ChatInterface({ slug }: { slug?: string }) {
               </button>
             </div>
           )}
+          {chatBlocked && (
+            <div className="flex items-center justify-between gap-2 px-4 pb-2 text-xs">
+              <span className="text-amber-300">
+                {chatBlockedReason ??
+                  "Message sending is currently blocked by your plan."}
+              </span>
+              <Link href={upgradeUrl} className="text-primary hover:underline">
+                Upgrade
+              </Link>
+            </div>
+          )}
 
           <div
             className="flex gap-2 sm:gap-3 items-end bg-surface border border-border rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 focus-within:ring-1 focus-within:ring-primary/40 focus-within:border-primary/30 transition-all"
@@ -458,7 +480,12 @@ export function ChatInterface({ slug }: { slug?: string }) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKey}
-              placeholder="Ask anything about your knowledge base…"
+              placeholder={
+                chatBlocked
+                  ? "Message sending is restricted on your current plan."
+                  : "Ask anything about your knowledge base…"
+              }
+              disabled={chatBlocked}
               rows={1}
               // className="flex-1 bg-transparent border-none shadow-none outline-none focus-visible:ring-0 text-foreground text-sm leading-relaxed font-sans resize-none min-h-6 max-h-40 caret-primary placeholder:text-muted-foreground p-0"
               className="flex-1 bg-transparent border-none shadow-none outline-none focus-visible:ring-0 text-foreground text-sm leading-relaxed font-sans resize-none min-h-6 max-h-40 caret-primary placeholder:text-muted-foreground"
@@ -466,7 +493,7 @@ export function ChatInterface({ slug }: { slug?: string }) {
             <Button
               size="icon"
               onClick={() => send()}
-              disabled={!input.trim() || loading}
+              disabled={chatBlocked || !input.trim() || loading}
               className="h-9 w-9 sm:h-8 sm:w-8 shrink-0 rounded-lg transition-all disabled:opacity-30"
             >
               <ArrowUp className="h-4 w-4" />

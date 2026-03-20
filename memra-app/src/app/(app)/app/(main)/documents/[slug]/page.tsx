@@ -3,10 +3,15 @@
 import { use, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { getDocument, updateDocument, type CorpusDocDetail } from "@/lib/documents";
 import { getDocumentStatus, reIngestDocument } from "@/lib/documents";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/providers/auth-provider";
+import {
+  deriveRestrictionState,
+  fetchBillingSnapshot,
+} from "@/lib/billing/restrictions";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -119,10 +124,12 @@ function IngestionPanel({
   docId,
   initialStatus,
   canManage,
+  mutationBlocked,
 }: {
   docId: string;
   initialStatus?: string;
   canManage: boolean;
+  mutationBlocked: boolean;
 }) {
   const [status, setStatus] = useState(initialStatus ?? "pending");
   const [error, setError] = useState<string | undefined>();
@@ -143,6 +150,7 @@ function IngestionPanel({
   }, [docId, status]);
 
   async function handleReingest() {
+    if (mutationBlocked) return;
     setReingesting(true);
     try {
       await reIngestDocument(docId);
@@ -185,7 +193,7 @@ function IngestionPanel({
         <Button
           size="sm"
           variant="outline"
-          disabled={reingesting || status === "processing"}
+          disabled={mutationBlocked || reingesting || status === "processing"}
           onClick={handleReingest}
         >
           {reingesting ? (
@@ -210,7 +218,15 @@ function IngestionPanel({
 
 // ── Content preview ───────────────────────────────────────────────────────────
 
-function ContentPreview({ doc, canManage }: { doc: CorpusDocDetail; canManage: boolean }) {
+function ContentPreview({
+  doc,
+  canManage,
+  mutationBlocked,
+}: {
+  doc: CorpusDocDetail;
+  canManage: boolean;
+  mutationBlocked: boolean;
+}) {
   const [open, setOpen] = useState(doc.source_type === "text");
   const preview = doc.extracted_text?.slice(0, 500) ?? "";
   const hasContent = !!doc.extracted_text;
@@ -243,7 +259,7 @@ function ContentPreview({ doc, canManage }: { doc: CorpusDocDetail; canManage: b
                   Showing first 500 of {doc.extracted_text.length.toLocaleString()} characters
                 </p>
               )}
-              {canManage && (
+              {canManage && !mutationBlocked && (
                 <div className="mt-4">
                   <Link
                     href={`/documents/${doc.slug}/edit`}
@@ -262,7 +278,7 @@ function ContentPreview({ doc, canManage }: { doc: CorpusDocDetail; canManage: b
               {doc.source_type === "file"
                 ? "Content will be available after ingestion completes."
                 : "No content yet. "}
-              {doc.source_type === "text" && canManage && (
+              {doc.source_type === "text" && canManage && !mutationBlocked && (
                 <Link href={`/documents/${doc.slug}/edit`} className="text-primary hover:underline not-italic">
                   Open editor →
                 </Link>
@@ -286,6 +302,14 @@ export default function DocumentDetailPage({
   const router = useRouter();
   const { org } = useAuth();
   const canManage = org?.role === "admin" || org?.role === "owner";
+  const { data: billingData } = useQuery({
+    queryKey: ["billing"],
+    queryFn: fetchBillingSnapshot,
+    staleTime: 30_000,
+  });
+  const restrictions = deriveRestrictionState(billingData);
+  const canEdit = canManage && !restrictions.blockDocumentEdit;
+  const canReingest = canManage && !restrictions.blockReingest;
 
   const [doc, setDoc] = useState<CorpusDocDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -338,7 +362,7 @@ export default function DocumentDetailPage({
 
         {doc ? (
           <div className="space-y-2">
-            <InlineTitle value={doc.title} onSave={(v) => save({ title: v })} canEdit={canManage} />
+            <InlineTitle value={doc.title} onSave={(v) => save({ title: v })} canEdit={canEdit} />
             <div className="flex items-center gap-2 flex-wrap">
               {/* Type pill */}
               <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-mono font-medium ${TYPE_COLORS[doc.type] ?? "bg-muted/40 text-muted-foreground border-border"}`}>
@@ -349,7 +373,7 @@ export default function DocumentDetailPage({
                 {doc.source_type === "file" ? "📎 file" : "✎ text"}
               </span>
               {/* Edit link */}
-              {canManage && (
+              {canEdit && (
                 <Link
                   href={`/documents/${slug}/edit`}
                   className="ml-auto text-xs text-primary hover:underline inline-flex items-center gap-1"
@@ -372,11 +396,45 @@ export default function DocumentDetailPage({
         {saveError && (
           <p className="text-xs text-destructive mt-2">{saveError}</p>
         )}
+        {(restrictions.blockDocumentEdit ||
+          restrictions.blockReingest ||
+          restrictions.blockReadonlyViews) && (
+          <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-amber-200">
+                {restrictions.reason ??
+                  "Your plan currently restricts document access in this workspace."}
+              </p>
+              <Link
+                href={restrictions.upgradeUrl}
+                className="shrink-0 text-primary hover:underline"
+              >
+                Upgrade
+              </Link>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Scrollable body */}
       <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-        {doc ? (
+        {restrictions.blockReadonlyViews ? (
+          <section className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6">
+            <p className="text-sm font-medium text-foreground">
+              Document details are unavailable for this subscription state.
+            </p>
+            <p className="text-sm text-muted-foreground mt-1.5">
+              {restrictions.reason ??
+                "Please update your plan or billing status to continue."}
+            </p>
+            <Link
+              href={restrictions.upgradeUrl}
+              className="mt-3 inline-flex text-primary hover:underline"
+            >
+              Go to billing →
+            </Link>
+          </section>
+        ) : doc ? (
           <>
             {/* Metadata grid */}
             <section>
@@ -424,10 +482,15 @@ export default function DocumentDetailPage({
             </section>
 
             {/* Ingestion status */}
-            <IngestionPanel docId={doc.id} initialStatus={doc.lightrag_status} canManage={canManage} />
+            <IngestionPanel
+              docId={doc.id}
+              initialStatus={doc.lightrag_status}
+              canManage={canManage}
+              mutationBlocked={!canReingest}
+            />
 
             {/* Content preview */}
-            <ContentPreview doc={doc} canManage={canManage} />
+            <ContentPreview doc={doc} canManage={canManage} mutationBlocked={!canEdit} />
           </>
         ) : (
           <div className="space-y-4">

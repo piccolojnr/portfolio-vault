@@ -182,7 +182,7 @@ export function ConversationSidebarContent({
       <SidebarHeader className="px-2 py-3">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton render={<Link href="/app" />}>
+            <SidebarMenuButton render={<Link href="/" />}>
               <Plus className="h-3.5 w-3.5" />
               <span className="font-mono text-[12px]">New chat</span>
             </SidebarMenuButton>

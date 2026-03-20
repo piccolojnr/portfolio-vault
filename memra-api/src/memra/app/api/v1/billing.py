@@ -87,6 +87,7 @@ async def get_billing(
         )
         row = res.mappings().first()
         used_tokens = int(row["used_tokens"] if row else 0)
+        # used_tokens = 20_000_000 # for testing
 
     # Limits usage overview
     doc_count_res = await session.execute(
@@ -137,6 +138,79 @@ async def get_billing(
             },
         },
         "next_billing_date": subscription.current_period_end.isoformat() if subscription and subscription.current_period_end else None,
+    }
+
+
+@router.get("/restrictions")
+async def get_billing_restrictions(
+    session: DBSession = Depends(get_db_conn),
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = UUID(current_user["org_id"])
+
+    org = (
+        await session.execute(select(Organisation).where(Organisation.id == org_id))
+    ).scalars().first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organisation not found")
+
+    plan_limit = (
+        await session.execute(select(PlanLimit).where(PlanLimit.plan_tier == org.plan))
+    ).scalars().first()
+    if not plan_limit:
+        plan_limit = (
+            await session.execute(select(PlanLimit).where(PlanLimit.plan_tier == "free"))
+        ).scalars().first()
+
+    subscription = (
+        await session.execute(select(Subscription).where(Subscription.org_id == org_id))
+    ).scalars().first()
+
+    now = _utcnow_naive()
+    if subscription and subscription.current_period_start and subscription.current_period_end:
+        period_start = subscription.current_period_start
+        period_end = subscription.current_period_end
+    else:
+        period_start, period_end = _month_bounds(now)
+
+    used_tokens = 0
+    if plan_limit and plan_limit.monthly_token_limit is not None:
+        res = await session.execute(
+            text(
+                """
+                SELECT
+                  COALESCE(SUM(COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0)), 0) AS used_tokens
+                FROM ai_calls
+                WHERE org_id = :org_id
+                  AND created_at >= :period_start
+                  AND created_at < :period_end
+                """
+            ),
+            {"org_id": org_id, "period_start": period_start, "period_end": period_end},
+        )
+        row = res.mappings().first()
+        used_tokens = int(row["used_tokens"] if row else 0)
+
+    doc_count_res = await session.execute(
+        text("SELECT COUNT(*) AS cnt FROM documents WHERE org_id = :org_id"),
+        {"org_id": org_id},
+    )
+    used_docs = int(doc_count_res.mappings().first()["cnt"])
+
+    return {
+        "plan": org.plan,
+        "subscription_status": subscription.status if subscription else None,
+        "usage": {
+            "tokens_used": used_tokens,
+            "monthly_token_limit": plan_limit.monthly_token_limit if plan_limit else None,
+        },
+        "limits": {
+            "documents": {
+                "used": used_docs,
+                "max": plan_limit.max_documents if plan_limit else None,
+            },
+        },
+        "upgrade_url": "/settings/billing",
     }
 
 

@@ -13,6 +13,10 @@ import { reIngestDocument } from "@/lib/documents";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/providers/auth-provider";
 import { useActiveCorpus } from "@/lib/documents";
+import {
+  deriveRestrictionState,
+  fetchBillingSnapshot,
+} from "@/lib/billing/restrictions";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -133,9 +137,21 @@ interface RowProps {
   onSelect: (v: boolean) => void;
   onRefresh: () => void;
   canManage: boolean;
+  reingestBlocked: boolean;
+  deleteBlocked: boolean;
+  selectionBlocked: boolean;
 }
 
-function DocRow({ doc, selected, onSelect, onRefresh, canManage }: RowProps) {
+function DocRow({
+  doc,
+  selected,
+  onSelect,
+  onRefresh,
+  canManage,
+  reingestBlocked,
+  deleteBlocked,
+  selectionBlocked,
+}: RowProps) {
   const router = useRouter();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmReingest, setConfirmReingest] = useState(false);
@@ -144,6 +160,7 @@ function DocRow({ doc, selected, onSelect, onRefresh, canManage }: RowProps) {
 
   async function handleDelete(e: React.MouseEvent) {
     e.stopPropagation();
+    if (deleteBlocked) return;
     setDeleting(true);
     try {
       await deleteDocument(doc.slug);
@@ -156,6 +173,7 @@ function DocRow({ doc, selected, onSelect, onRefresh, canManage }: RowProps) {
 
   async function handleReingest(e: React.MouseEvent) {
     e.stopPropagation();
+    if (reingestBlocked) return;
     setReingesting(true);
     setConfirmReingest(false);
     try {
@@ -181,6 +199,7 @@ function DocRow({ doc, selected, onSelect, onRefresh, canManage }: RowProps) {
           type="checkbox"
           checked={selected}
           onChange={(e) => onSelect(e.target.checked)}
+          disabled={selectionBlocked}
           className="accent-primary"
         />
       </td>
@@ -238,6 +257,7 @@ function DocRow({ doc, selected, onSelect, onRefresh, canManage }: RowProps) {
               <span className="flex items-center gap-1 text-[11px]">
                 <button
                   onClick={handleReingest}
+                  disabled={reingestBlocked}
                   className="text-primary hover:underline"
                 >
                   Yes
@@ -257,10 +277,12 @@ function DocRow({ doc, selected, onSelect, onRefresh, canManage }: RowProps) {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (reingestBlocked) return;
                   setConfirmReingest(true);
                 }}
                 title="Reprocess"
-                className="p-1.5 rounded text-muted-foreground hover:text-primary transition-colors"
+                disabled={reingestBlocked}
+                className="p-1.5 rounded text-muted-foreground hover:text-primary transition-colors disabled:opacity-40 disabled:hover:text-muted-foreground"
               >
                 <svg
                   width="12"
@@ -287,7 +309,7 @@ function DocRow({ doc, selected, onSelect, onRefresh, canManage }: RowProps) {
               <span className="flex items-center gap-1 text-[11px]">
                 <button
                   onClick={handleDelete}
-                  disabled={deleting}
+                  disabled={deleting || deleteBlocked}
                   className="text-destructive hover:underline disabled:opacity-50"
                 >
                   {deleting ? "…" : "Yes"}
@@ -307,10 +329,12 @@ function DocRow({ doc, selected, onSelect, onRefresh, canManage }: RowProps) {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (deleteBlocked) return;
                   setConfirmDelete(true);
                 }}
                 title="Delete"
-                className="p-1.5 rounded text-muted-foreground hover:text-destructive transition-colors"
+                disabled={deleteBlocked}
+                className="p-1.5 rounded text-muted-foreground hover:text-destructive transition-colors disabled:opacity-40 disabled:hover:text-muted-foreground"
               >
                 <svg
                   width="12"
@@ -342,11 +366,15 @@ function BulkBar({
   onReingest,
   onDelete,
   onClear,
+  reingestDisabled,
+  deleteDisabled,
 }: {
   count: number;
   onReingest: () => void;
   onDelete: () => void;
   onClear: () => void;
+  reingestDisabled: boolean;
+  deleteDisabled: boolean;
 }) {
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-4 py-2.5 bg-bg border border-border/80 rounded-xl shadow-xl">
@@ -354,7 +382,12 @@ function BulkBar({
         {count} selected
       </span>
       <div className="w-px h-4 bg-border/60" />
-      <Button size="sm" variant="outline" onClick={onReingest}>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={onReingest}
+        disabled={reingestDisabled}
+      >
         <svg
           className="mr-1.5"
           width="11"
@@ -369,7 +402,12 @@ function BulkBar({
         </svg>
         Reprocess {count}
       </Button>
-      <Button size="sm" variant="destructive" onClick={onDelete}>
+      <Button
+        size="sm"
+        variant="destructive"
+        onClick={onDelete}
+        disabled={deleteDisabled}
+      >
         Delete {count}
       </Button>
       <button
@@ -460,6 +498,16 @@ export default function DocumentsPage() {
     },
     staleTime: 10_000,
   });
+  const { data: billingData } = useQuery({
+    queryKey: ["billing"],
+    queryFn: fetchBillingSnapshot,
+    staleTime: 30_000,
+  });
+  const restrictions = deriveRestrictionState(billingData);
+  const canCreate = canManage && !restrictions.blockDocumentCreate;
+  const canReingest = canManage && !restrictions.blockReingest;
+  const canDelete = canManage && !restrictions.blockReadonlyViews;
+  const canSelect = canReingest || canDelete;
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
@@ -573,49 +621,80 @@ export default function DocumentsPage() {
           </div>
           {canManage && (
             <div className="flex items-center gap-2">
-              <Link href="/documents/ingest">
-                <Button variant="outline" size="sm">
-                  <svg
-                    className="mr-1.5"
-                    width="11"
-                    height="11"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <path
-                      d="M8 12V4M4 8l4-4 4 4"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path d="M2 14h12" strokeLinecap="round" />
-                  </svg>
-                  Add
-                </Button>
-              </Link>
-              <Link href="/documents/new">
-                <Button size="sm">
-                  <svg
-                    className="mr-1.5"
-                    width="11"
-                    height="11"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                  >
-                    <path
-                      d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                  Write
-                </Button>
-              </Link>
+              {canCreate ? (
+                <>
+                  <Link href="/documents/ingest">
+                    <Button variant="outline" size="sm">
+                      <svg
+                        className="mr-1.5"
+                        width="11"
+                        height="11"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <path
+                          d="M8 12V4M4 8l4-4 4 4"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <path d="M2 14h12" strokeLinecap="round" />
+                      </svg>
+                      Add
+                    </Button>
+                  </Link>
+                  <Link href="/documents/new">
+                    <Button size="sm">
+                      <svg
+                        className="mr-1.5"
+                        width="11"
+                        height="11"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                      >
+                        <path
+                          d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                      Write
+                    </Button>
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Button variant="outline" size="sm" disabled>
+                    Add
+                  </Button>
+                  <Button size="sm" disabled>
+                    Write
+                  </Button>
+                </>
+              )}
             </div>
           )}
         </div>
+        {(restrictions.blockDocumentCreate ||
+          restrictions.blockReingest ||
+          restrictions.blockReadonlyViews) && (
+          <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
+            <div className="flex items-center justify-between gap-3">
+              <p>
+                {restrictions.reason ??
+                  "Your current plan blocks document actions in this workspace."}
+              </p>
+              <Link
+                href={restrictions.upgradeUrl}
+                className="shrink-0 text-primary hover:underline"
+              >
+                Upgrade
+              </Link>
+            </div>
+          </div>
+        )}
 
         {/* Tabs */}
         <TabStrip
@@ -697,7 +776,23 @@ export default function DocumentsPage() {
 
       {/* Table */}
       <div className="flex-1 overflow-y-auto pb-20">
-        {loading ? (
+        {restrictions.blockReadonlyViews ? (
+          <div className="mx-6 mt-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6 text-sm">
+            <p className="text-foreground font-medium">
+              Documents are temporarily read-only for this workspace.
+            </p>
+            <p className="text-muted-foreground mt-1.5">
+              {restrictions.reason ??
+                "Update your subscription to access documents again."}
+            </p>
+            <Link
+              href={restrictions.upgradeUrl}
+              className="mt-3 inline-flex text-primary hover:underline"
+            >
+              Go to billing →
+            </Link>
+          </div>
+        ) : loading ? (
           <div className="space-y-1 px-6 pt-4">
             {Array.from({ length: 8 }).map((_, i) => (
               <div
@@ -733,6 +828,7 @@ export default function DocumentsPage() {
                     type="checkbox"
                     checked={allFilteredSelected}
                     onChange={toggleAll}
+                    disabled={!canSelect}
                     className="accent-primary"
                   />
                 </th>
@@ -759,6 +855,7 @@ export default function DocumentsPage() {
                   selected={selected.has(doc.id)}
                   onSelect={(v) =>
                     setSelected((s) => {
+                      if (!canSelect) return s;
                       const n = new Set(s);
                       // eslint-disable-next-line @typescript-eslint/no-unused-expressions
                       v ? n.add(doc.id) : n.delete(doc.id);
@@ -769,6 +866,9 @@ export default function DocumentsPage() {
                     qc.invalidateQueries({ queryKey: ["documents", page] })
                   }
                   canManage={canManage}
+                  reingestBlocked={!canReingest}
+                  deleteBlocked={!canDelete}
+                  selectionBlocked={!canSelect}
                 />
               ))}
             </tbody>
@@ -813,6 +913,8 @@ export default function DocumentsPage() {
           onReingest={() => setBulkReingestConfirm(true)}
           onDelete={() => setBulkDeleteConfirm(true)}
           onClear={() => setSelected(new Set())}
+          reingestDisabled={!canReingest}
+          deleteDisabled={!canDelete}
         />
       )}
 

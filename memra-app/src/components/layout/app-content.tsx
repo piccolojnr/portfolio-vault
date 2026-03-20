@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { HeaderNav } from "@/components/layout/header-nav";
+import { BillingAttentionBanner } from "@/components/layout/billing-attention-banner";
 import { ConversationSidebarContent } from "@/components/conversations/conversation-sidebar";
 import { useConversations } from "@/components/providers/conversation-context";
 
@@ -63,6 +64,8 @@ export function AppContent({ children }: { children: React.ReactNode }) {
             <HeaderNav />
           </div>
         </header>
+
+        <BillingAttentionBanner />
 
         <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
           {children}
