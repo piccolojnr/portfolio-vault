@@ -46,6 +46,16 @@ _Categories: Shipped something · Solved a hard problem · Learned something sig
 
 ### March
 
+**Mar 2026 — Built and launched Memraiq: a full-stack AI SaaS platform with a custom RAG pipeline**
+Designed and shipped Memraiq (memraiq.com) entirely solo — an AI-powered platform that lets users query their personal knowledge vault using natural language and get grounded, cited answers. Started with a working v1 using LightRAG to validate the concept fast, then identified the ceiling of the third-party dependency and built the entire RAG pipeline from scratch. The custom system (memra-rag) handles semantic chunking, embedding, Qdrant vector search, Neo4j graph retrieval, query classification, cross-encoder reranking, and streaming generation — all as a standalone FastAPI service. Also built the full frontend (Next.js 15, streaming answers, vault editor, SSE pipeline control), the multi-tenant API (auth, encrypted secrets, cost tracking, conversation history), and a second API version integrating the custom RAG. Four codebases, three live deployments (memraiq.com, app.memraiq.com, admin.memraiq.com), four infra providers — shipped and maintained solo.
+
+**Stack:** Next.js 15, FastAPI, Python, Qdrant, Neo4j, Anthropic Claude, OpenAI, Supabase, Railway, Vercel
+**Key outcome:** Live AI SaaS product · custom RAG pipeline built from scratch · 4 services · 3 live deployments
+
+_Categories: Shipped something · Solved a hard problem · Learned something significant · Went above and beyond_
+
+---
+
 **Mar 2026 — Resolved non-interactive CI/CD sudo permissions blocking production deployments**
 While migrating a client's Laravel laundry POS from cPanel to a self-managed VPS, set up a GitLab CI/CD pipeline with separate staging and production environments. Hit a hard blocker: the deployment user needed sudo access to restart Supervisor (used for Laravel job queues), but the CI pipeline is non-interactive and couldn't accept a password prompt. Spent 1–2 days debugging and learning, ultimately configuring targeted sudoers permissions for the deploy user to resolve it without compromising server security. Strengthened hands-on knowledge of Linux server administration, Nginx, Supervisor, and GitLab CI/CD.
 

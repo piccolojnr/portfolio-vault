@@ -6,6 +6,55 @@
 
 ---
 
+## Founder & Solo Developer — Memraiq
+
+**Type:** Personal product / SaaS
+**Period:** March 2026 – Present
+**Location:** Ghana (remote-capable)
+
+### What the role was
+
+Memraiq is an AI-powered SaaS platform I designed and built from scratch — entirely solo. It lets users query their personal knowledge vault (portfolio documents, notes, project writeups, experience logs) using natural language and get grounded, cited answers back. Built as a real multi-tenant product: separate frontend, API, and custom RAG service, all deployed and live.
+
+### What I actually did day-to-day
+
+- Designed the full system architecture: service boundaries, data model, auth, RAG pipeline, and deployment topology — entirely solo with no team to sanity-check decisions
+- Built and shipped v1 using LightRAG as the RAG layer to validate the concept quickly
+- Identified LightRAG's ceiling (limited control over chunking, retrieval tuning, cost visibility) and made the call to build the entire RAG pipeline from scratch
+- Built memra-rag: a standalone FastAPI RAG service with semantic chunking, Qdrant vector search, Neo4j graph retrieval, query classification, cross-encoder reranking, and streaming generation
+- Built memra-api-v2: a full rewrite of the backend integrating the custom RAG service in place of LightRAG
+- Maintained and iterated on the live v1 deployment throughout — no downtime
+- Managed the full deployment infrastructure: Vercel, Railway, Supabase, Qdrant cloud
+
+### What I built or delivered
+
+- **memra-app** — Next.js 15 frontend with chat interface, streaming answers, source citations, markdown vault editor, and real-time pipeline control panel (SSE)
+- **memra-api** — FastAPI multi-tenant backend: auth, vault CRUD, pipeline control, conversation history, cost tracking, encrypted API key storage, DOCX/PDF export
+- **memra-rag** — Custom RAG service: semantic chunker, embedding pipeline, Qdrant vector search, Neo4j graph traversal, query classification, cross-encoder reranker, streaming generation
+- **memra-api-v2** — Backend rewrite integrating memra-rag over Railway's private network, with Alembic migrations and improved auth
+- Live deployments: memraiq.com · app.memraiq.com · admin.memraiq.com
+
+### Impact & results
+
+- Shipped a fully functional AI SaaS product solo in weeks
+- Custom RAG pipeline gives full control over retrieval quality, chunking granularity, and cost — not possible with LightRAG
+- Four separate codebases, three live deployments, four infrastructure providers — all maintained by one person
+- Validated the concept with a working v1 before rebuilding the core
+
+### What I learned
+
+- How to design, build, and maintain a multi-service distributed system solo
+- RAG system internals — not just wiring up a library, but building each layer: chunking, embedding, retrieval, reranking, generation
+- Multi-tenant SaaS patterns: per-org data isolation, encrypted secrets, settings layering, cost tracking
+- When to use a third-party library and when the ceiling of that library justifies building your own
+- Infrastructure management across Vercel, Railway, Supabase, and Qdrant cloud
+
+### Why I left
+
+<!-- Ongoing -->
+
+---
+
 ## Freelance Full-Stack Developer
 
 **Type:** Freelance  

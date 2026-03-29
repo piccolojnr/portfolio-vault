@@ -9,7 +9,7 @@
 
 <!-- ~15 words. For Twitter bios, email signatures, quick intros. -->
 
-Daud Rahim — full-stack developer building products and client software across Ghana.
+Daud Rahim — full-stack developer building AI products and client software across Ghana.
 
 ---
 
@@ -17,7 +17,7 @@ Daud Rahim — full-stack developer building products and client software across
 
 <!-- 3–5 sentences. For portfolio sites, LinkedIn summary, conference speaker bios. -->
 
-Daud Rahim is a full-stack developer based in Ghana. He builds web applications, SaaS products, and IoT systems for enterprise clients, startups, and institutions — from corporate sites for conglomerates like KGL Group to a live permit management platform serving 1,687 university students. Working entirely through referrals, he has delivered 12+ projects across web development, mobile, networking, and branding. He's comfortable across the full stack and increasingly interested in the intersection of software and hardware.
+Daud Rahim is a full-stack developer based in Ghana. He builds web applications, AI products, SaaS platforms, and IoT systems — from corporate sites for conglomerates like KGL Group to a live permit management platform serving 1,687 university students to Memraiq, a custom-built AI SaaS platform with a full RAG pipeline he designed and shipped entirely solo. Working entirely through referrals, he has delivered 12+ projects across web development, mobile, networking, and branding. He's comfortable across the full stack and increasingly building at the intersection of software, AI, and hardware.
 
 ---
 
@@ -37,7 +37,7 @@ Daud's default mode is end-to-end ownership — he takes a brief, figures out th
 
 ### Recent focus
 
-Over the last year, Daud has been expanding beyond pure web development — building a full IoT laundry kiosk system (hardware integration, Android app, backend API, admin dashboard) and going deeper into DevOps, Linux server administration, and CI/CD pipelines. He's also actively building a laundry POS system he plans to evolve into a SaaS product.
+Over the last year, Daud has expanded significantly beyond web development. He built a full IoT laundry kiosk system (hardware integration, Android kiosk app, backend API, admin dashboard) and went deep on DevOps, Linux server administration, and CI/CD pipelines. Most recently he designed and shipped Memraiq — an AI SaaS platform with a custom-built RAG pipeline covering semantic chunking, Qdrant vector search, Neo4j graph retrieval, query classification, and cross-encoder reranking. He built it entirely solo across four services and three live deployments. He's now actively developing the next version, which replaces the initial third-party RAG dependency with his own system.
 
 ### Beyond work
 
